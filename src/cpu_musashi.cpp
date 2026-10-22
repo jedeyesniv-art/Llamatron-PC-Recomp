@@ -58,6 +58,16 @@ int Execute(int cycles) {
 }
 
 int CyclesRun() { return g_in_execute ? m68k_cycles_run() : 0; }
+
+std::vector<uint8_t> SaveContext() {
+  std::vector<uint8_t> c(m68k_context_size());
+  m68k_get_context(c.data());
+  return c;
+}
+
+void RestoreContext(const std::vector<uint8_t>& context) { m68k_set_context(const_cast<uint8_t*>(context.data())); }
+
+void SetMachine(st::Machine* machine) { g_machine = machine; }
 void EndSlice() { m68k_end_timeslice(); }
 void SetIrq(int level) { m68k_set_irq(level); }
 

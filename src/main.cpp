@@ -9,6 +9,7 @@
 #include <cstring>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,7 @@
 #include "gridrunner.h"
 #include "settings.h"
 #include "input.h"
+#include "launcher.h"
 #include "log.h"
 #include "machine.h"
 
@@ -41,6 +43,15 @@ struct Options {
   // line where square pixels are 14.75 MHz, and two TV lines tall -> pixel aspect 0.92, picture ~1.48:1)
   bool pal_aspect = true;
   std::string program = "TRON1MEG.PRG";  // --program=<file on the disk>: GRIDRUNR.PRG = the bonus Gridrunner
+  bool program_given = false;  // --program: straight into it, no launcher
+  // The launcher (tests): --lpress=N:<pad button> at launcher frame N, --lshot=N:<file.bmp>, --lframes=N (quit)
+  struct LaunchPress {
+    int frame;
+    std::string what;
+  };
+  std::vector<LaunchPress> lpresses;
+  std::map<int, std::string> lshots;
+  int lframes = 0;
   bool headless = false;   // --headless: no window or audio (tests)
   int frames = 0;          // --frames=N: quit after N frames
   std::string wav;         // --wav=<file>: also write the audio to a WAV file (tests)
@@ -111,7 +122,11 @@ Options ParseArgs(int argc, char** argv) {
     else if (a == "--trace-tos") o.trace_tos = true;
     else if (a == "--fullscreen") o.fullscreen = true;
     else if (a == "--window") o.fullscreen = false;
+    else if (Arg(a, "lpress", &v)) o.lpresses.push_back({std::atoi(v.c_str()), v.substr(v.find(':') + 1)});
+    else if (Arg(a, "lshot", &v)) o.lshots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
+    else if (Arg(a, "lframes", &v)) o.lframes = std::atoi(v.c_str());
     else if (Arg(a, "program", &v)) {
+      o.program_given = true;
       o.program = v;
       std::transform(o.program.begin(), o.program.end(), o.program.begin(), ::toupper);
     }
@@ -246,44 +261,27 @@ uint8_t PressBits(const std::string& what, int* port) {
          : b == "left" ? st::kJoyLeft : b == "right" ? st::kJoyRight : 0;
 }
 
-}  // namespace
+// What the launcher and the games share: the options, the disk, the window, the audio.
+struct Context {
+  Options* opt = nullptr;
+  fs::path save_dir;
+  std::string disk_path;
+  std::map<std::string, disk::Bytes> disk_files;  // as on the disk
+  SDL_Window* window = nullptr;
+  SDL_Renderer* renderer = nullptr;
+  SDL_Texture* texture = nullptr;
+  SDL_AudioStream* audio = nullptr;
+  int view_h = st::kScreenH;
+  std::vector<float> wav;
+};
 
-int main(int argc, char** argv) {
-  Options opt = ParseArgs(argc, argv);
-  // The log: --log, else userdata\llamatron.log next to the exe.
+constexpr int kRate = 48000;
+
+// The disk's files with the saved ones (userdata\: high scores the games wrote) over them.
+std::map<std::string, disk::Bytes> FilesWithSaves(const Context& c) {
+  std::map<std::string, disk::Bytes> files = c.disk_files;
   std::error_code ec;
-  fs::path save_dir = opt.userdata.empty() ? ExeDir() / "userdata" : fs::path(opt.userdata);
-  fs::create_directories(save_dir, ec);
-  logging::Open(opt.log.empty() ? (save_dir / "llamatron.log").string().c_str() : opt.log.c_str());
-  InstallCrashHandler();
-
-  std::string disk_path = FindDisk(opt), error;
-  if (disk_path.empty()) {
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Llamatron",
-                             "Game disk not found.\nPut your Llamatron disk image (.msa or .st) in the game folder "
-                             "next to the program.", nullptr);
-    return 1;
-  }
-  disk::Bytes image = disk::LoadImage(disk_path, &error);
-  auto files = disk::ReadFiles(image);
-  disk::Program program;
-  const bool llamatron = opt.program == "TRON1MEG.PRG";
-  bool loaded = false;
-  if (!image.empty() && files.count(opt.program))
-    loaded = llamatron ? disk::UnpackLlamatron(files[opt.program], &program, &error)
-                       : disk::LoadPrg(files[opt.program], &program, &error);
-  if (!loaded) {
-    if (error.empty()) error = opt.program + " not found on the disk";
-    std::string msg = disk_path + ":\n" + error;
-    LOG("%s", msg.c_str());
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Llamatron", msg.c_str(), nullptr);
-    return 1;
-  }
-  LOG("disk %s: %zu files, program %zu bytes, %zu relocations", disk_path.c_str(), files.size(), program.text.size(),
-      program.relocs.size());
-
-  // Saves: userdata\ next to the exe; files there replace the disk's.
-  for (const auto& e : fs::directory_iterator(save_dir, ec)) {
+  for (const auto& e : fs::directory_iterator(c.save_dir, ec)) {
     std::string name = e.path().filename().string();
     std::transform(name.begin(), name.end(), name.begin(), ::toupper);
     std::string ext = name.size() > 4 ? name.substr(name.size() - 4) : "";
@@ -297,62 +295,55 @@ int main(int argc, char** argv) {
       LOG("using saved %s", name.c_str());
     }
   }
+  return files;
+}
 
-  static st::Machine machine;
-  machine.trace_tos = opt.trace_tos;
-  if (!machine.Load(program, std::move(files), save_dir.string(), &error)) {
-    LOG("load failed: %s", error.c_str());
-    return 1;
+enum class GameEnd { kQuitApp, kToLauncher, kError };
+
+// Runs one game (a program on the disk) until the player leaves it.
+GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
+  Options& opt = *c.opt;
+  std::string error;
+  disk::Program program;
+  const bool llamatron = program_name == "TRON1MEG.PRG";
+  auto it = c.disk_files.find(program_name);
+  bool loaded = it != c.disk_files.end() && (llamatron ? disk::UnpackLlamatron(it->second, &program, &error)
+                                                      : disk::LoadPrg(it->second, &program, &error));
+  if (!loaded) {
+    if (error.empty()) error = program_name + " not found on the disk";
+    std::string msg = c.disk_path + ":\n" + error;
+    LOG("%s", msg.c_str());
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Llamatron", msg.c_str(), c.window);
+    return GameEnd::kError;
   }
+  LOG("starting %s: %zu bytes, %zu relocations", program_name.c_str(), program.text.size(), program.relocs.size());
+
+  auto machine_owner = std::make_unique<st::Machine>();
+  st::Machine& machine = *machine_owner;
+  machine.trace_tos = opt.trace_tos;
+  if (!machine.Load(program, FilesWithSaves(c), c.save_dir.string(), &error)) {
+    LOG("load failed: %s", error.c_str());
+    return GameEnd::kError;
+  }
+  game::Reset();
+  input::Reset();
+  grid::Reset();
   game::g_llamatron = llamatron;
   if (llamatron) game::ApplyPatches(machine, opt.game);
-  // Settings (userdata\settings.txt, key=value; reread while running when it changes).
-  settings::Load((save_dir / "settings.txt").string());
-  game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
-  grid::LoadSettings();
-  settings::Save();  // so every setting is in the file, with its default
-  if (opt.aim >= 0) game::SetAnalogAim(opt.aim == 1);
   input::SetGridrunner(!llamatron);
   grid::SetHideEntryLane(!opt.entry_lane);
-  LOG("analog aim %s", game::AnalogAim() ? "on" : "off");
-  LOG("cpu speed during play x%d", opt.cpu_speed);
-
-  SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
-  SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON, "1");  // the window/taskbar icon: our resource 1
-  SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON_SMALL, "1");
-  if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
-    LOG("SDL_Init: %s", SDL_GetError());
-    return 1;
-  }
-  input::Init();
-  LogDisplayModes();
-
-  SDL_Window* window = nullptr;
-  SDL_Renderer* renderer = nullptr;
-  SDL_Texture* texture = nullptr;
-  SDL_AudioStream* audio = nullptr;
-  const int kRate = 48000;
   machine.SetSampleRate(kRate);
-  // Picture height in a 320-wide space: PAL pixel aspect (14.75 / 8) / 2 = 0.92 -> 200 / 0.92 = 217.
-  const int view_h = opt.pal_aspect ? int(std::lround(st::kScreenH * 2.0 * 8.0 / 14.75)) : st::kScreenH;
-  if (!opt.headless) {
-    window = SDL_CreateWindow("Llamatron", st::kScreenW * 4, st::kScreenH * 4,
-                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
-    renderer = SDL_CreateRenderer(window, nullptr);
-    SDL_SetRenderVSync(renderer, 1);
-    if (opt.match_refresh) ChooseFullscreenMode(window, 50.0);
-    if (opt.fullscreen) SDL_SetWindowFullscreen(window, true);
-    SDL_SetRenderLogicalPresentation(renderer, st::kScreenW, view_h, SDL_LOGICAL_PRESENTATION_LETTERBOX);
-    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, st::kScreenW,
-                                st::kScreenH);
-    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_PIXELART);  // sharp, and even at non-integer scales
-    SDL_AudioSpec spec{SDL_AUDIO_F32, 1, kRate};
-    audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
-    if (audio) SDL_ResumeAudioStreamDevice(audio);
-    else LOG("no audio: %s", SDL_GetError());
-  }
+  LOG("analog aim %s, cpu speed during play x%d", game::AnalogAim() ? "on" : "off", opt.cpu_speed);
 
-  std::vector<float> wav;
+  SDL_Window* window = c.window;
+  SDL_Renderer* renderer = c.renderer;
+  SDL_Texture* texture = c.texture;
+  SDL_AudioStream* audio = c.audio;
+  const int view_h = c.view_h;
+  if (renderer) SDL_SetRenderLogicalPresentation(renderer, st::kScreenW, view_h, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+  if (audio) SDL_ClearAudioStream(audio);
+
+  GameEnd end = GameEnd::kQuitApp;
   uint64_t start = SDL_GetTicksNS();
   double frames_due = 0;
   int frame = 0, vsyncs = 0, lock_k = -1;
@@ -371,7 +362,7 @@ int main(int argc, char** argv) {
   while (running) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
-      if (e.type == SDL_EVENT_QUIT) running = false;
+      if (e.type == SDL_EVENT_QUIT) running = false, end = GameEnd::kQuitApp;
       if (!llamatron && e.type == SDL_EVENT_MOUSE_MOTION) {  // other programs (Gridrunner): the ST mouse
         mouse_x += e.motion.xrel * 0.25f, mouse_y += e.motion.yrel * 0.25f;
         continue;
@@ -388,7 +379,7 @@ int main(int argc, char** argv) {
       }
       input::HandleEvent(e, &machine);
     }
-    if (input::QuitRequested()) running = false;
+    if (input::QuitRequested()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
     if (frame % 50 == 0 && settings::Reload()) {  // edited while running
       grid::LoadSettings();
       if (opt.aim < 0) game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
@@ -507,7 +498,7 @@ int main(int argc, char** argv) {
       bool playing = llamatron ? game::Playing(machine) : grid::GameState(machine) == grid::kPlay;
       machine.SetCpuSpeed(playing ? opt.cpu_speed : 1);
       playing_second &= playing;
-      if (!machine.RunFrame()) running = false;
+      if (!machine.RunFrame()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
       ++frame;
       ++stats_frames;
       swaps_second += machine.TakeSwaps();
@@ -545,11 +536,11 @@ int main(int argc, char** argv) {
       }
       auto shot = opt.shots.find(frame);
       if (shot != opt.shots.end()) SaveShot(machine, shot->second);
-      if (opt.frames && frame >= opt.frames) running = false;
+      if (opt.frames && frame >= opt.frames) running = false, end = GameEnd::kQuitApp;
     }
 
     std::vector<float>& samples = machine.Audio();
-    if (!opt.wav.empty()) wav.insert(wav.end(), samples.begin(), samples.end());
+    if (!opt.wav.empty()) c.wav.insert(c.wav.end(), samples.begin(), samples.end());
     if (audio && !samples.empty()) {
       // Keep about 50 ms queued: play up to 0.5% faster or slower (the vsync-locked game runs at the display's
       // rate, not exactly the ST's), and drop audio if we got far ahead (after a stall).
@@ -598,14 +589,143 @@ int main(int argc, char** argv) {
       }
     }
   }
+  if (window) SDL_SetWindowRelativeMouseMode(window, false);
+  if (audio) SDL_ClearAudioStream(audio);
+  LOG("%s ended after %d frames", program_name.c_str(), frame);
+  return end;
+}
 
-  LOG("exit after %d frames", frame);
-  if (!opt.wav.empty()) SaveWav(opt.wav, wav, kRate);
+void SaveRenderShot(SDL_Renderer* r, const std::string& path) {
+  if (SDL_Surface* s = SDL_RenderReadPixels(r, nullptr)) {
+    if (SDL_SaveBMP(s, path.c_str())) LOG("screenshot %s", path.c_str());
+    SDL_DestroySurface(s);
+  }
+}
+
+// The start screen until the player picks a game (kPlay) or quits.
+bool RunLauncher(Context& c, launcher::Launcher& l) {
+  Options& opt = *c.opt;
+  SDL_SetRenderLogicalPresentation(c.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+  uint64_t last = SDL_GetTicksNS();
+  for (int frame = 0;; ++frame) {
+    SDL_Event e;
+    while (SDL_PollEvent(&e)) {
+      if (e.type == SDL_EVENT_QUIT) return false;
+      if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat &&
+          (e.key.scancode == SDL_SCANCODE_F11 ||
+           (e.key.scancode == SDL_SCANCODE_RETURN && (e.key.mod & SDL_KMOD_ALT)))) {
+        SDL_SetWindowFullscreen(c.window, !(SDL_GetWindowFlags(c.window) & SDL_WINDOW_FULLSCREEN));
+        continue;
+      }
+      input::HandleEvent(e, nullptr);  // pads connecting
+      if (l.HandleEvent(e) == launcher::Action::kQuit) return false;
+    }
+    for (const auto& p : opt.lpresses) {  // scripted (tests): pad buttons at launcher frames
+      if (p.frame != frame) continue;
+      SDL_Event be{};
+      be.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+      be.gbutton.button = uint8_t(SDL_GetGamepadButtonFromString(p.what.c_str()));
+      if (l.HandleEvent(be) == launcher::Action::kQuit) return false;
+    }
+    uint64_t now = SDL_GetTicksNS();
+    double dt = std::min(0.1, double(now - last) / 1e9);
+    last = now;
+    if (l.Update(input::FirstPad(), dt) == launcher::Action::kPlay) return true;
+    l.Render();
+    auto shot = opt.lshots.find(frame);
+    if (shot != opt.lshots.end()) SaveRenderShot(c.renderer, shot->second);
+    SDL_RenderPresent(c.renderer);
+    if (opt.lframes && frame >= opt.lframes) return false;
+  }
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  Options opt = ParseArgs(argc, argv);
+  Context c;
+  c.opt = &opt;
+  // The log: --log, else userdata\llamatron.log next to the exe.
+  std::error_code ec;
+  c.save_dir = opt.userdata.empty() ? ExeDir() / "userdata" : fs::path(opt.userdata);
+  fs::create_directories(c.save_dir, ec);
+  logging::Open(opt.log.empty() ? (c.save_dir / "llamatron.log").string().c_str() : opt.log.c_str());
+  InstallCrashHandler();
+
+  std::string error;
+  c.disk_path = FindDisk(opt);
+  if (c.disk_path.empty()) {
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Llamatron",
+                             "Game disk not found.\nPut your Llamatron disk image (.msa or .st) in the game folder "
+                             "next to the program.", nullptr);
+    return 1;
+  }
+  disk::Bytes image = disk::LoadImage(c.disk_path, &error);
+  c.disk_files = disk::ReadFiles(image);
+  LOG("disk %s: %zu files", c.disk_path.c_str(), c.disk_files.size());
+  if (!c.disk_files.count("TRON1MEG.PRG")) {
+    std::string msg = c.disk_path + ":\nnot the Llamatron disk (TRON1MEG.PRG not found)" +
+                      (error.empty() ? "" : "\n" + error);
+    LOG("%s", msg.c_str());
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Llamatron", msg.c_str(), nullptr);
+    return 1;
+  }
+
+  // Settings (userdata\settings.txt, key=value; reread while running when it changes).
+  settings::Load((c.save_dir / "settings.txt").string());
+  game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
+  grid::LoadSettings();
+  settings::Save();  // so every setting is in the file, with its default
+  if (opt.aim >= 0) game::SetAnalogAim(opt.aim == 1);
+
+  SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+  SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON, "1");  // the window/taskbar icon: our resource 1
+  SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON_SMALL, "1");
+  if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
+    LOG("SDL_Init: %s", SDL_GetError());
+    return 1;
+  }
+  input::Init();
+  LogDisplayModes();
+
+  // Picture height in a 320-wide space: PAL pixel aspect (14.75 / 8) / 2 = 0.92 -> 200 / 0.92 = 217.
+  c.view_h = opt.pal_aspect ? int(std::lround(st::kScreenH * 2.0 * 8.0 / 14.75)) : st::kScreenH;
+  if (!opt.headless) {
+    c.window = SDL_CreateWindow("Llamatron", st::kScreenW * 4, st::kScreenH * 4,
+                                SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+    c.renderer = SDL_CreateRenderer(c.window, nullptr);
+    SDL_SetRenderVSync(c.renderer, 1);
+    if (opt.match_refresh) ChooseFullscreenMode(c.window, 50.0);
+    if (opt.fullscreen) SDL_SetWindowFullscreen(c.window, true);
+    c.texture = SDL_CreateTexture(c.renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, st::kScreenW,
+                                  st::kScreenH);
+    SDL_SetTextureScaleMode(c.texture, SDL_SCALEMODE_PIXELART);  // sharp, and even at non-integer scales
+    SDL_AudioSpec spec{SDL_AUDIO_F32, 1, kRate};
+    c.audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+    if (c.audio) SDL_ResumeAudioStreamDevice(c.audio);
+    else LOG("no audio: %s", SDL_GetError());
+  }
+
+  // --program (or tests): straight into that game, and leaving it quits. Otherwise the launcher.
+  if (opt.program_given || opt.headless || !c.renderer) {
+    RunGame(c, opt.program, true);
+  } else {
+    launcher::Launcher l(c.renderer);
+    l.Enter(launcher::kLlamatron);
+    while (RunLauncher(c, l)) {
+      int game = l.Selected();
+      GameEnd end = RunGame(c, game == launcher::kLlamatron ? "TRON1MEG.PRG" : "GRIDRUNR.PRG", false);
+      if (end == GameEnd::kQuitApp) break;
+      l.Enter(game);
+    }
+  }
+
+  if (!opt.wav.empty()) SaveWav(opt.wav, c.wav, kRate);
   input::Shutdown();
-  if (audio) SDL_DestroyAudioStream(audio);
-  if (texture) SDL_DestroyTexture(texture);
-  if (renderer) SDL_DestroyRenderer(renderer);
-  if (window) SDL_DestroyWindow(window);
+  if (c.audio) SDL_DestroyAudioStream(c.audio);
+  if (c.texture) SDL_DestroyTexture(c.texture);
+  if (c.renderer) SDL_DestroyRenderer(c.renderer);
+  if (c.window) SDL_DestroyWindow(c.window);
   SDL_Quit();
   return 0;
 }

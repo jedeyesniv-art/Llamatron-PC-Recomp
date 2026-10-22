@@ -123,7 +123,7 @@ bool Hook(st::Machine& m, const char* name, uint32_t off, uint16_t opcode, uint3
     return false;
   }
   Put16(m, a, 0x4AFC);
-  m.AddHook(a, [&m, fn] { fn(m); });
+  m.AddHook(a, [fn](st::Machine& running) { fn(running); });
   LOG("hook %s installed", name);
   return true;
 }
@@ -131,6 +131,11 @@ bool Hook(st::Machine& m, const char* name, uint32_t off, uint16_t opcode, uint3
 }  // namespace
 
 void SetAim(bool on, float x, float y) { g_aim = {on, x, y}; }
+
+void Reset() {
+  g_aim = {};
+  for (Shot& s : g_shots) s.on = false;
+}
 void SetAnalogAim(bool on) { g_analog = on; }
 bool AnalogAim() { return g_analog; }
 

@@ -38,6 +38,8 @@ void Update(st::Machine* m);
 bool QuitRequested();
 // Gridrunner's controls (gridrunner.h) instead of Llamatron's.
 void SetGridrunner(bool on);
+// Forgets the state of the last game (before starting another).
+void Reset();
 SDL_Gamepad* FirstPad();
 // A line to show over the picture (pause screen help, quit confirmation), or null.
 const char* Hint(st::Machine* m);

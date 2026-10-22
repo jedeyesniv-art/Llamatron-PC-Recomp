@@ -46,6 +46,8 @@ const char* Hint(st::Machine* m, bool have_pad);
 bool QuitRequested();
 // Hide objects in the entry lane under the top rail until they can be shot (default on; --entry-lane = off).
 void SetHideEntryLane(bool on);
+// Forgets the state of the last game (before starting another).
+void Reset();
 
 // Tests: a scripted pad for the next Update (sticks -1..1, triggers 0..1, RB).
 struct TestPad {

@@ -199,6 +199,7 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
     default:
       break;
   }
+  if (!m) return false;  // no game running (the launcher): only pads connecting
   if (g_gridrunner) {  // its pad buttons and Esc; every key goes to the ST
     if (grid::HandleEvent(e, m)) return true;
     if ((e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) && !e.key.repeat)
@@ -253,6 +254,15 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
 bool QuitRequested() { return g_quit || grid::QuitRequested(); }
 
 void SetGridrunner(bool on) { g_gridrunner = on; }
+
+void Reset() {
+  std::fill(std::begin(g_keys), std::end(g_keys), false);
+  g_a_held = g_a_to_stick0 = false;
+  g_taps.clear();
+  g_quit_to_title = 0;
+  g_quit_armed_ms = g_aim_hint_ms = 0;
+  g_quit = g_was_title = false;
+}
 SDL_Gamepad* FirstPad() { return g_pads.empty() ? nullptr : g_pads[0]; }
 
 const char* Hint(st::Machine* m) {

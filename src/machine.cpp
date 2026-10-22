@@ -174,11 +174,12 @@ bool Machine::RunFrame() {
     RunTimers(cycles_done_);
     AciaService(cycles_done_);
     while (line_ < kScreenH && line_end(line_) <= cycles_done_) {
-      RenderLine(line_++);
+      if (!sandbox) RenderLine(line_);
+      ++line_;
       DisplayLineEnd();
     }
   }
-  while (line_ < kScreenH) RenderLine(line_++);  // (the program ended mid-frame)
+  while (!sandbox && line_ < kScreenH) RenderLine(line_++);  // (the program ended mid-frame)
   // VBL: the shifter latches the new screen address.
   uint32_t base = uint32_t(vbase_hi_) << 16 | uint32_t(vbase_mid_) << 8;
   if (base != vbase_latched_) ++swaps_;  // the game shows a new frame
@@ -192,6 +193,7 @@ bool Machine::RunFrame() {
 
 void Machine::Sync() {
   uint64_t now = Now();
+  if (sandbox) audio_synced_ = now;
   if (now <= audio_synced_) return;
   ym_.Run(double(now - audio_synced_) * (2000000.0 / kCpuHz), &audio_);
   audio_synced_ = now;
@@ -631,7 +633,7 @@ std::string Machine::ReadString(uint32_t a) {
 bool Machine::IllegalOpcode(int) {
   uint32_t pc = cpu::Get(cpu::PPC) & 0xFFFFFF;
   if (auto hook = hooks_.find(pc); hook != hooks_.end()) {
-    hook->second();
+    hook->second(*this);
     return true;
   }
   if (pc < kRomBase || pc >= kRomBase + kRomSize) return false;
@@ -924,7 +926,7 @@ bool Machine::Xbios(uint32_t args, uint32_t* d0) {
 }
 
 void Machine::SaveFile(const std::string& name) {
-  if (save_dir_.empty()) return;
+  if (save_dir_.empty() || sandbox) return;
   std::string path = save_dir_ + "/" + name;
   if (FILE* f = std::fopen(path.c_str(), "wb")) {
     const disk::Bytes& d = files_[name];

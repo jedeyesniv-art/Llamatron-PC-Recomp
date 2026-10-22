@@ -33,6 +33,12 @@ elease\Llamatron-<ver>-windows.zip (no game
                         crash.cpp (unhandled exception -> stack in the log), musashi\m68kconf.h (our Musashi config,
                         copied over the submodule's at build time).
 - third_party\          submodules: musashi (kstenerud/Musashi, MIT-style), SDL (3.4.16, static).
+- src\launcher.cpp      the start screen (2026-10-22): two low-poly 3.5" disks (SDL_RenderGeometry, own projection
+                        and flat shading), hand-scrawled labels (stroke font; owner will supply label images),
+                        pools of light + bloom on pure black (owner: no beam, no grey floor), Y = how to play,
+                        B twice quits; games return to it (B twice on their title). main.cpp: RunLauncher /
+                        RunGame (a fresh st::Machine per game; input/game/grid::Reset). --program skips it.
+                        Tests: --lpress=N:<pad button>, --lshot=N:<bmp>, --lframes=N.
 - res\                  README.txt (the player's readme), llamatron.ico + .rc.in (icon, version info).
 - licenses\             THIRD-PARTY-NOTICES.txt (SDL zlib, Musashi MIT-style, SoftFloat 2b, ayumi MIT).
 - Tools\                st_disk.py (msa -> files), depack.py (TRON1MEG.PRG -> tron.bin + tron.reloc),
@@ -111,10 +117,17 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   chose "invisible until vulnerable", on by default, --entry-lane = the original look). Snakes (objects: table
   $46770, $B4 bytes x 15; +2 x, +4 y, +6 type: 2 head / 3 body, +$20 shootable, +$2E hits the ship) come in
   along y = 5 under the top rail; shots only hit at shot y >= 20 ($1345E: a deliberate safe zone); the sprites'
-  lowest row (y + 6) shows at lines 10-11 below the rail (rail lines 3-9, grid from 10). Hook on the object draw
-  routine $1655E ("cmpi.w #$1D,6(a3); beq rts $12C3C"): objects with y < 14 aren't drawn. Installed once the
-  title has been seen (code checked first). Same input with / without: RAM differs only in the per-screen restore
-  lists + 1 stack byte. Rejected (owner agreed): hittable in the lane (breaks the safe zone / balance), a taller
+  lowest row (y + 6) shows at lines 10-11 below the rail (rail lines 3-9, grid from 10). Hook on the snake draw
+  routine $1655E ("cmpi.w #$1D,6(a3); beq rts $12C3C"): it draws a WHOLE snake - called with the tail segment
+  (+8 = $FFFF), it follows the links +$E to the head - so the hook walks the chain: hidden only while every
+  segment has y < 14 and none is due. (The first version looked only at the tail: a snake coming down stayed
+  invisible until its tail left the lane, head already shootable - the owner's "surprise attacks".)
+  "Visible 1.5 s before vulnerable" (owner): look-ahead - every 15 frames in play with something in the lane, a
+  copy of the machine (Machine is copyable; cpu::SaveContext/RestoreContext/SetMachine; sandbox = no picture,
+  sound, files; CPU x1: the logic is in the VBL) runs 90 frames with the controls held; each object is drawn
+  from 75 frames before it leaves the lane (g_reveal_at). Measured: head predicted at frame 3472 from every
+  look-ahead (3390+82, 3405+67...), shown from 3405 (orig: visible, old: never), whole snake visible coming down.
+  Same input with / without: RAM differs only in drawing (restore lists, lane pixels, stack). Rejected (owner agreed): hittable in the lane (breaks the safe zone / balance), a taller
   playfield (frame, rails, limits, HUD all move). Tool: grid_objects.py <dump> lists the objects.
 - High scores: HISCORES.COW, 40 x (8-digit score + 3 letters) + 3 messages; byte $217 = checksum: $27 + the
   sum of bytes 0..$216 ($193AC); a bad checksum = the file is ignored silently (the built-in table $49520 is

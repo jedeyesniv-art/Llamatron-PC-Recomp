@@ -33,6 +33,14 @@ constexpr int kOptionRows[4] = {84, 104, 134, 186};  // pause mode demo, freeze,
 constexpr uint32_t kDrawObject = 0x1655E, kDrawObjectNext = 0x16568, kDrawObjectSkip = 0x12C3C;
 constexpr int kLaneHiddenBelowY = 14;
 
+// "Show them 1.5 s before they can be hit" (owner): the game doesn't decide in advance when a snake leaves the
+// lane, so we look ahead - every 15 frames in play, while something is in the lane, a copy of the whole machine
+// runs 90 frames (original CPU speed, nothing drawn: the logic is in the VBL and doesn't depend on drawing) with
+// the controls as they are, and each lane object is drawn from 75 frames before it leaves the lane.
+constexpr uint32_t kObjects = 0x46770, kObjectSize = 0xB4;
+constexpr int kObjectSlots = 15, kRevealFrames = 75, kLookAhead = 90, kPredictEvery = 15;
+constexpr int64_t kNever = INT64_MAX;
+
 // ST scancodes we press for the player.
 constexpr uint8_t kRShift = 0x36, kLShift = 0x2A, kCtrl = 0x1D, kAlt = 0x38, kSpace = 0x39, kQ = 0x10;
 
@@ -60,6 +68,8 @@ bool g_quit = false;
 bool g_running = false;  // the game has unpacked itself and reached its title
 bool g_hide_entry_lane = true;
 bool g_hooked = false;
+int64_t g_frame = 0;                    // frames since the game started
+int64_t g_reveal_at[kObjectSlots] = {};  // a lane object is drawn from this frame on (kNever: not soon)
 bool g_test = false;
 TestPad g_test_pad;
 
@@ -117,13 +127,55 @@ void InstallHooks(st::Machine* m) {
     return;
   }
   Put16(*m, kDrawObject, 0x4AFC);
-  m->AddHook(kDrawObject, [m] {
+  // The routine draws a whole snake: it gets the tail segment and follows the links (+$E) to the head. Hidden only
+  // while every segment is still in the lane and none of them is due to show (the look-ahead).
+  m->AddHook(kDrawObject, [](st::Machine& running) {
     uint32_t obj = cpu::Get(cpu::Reg(cpu::A0 + 3)) & 0xFFFFFF;
-    int type = Get16(*m, obj + 6), y = int16_t(Get16(*m, obj + 4));
-    bool skip = type == 0x1D || (g_hide_entry_lane && y < kLaneHiddenBelowY);
+    bool hide = g_hide_entry_lane && Get16(running, obj + 6) != 0x1D;
+    for (uint32_t o = obj, n = 0; hide && o && n < uint32_t(kObjectSlots); ++n) {
+      uint32_t slot = (o - kObjects) / kObjectSize;
+      if (o < kObjects || slot >= uint32_t(kObjectSlots)) break;
+      if (int16_t(Get16(running, o + 4)) >= kLaneHiddenBelowY || g_frame >= g_reveal_at[slot]) hide = false;
+      o = (uint32_t(Get16(running, o + 0xE)) << 16 | Get16(running, o + 0x10)) & 0xFFFFFF;
+    }
+    bool skip = Get16(running, obj + 6) == 0x1D || hide;
     cpu::Set(cpu::PC, skip ? kDrawObjectSkip : kDrawObjectNext);
   });
   LOG("gridrunner: entry lane hook installed (%s)", g_hide_entry_lane ? "hiding it" : "original look");
+}
+
+bool InLane(st::Machine& m, int slot) {
+  uint32_t o = kObjects + uint32_t(slot) * kObjectSize;
+  return Get16(m, o) && int16_t(Get16(m, o + 4)) < kLaneHiddenBelowY;
+}
+
+// Looks ahead: when does each object now in the lane leave it?
+void Predict(st::Machine* m) {
+  bool in_lane[kObjectSlots], any = false;
+  for (int i = 0; i < kObjectSlots; ++i) any |= in_lane[i] = InLane(*m, i);
+  for (int64_t& r : g_reveal_at) r = kNever;
+  if (!any) return;
+  std::vector<uint8_t> context = cpu::SaveContext();
+  st::Machine fork = *m;
+  fork.sandbox = true;
+  fork.trace_tos = false;
+  fork.SetCpuSpeed(1);
+  cpu::SetMachine(&fork);
+  for (int k = 1; k <= kLookAhead && any; ++k) {
+    if (!fork.RunFrame()) break;
+    any = false;
+    for (int i = 0; i < kObjectSlots; ++i) {
+      if (!in_lane[i]) continue;
+      if (!InLane(fork, i)) {
+        in_lane[i] = false;
+        g_reveal_at[i] = g_frame + k - kRevealFrames;
+        if (m->trace_tos) LOG("lane: frame %lld, object %d leaves the lane in %d frames", (long long)g_frame, i, k);
+      }
+      any |= in_lane[i];
+    }
+  }
+  cpu::SetMachine(m);
+  cpu::RestoreContext(context);
 }
 
 // The pointer to the name entry cell (col, row), kept on the keyboard (row 3 has only ^ and _ in columns 8, 9).
@@ -269,6 +321,8 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
   // Only once the game is running: before it has unpacked itself these addresses hold its packed data.
   g_running |= GameState(*m) == kTitle;
   if (g_running && !g_hooked) InstallHooks(m);
+  ++g_frame;
+  if (g_running && g_hide_entry_lane && GameState(*m) == kPlay && g_frame % kPredictEvery == 0) Predict(m);
   if (g_running) Put16(*m, kFramesPerDraw, g_tune.draw_50 && GameState(*m) == kPlay ? 1 : 2);
   uint8_t buttons = mouse_buttons;
   bool test = g_test;
@@ -374,6 +428,19 @@ const char* Hint(st::Machine* m, bool have_pad) {
 bool QuitRequested() { return g_quit; }
 
 void SetHideEntryLane(bool on) { g_hide_entry_lane = on; }
+
+void Reset() {
+  g_taps.clear();
+  g_px = g_py = 0;
+  g_held_keys = 0;
+  g_flick = 0;
+  g_quit_armed_ms = g_title_hint_ms = 0;
+  g_quit = g_running = g_hooked = g_test = false;
+  g_clicks.clear();
+  g_click_frame = g_prev_state = -1;
+  g_frame = 0;
+  for (int64_t& r : g_reveal_at) r = kNever;
+}
 
 void SetTestPad(const TestPad& t) {
   g_test = true;

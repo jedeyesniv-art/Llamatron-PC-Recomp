@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace st {
 class Machine;
@@ -21,6 +22,12 @@ uint32_t Get(Reg r);
 void Set(Reg r, uint32_t v);
 // If set, called before every instruction with its address and the interrupt mask (profiling; slow).
 extern void (*g_profile)(uint32_t pc, int ipl);
+
+// The CPU's state, for running a copy of the machine and coming back (look-ahead).
+std::vector<uint8_t> SaveContext();
+void RestoreContext(const std::vector<uint8_t>& context);
+// Whose bus the CPU uses (Init sets it).
+void SetMachine(st::Machine* machine);
 
 // One-line disassembly (for traces).
 const char* Disassemble(uint32_t pc, int* size);

@@ -50,6 +50,8 @@ void ApplyPatches(st::Machine& m, const Options& o);
 void SetAim(bool on, float x, float y);
 // Analog aim on/off (the player's setting; off = the original 8 directions).
 void SetAnalogAim(bool on);
+// Forgets the state of the last game (before starting another).
+void Reset();
 bool AnalogAim();
 
 }  // namespace game

@@ -73,11 +73,13 @@ class Machine {
   // Where the program's text was loaded.
   uint32_t TextBase() const { return kTextBase; }
 
-  // Code hooks: the game instruction at `addr` is replaced by ILLEGAL; when reached, `fn` runs instead and must
-  // do the replaced instruction's work and set the PC to continue.
-  void AddHook(uint32_t addr, std::function<void()> fn) { hooks_[addr] = std::move(fn); }
+  // Code hooks: the game instruction at `addr` is replaced by ILLEGAL; when reached, `fn` runs instead (with the
+  // machine it runs in) and must do the replaced instruction's work and set the PC to continue.
+  void AddHook(uint32_t addr, std::function<void(Machine&)> fn) { hooks_[addr] = std::move(fn); }
 
   bool trace_tos = false;
+  // A look-ahead copy (the machine is copyable; run it with cpu::SetMachine): no picture, no sound, no files.
+  bool sandbox = false;
 
  private:
   static constexpr uint32_t kBasepage = 0x10000, kTextBase = kBasepage + 0x100;
@@ -115,7 +117,7 @@ class Machine {
   std::string ReadString(uint32_t a);
 
   std::vector<uint8_t> ram_ = std::vector<uint8_t>(kRamSize);
-  std::map<uint32_t, std::function<void()>> hooks_;
+  std::map<uint32_t, std::function<void(Machine&)>> hooks_;
   std::array<uint8_t, kRomSize> rom_{};
   std::array<uint32_t, kScreenW * kScreenH> frame_{};
 
