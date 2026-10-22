@@ -31,7 +31,8 @@ Goal: a native Windows app (SDL3) that plays well on an Xbox pad, twin-stick sty
 ## Running and testing
 build\llamatron.exe finds the disk image itself (game\ next to the exe, the exe's folder, nearest Private\ up).
 Saves (hiscores: SCORES.YAK) go to userdata\ next to the exe; files there replace the disk's.
-Options: --disk=<.msa|.st> --log=<file> --trace-tos --fullscreen (F11 / Alt+Enter toggle)
+Options: --disk=<.msa|.st> --log=<file> (default userdata\llamatron.log) --trace-tos --window (fullscreen is the
+default; F11 / Alt+Enter toggle) --refresh=desktop (don't change the display mode)
 Tests: --headless --frames=N --shot=N:<file.bmp> --wav=<file> --press=N:<what>[:frames], what = j0|j1 +
 fire|up|down|left|right, or an SDL key name. The exe is a GUI app: from PowerShell use Start-Process -Wait.
 Scripted path: press j1fire at frame 150 (leaves the shareware screen), title is up by ~2900, j0fire there at 3000
@@ -86,4 +87,10 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
 - YM2149 run up to the CPU time before every register write (digitized samples need it), box-filtered to 48 kHz,
   DC blocked. Levels from ayumi (MIT).
 - Musashi gotcha: m68k_set_reg(SR) doesn't swap USP/SSP on a mode change - cpu::Set(SR) does it.
-- Pacing: wall clock at the ST frame rate (50.05 Hz), vsync'd present (50 on a 60 Hz display judders a bit).
+- Pacing (owner 2026-10-22: "run it at 60 but with the speed from 50?" - the game moves a fixed amount per frame
+  and its own 60 Hz mode is just 20% faster, so: show 50 Hz evenly). Fullscreen picks the desktop resolution at
+  the fastest refresh that is a whole multiple of 50 Hz (owner's 4K 120 Hz screen: 100 Hz; 60 Hz screens often
+  have 50), and if the display's refresh is k x the game's rate, one game frame per k vsyncs (game runs at
+  50.00 instead of 50.05). Otherwise (windowed at 120 Hz...) by the wall clock: uneven 2/3 refreshes per frame.
+  Audio: ~50 ms queued, SDL stream frequency ratio +-0.5% to follow. Log: "pacing: ..." and every 10 s
+  "timing: game frames/s, presents/s, longest present gap" (measured: 50.00 / 100.00 / 10.4 ms).
