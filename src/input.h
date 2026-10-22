@@ -5,7 +5,8 @@
 //   left stick / d-pad  = joystick 1 directions     A = joystick 1 fire; but on the title screen A is joystick 0
 //                                                     fire = starts the twin-stick game (where the mode allows)
 //   right stick         = joystick 0 directions     X = joystick 1 fire (on the title: a one-stick game)
-//                                                   Start, RB, RT = joystick 0 fire
+//                                                   Start, RB, RT = joystick 0 fire (not RB at the title)
+//   RB at the title     = analog aim on / off (twin-stick shots in any direction; off = the original 8)
 //   Back                = pause / resume (the game's P and O keys)
 //   Y                   = paused: the Ozric tentacle on / off (the game's T and G keys)
 //   B                   = paused: quit to the title (the game's X key, which only works in play); title: quit

@@ -31,6 +31,7 @@ struct Options {
   bool fullscreen = true;  // --window / --fullscreen
   bool match_refresh = true;  // --refresh=desktop: keep the desktop's refresh rate in fullscreen
   game::Options game;       // --flashes: keep the original screen flashes
+  int aim = -1;             // --aim=8|analog for this run (else the saved setting, RB at the title)
   int cpu_speed = 8;        // --cpu=N: CPU speed multiple during play (1 = the ST's 8 MHz)
   // --aspect=square (320x200 with square pixels: 16:10) or pal (as on a UK TV: an ST pixel is 8 MHz wide on a
   // line where square pixels are 14.75 MHz, and two TV lines tall -> pixel aspect 0.92, picture ~1.48:1)
@@ -100,7 +101,8 @@ Options ParseArgs(int argc, char** argv) {
     else if (a == "--window") o.fullscreen = false;
     else if (Arg(a, "aspect", &v)) o.pal_aspect = v != "square";
     else if (a == "--flashes") o.game.flashes = true;
-    else if (a == "--aim=8") o.game.analog_aim = false;
+    else if (a == "--aim=8") o.aim = 0;
+    else if (a == "--aim=analog") o.aim = 1;
     else if (Arg(a, "cpu", &v)) o.cpu_speed = std::max(1, std::atoi(v.c_str()));
     else if (Arg(a, "refresh", &v)) o.match_refresh = v != "desktop";
     else if (a == "--headless") o.headless = true;
@@ -279,6 +281,16 @@ int main(int argc, char** argv) {
     return 1;
   }
   game::ApplyPatches(machine, opt.game);
+  // Settings (userdata\settings.txt, key=value): analog_aim.
+  fs::path settings = save_dir / "settings.txt";
+  if (FILE* f = std::fopen(settings.string().c_str(), "r")) {
+    char line[128];
+    while (std::fgets(line, sizeof(line), f))
+      if (std::strncmp(line, "analog_aim=", 11) == 0) game::SetAnalogAim(line[11] == '1');
+    std::fclose(f);
+  }
+  if (opt.aim >= 0) game::SetAnalogAim(opt.aim == 1);
+  LOG("analog aim %s", game::AnalogAim() ? "on" : "off");
   LOG("cpu speed during play x%d", opt.cpu_speed);
 
   SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
@@ -514,6 +526,12 @@ int main(int argc, char** argv) {
   }
 
   LOG("exit after %d frames", frame);
+  if (opt.aim < 0) {
+    if (FILE* f = std::fopen(settings.string().c_str(), "w")) {
+      std::fprintf(f, "analog_aim=%d\n", game::AnalogAim() ? 1 : 0);
+      std::fclose(f);
+    }
+  }
   if (!opt.wav.empty()) SaveWav(opt.wav, wav, kRate);
   input::Shutdown();
   if (audio) SDL_DestroyAudioStream(audio);

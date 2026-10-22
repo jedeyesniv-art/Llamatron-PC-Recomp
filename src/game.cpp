@@ -40,6 +40,8 @@ void Put16(st::Machine& m, uint32_t a, uint16_t v) { m.Ram()[a] = uint8_t(v >> 8
 constexpr uint32_t kShots = 0x54FD4, kShotSlots = 64, kLlamaX = 0x4CFA4, kLlamaY = 0x4CFA6, kHot = 0x1634;
 constexpr uint32_t kTwinStick = 0x8616;
 
+bool g_analog = false;  // the player's setting (RB at the title)
+
 struct Aim {
   bool on = false;
   float x = 0, y = 0;
@@ -67,7 +69,7 @@ void OnShotCreated(st::Machine& m) {
   if (a0 < t + kShots || slot >= kShotSlots) return;
   Shot& s = g_shots[slot];
   s.on = false;
-  if (!g_aim.on || !Get16(m, t + kTwinStick) || Get16(m, t + kHot)) return;
+  if (!g_analog || !g_aim.on || !Get16(m, t + kTwinStick) || Get16(m, t + kHot)) return;
   double len = std::hypot(g_aim.x, g_aim.y), c = g_aim.x / len, sn = g_aim.y / len;
   double speed = 3.0 / std::max(std::fabs(c), std::fabs(sn));
   s.on = true;
@@ -129,6 +131,8 @@ bool Hook(st::Machine& m, const char* name, uint32_t off, uint16_t opcode, uint3
 }  // namespace
 
 void SetAim(bool on, float x, float y) { g_aim = {on, x, y}; }
+void SetAnalogAim(bool on) { g_analog = on; }
+bool AnalogAim() { return g_analog; }
 
 void ApplyPatches(st::Machine& m, const Options& o) {
   if (!o.flashes) {
@@ -138,10 +142,10 @@ void ApplyPatches(st::Machine& m, const Options& o) {
     // timing, one still cuts another short), the background stays black. The end of a list writes 0 as before.
     Apply(m, {"no screen flashes", 0x53DA, {0x33, 0xC0, 0x00, 0xFF, 0x82, 0x40}, {0x4E, 0x71, 0x4E, 0x71, 0x4E, 0x71}});
   }
-  if (o.analog_aim) {
-    Hook(m, "analog aim: shot created", 0x10A8, 0x3179, kLlamaY, OnShotCreated);
-    Hook(m, "analog aim: shots move", 0x1198, 0x41F9, kShots, OnShotsMove);
-  }
+  // Analog aim: the hooks are always in; they only change shots while the setting is on (new shots: shots
+  // already flying keep their direction when it's switched).
+  Hook(m, "analog aim: shot created", 0x10A8, 0x3179, kLlamaY, OnShotCreated);
+  Hook(m, "analog aim: shots move", 0x1198, 0x41F9, kShots, OnShotsMove);
 }
 
 }  // namespace game

@@ -110,7 +110,10 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   identical except the 5 white frames. --flashes restores them. Left alone: colour 1 rainbow cycle in the VBL
   ($5402, smooth), the load indicators at $87B0.. (boot).
 
-- Analog aim (owner 2026-10-22: "can we make this full analog?"), --aim=8 = original. Code hooks
+- Analog aim (owner 2026-10-22: "can we make this full analog?"; then: a toggle for purists, RB, off by
+  default): RB at the title toggles it (hint line for 4 s when the title appears / 3 s after a toggle; RB isn't
+  stick-2 fire at the title any more), saved in userdata\settings.txt (analog_aim=0|1); --aim=8|analog for one
+  run (not saved). The hooks are always installed; off = they leave shots alone. Code hooks
   (Machine::AddHook: the instruction becomes ILLEGAL, C++ runs and does its work): $10A8 (shot created, a0 = slot)
   and $1198 (shot movement starts, VBL). Shots ($54FD4, 16-byte slots: x, y, dx, dy, sprite 29/30/31/32, $C hot
   lifetime) move by integer dx/dy (-3/0/3); we keep an exact position/velocity per slot (any angle of the right

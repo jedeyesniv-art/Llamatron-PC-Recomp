@@ -24,6 +24,8 @@ std::vector<Tap> g_taps;
 int g_quit_to_title = 0;      // frames left waiting for the game to resume before tapping X (quit to title)
 uint64_t g_quit_armed_ms = 0; // B at the title: quit if pressed again before this time
 bool g_quit = false;
+uint64_t g_aim_hint_ms = 0;   // show the analog aim setting until then (title screen)
+bool g_was_title = false;
 
 void TapKey(st::Machine* m, uint8_t code) {
   m->KeyEvent(code, true);
@@ -201,6 +203,13 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
         TentacleButton(m);
         return true;
       }
+      if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER &&
+          game::AtTitle(*m)) {  // RB at the title: analog aim on / off
+        game::SetAnalogAim(!game::AnalogAim());
+        g_aim_hint_ms = SDL_GetTicks() + 3000;
+        LOG("analog aim %s", game::AnalogAim() ? "on" : "off");
+        return true;
+      }
       if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
         MenuButton(m);
         return true;
@@ -229,8 +238,13 @@ const char* Hint(st::Machine* m) {
   if (game::Paused(*m))
     return g_pads.empty() ? "O: resume   Esc: quit to title\nT / G: tentacle on / off"
                           : "Back: resume   B: quit to title\nY: tentacle (left stick plays)";
-  if (game::AtTitle(*m) && SDL_GetTicks() < g_quit_armed_ms)
+  bool title = game::AtTitle(*m);
+  if (title && !g_was_title) g_aim_hint_ms = SDL_GetTicks() + 4000;  // shown for a while when the title comes up
+  g_was_title = title;
+  if (title && SDL_GetTicks() < g_quit_armed_ms)
     return g_pads.empty() ? "Press Esc again to quit" : "Press B again to quit";
+  if (title && !g_pads.empty() && SDL_GetTicks() < g_aim_hint_ms)
+    return game::AnalogAim() ? "RB: analog aim ON" : "RB: analog aim OFF (8 directions)";
   return nullptr;
 }
 
@@ -274,7 +288,7 @@ void Update(st::Machine* m) {
       float ay = SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
       aim = ax * ax + ay * ay >= 0.35f * 0.35f;  // the same dead zone as the 8-way direction
       if (aim) game::SetAim(true, ax, ay);
-      if (button(SDL_GAMEPAD_BUTTON_START) || button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) ||
+      if (button(SDL_GAMEPAD_BUTTON_START) || (button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) && !game::AtTitle(*m)) ||
           SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000)
         j0 |= st::kJoyFire;
       // A at the title starts the twin-stick game (fire on stick 2), elsewhere it's stick 1's fire. Decided when
