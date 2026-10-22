@@ -126,5 +126,9 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   the fastest refresh that is a whole multiple of 50 Hz (owner's 4K 120 Hz screen: 100 Hz; 60 Hz screens often
   have 50), and if the display's refresh is k x the game's rate, one game frame per k vsyncs (game runs at
   50.00 instead of 50.05). Otherwise (windowed at 120 Hz...) by the wall clock: uneven 2/3 refreshes per frame.
+  Clock pacing presents only new frames and sleeps (SDL_DelayPrecise) until the next one is due, so a
+  variable refresh display (G-Sync/FreeSync) refreshes at 50 Hz: smooth on 60 Hz-only VRR screens too
+  (measured, windowed and fullscreen at 120 Hz: 50.05 presents/s, gaps 20.5-21.4 ms; VRR itself untested).
+  Fixed 60 Hz without VRR or a 50 Hz mode: 5 frames in 6 refreshes, a hitch 10x a second (unavoidable).
   Audio: ~50 ms queued, SDL stream frequency ratio +-0.5% to follow. Log: "pacing: ..." and every 10 s
   "timing: game frames/s, presents/s, longest present gap" (measured: 50.00 / 100.00 / 10.4 ms).

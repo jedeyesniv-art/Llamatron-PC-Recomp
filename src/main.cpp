@@ -367,6 +367,14 @@ int main(int argc, char** argv) {
       } else {
         if (t * hz - frames_due > 6) frames_due = t * hz;  // resync after a stall
         run = std::max(0, std::min(int(t * hz - frames_due), 3));
+        // Present only new frames, and wait for the next one in between: on a variable refresh display
+        // (G-Sync / FreeSync) the screen then refreshes at the game's 50 Hz - smooth. On a fixed 60 Hz one each
+        // frame waits for the next refresh as before.
+        if (run == 0) {
+          double wait = (frames_due + 1 - t * hz) / hz;
+          if (wait > 0) SDL_DelayPrecise(uint64_t(std::min(wait, 0.02) * 1e9));
+          continue;
+        }
       }
     }
     for (int i = 0; i < run && running; ++i) {
