@@ -3,6 +3,7 @@
 #include <SDL3/SDL_main.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -10,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "cpu.h"
 #include "crash.h"
 #include "disk.h"
 #include "game.h"
@@ -28,6 +30,7 @@ struct Options {
   bool fullscreen = true;  // --window / --fullscreen
   bool match_refresh = true;  // --refresh=desktop: keep the desktop's refresh rate in fullscreen
   game::Options game;       // --flashes: keep the original screen flashes
+  int cpu_speed = 8;        // --cpu=N: CPU speed multiple during play (1 = the ST's 8 MHz)
   bool headless = false;   // --headless: no window or audio (tests)
   int frames = 0;          // --frames=N: quit after N frames
   std::string wav;         // --wav=<file>: also write the audio to a WAV file (tests)
@@ -38,6 +41,18 @@ struct Options {
     std::string what;
   };
   std::vector<Press> presses;
+  // --poke=N:<hex text offset>:<hex word>: write a word into the game's memory at frame N (tests)
+  struct Poke {
+    int frame;
+    uint32_t offset;
+    uint16_t value;
+  };
+  std::vector<Poke> pokes;
+  std::vector<uint32_t> watches;
+  // --profile=N:M:<file>: count instructions per 16-byte block of the game's text, split by interrupt mask
+  // (main loop = mask < 4, VBL/MFP handlers >= 4), over frames N..M; written to <file>.
+  int profile_from = -1, profile_to = -1;
+  std::string profile_file;  // --watch=<hex text offset>[,...]: log these words every 10 frames (tests)
 };
 
 bool Arg(const std::string& a, const char* name, std::string* value) {
@@ -61,10 +76,25 @@ Options ParseArgs(int argc, char** argv) {
       o.presses.push_back({std::atoi(v.c_str()), c2 == std::string::npos ? 3 : std::atoi(v.c_str() + c2 + 1),
                            v.substr(c1 + 1, c2 == std::string::npos ? std::string::npos : c2 - c1 - 1)});
     }
+    else if (Arg(a, "poke", &v)) {
+      size_t c1 = v.find(':'), c2 = v.find(':', c1 + 1);
+      o.pokes.push_back({std::atoi(v.c_str()), uint32_t(std::strtoul(v.c_str() + c1 + 1, nullptr, 16)),
+                         uint16_t(std::strtoul(v.c_str() + c2 + 1, nullptr, 16))});
+    }
+    else if (Arg(a, "watch", &v)) {
+      for (size_t p = 0; p < v.size(); p = v.find(',', p) == std::string::npos ? v.size() : v.find(',', p) + 1)
+        o.watches.push_back(uint32_t(std::strtoul(v.c_str() + p, nullptr, 16)));
+    }
+    else if (Arg(a, "profile", &v)) {
+      size_t c1 = v.find(':'), c2 = v.find(':', c1 + 1);
+      o.profile_from = std::atoi(v.c_str()), o.profile_to = std::atoi(v.c_str() + c1 + 1);
+      o.profile_file = v.substr(c2 + 1);
+    }
     else if (a == "--trace-tos") o.trace_tos = true;
     else if (a == "--fullscreen") o.fullscreen = true;
     else if (a == "--window") o.fullscreen = false;
     else if (a == "--flashes") o.game.flashes = true;
+    else if (Arg(a, "cpu", &v)) o.cpu_speed = std::max(1, std::atoi(v.c_str()));
     else if (Arg(a, "refresh", &v)) o.match_refresh = v != "desktop";
     else if (a == "--headless") o.headless = true;
     else LOG("unknown option %s", a.c_str());
@@ -165,6 +195,23 @@ float DisplayRefresh(SDL_Window* window) {
   return m ? m->refresh_rate : 0.0f;
 }
 
+// --profile: instruction counts per 16-byte block of the text, [0] = main loop, [1] = interrupts.
+std::map<uint32_t, std::array<uint64_t, 2>> g_profile_counts;
+uint32_t g_profile_base = 0;
+void ProfileHook(uint32_t pc, int ipl) {
+  uint32_t off = (pc & 0xFFFFFF) - g_profile_base;
+  if (off < 0x60000) ++g_profile_counts[off >> 4][ipl >= 4];
+}
+
+void WriteProfile(const std::string& path) {
+  FILE* f = std::fopen(path.c_str(), "w");
+  if (!f) return;
+  for (const auto& [block, n] : g_profile_counts)
+    std::fprintf(f, "%06X %llu %llu\n", block << 4, (unsigned long long)n[0], (unsigned long long)n[1]);
+  std::fclose(f);
+  LOG("profile written to %s", path.c_str());
+}
+
 uint8_t PressBits(const std::string& what, int* port) {
   *port = what.size() > 1 && what[1] == '0' ? 0 : 1;
   std::string b = what.substr(2);
@@ -225,6 +272,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   game::ApplyPatches(machine, opt.game);
+  LOG("cpu speed during play x%d", opt.cpu_speed);
 
   SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
@@ -264,6 +312,10 @@ int main(int argc, char** argv) {
   // Timing stats, logged every 10 s: game frames and presents per second, longest gap between presents.
   uint64_t stats_start = SDL_GetTicksNS(), last_present = 0, worst_gap = 0;
   int stats_frames = 0, stats_presents = 0;
+  // Screen swaps (frames the game finished drawing) per second of ST time, counting only seconds spent playing.
+  // Every 10 s: average and the worst second.
+  int swaps_second = 0, swaps_total = 0, swaps_worst = 1 << 30, swaps_seconds = 0;
+  bool playing_second = true;
   bool running = true, at_title = false;
   while (running) {
     SDL_Event e;
@@ -317,9 +369,46 @@ int main(int argc, char** argv) {
           input::HandleEvent(ke, &machine);
         }
       }
+      for (const auto& p : opt.pokes) {
+        if (p.frame != frame) continue;
+        uint8_t* at = machine.Ram() + machine.TextBase() + p.offset;
+        at[0] = uint8_t(p.value >> 8), at[1] = uint8_t(p.value);
+      }
+      if (frame == opt.profile_from) g_profile_base = machine.TextBase(), cpu::g_profile = ProfileHook;
+      if (frame == opt.profile_to) cpu::g_profile = nullptr, WriteProfile(opt.profile_file);
+      // The faster CPU only while playing: the drawing keeps up with the sprites (the game logic is in the 50 Hz
+      // VBL either way); other screens are timed by CPU speed and keep the original.
+      bool playing = game::Playing(machine);
+      machine.SetCpuSpeed(playing ? opt.cpu_speed : 1);
+      playing_second &= playing;
       if (!machine.RunFrame()) running = false;
       ++frame;
       ++stats_frames;
+      swaps_second += machine.TakeSwaps();
+      if (!opt.watches.empty() && frame % 10 == 0) {
+        std::string line;
+        for (uint32_t w : opt.watches) {
+          const uint8_t* at = machine.Ram() + machine.TextBase() + w;
+          char buf[32];
+          std::snprintf(buf, sizeof(buf), " %X=%d", w, int16_t(at[0] << 8 | at[1]));
+          line += buf;
+        }
+        LOG("frame %d:%s", frame, line.c_str());
+      }
+      if (frame % 50 == 0) {
+        if (playing_second) {
+          swaps_total += swaps_second;
+          swaps_worst = std::min(swaps_worst, swaps_second);
+          ++swaps_seconds;
+        }
+        swaps_second = 0;
+        playing_second = true;
+        if (frame % 500 == 0 && swaps_seconds) {
+          LOG("frame %d: drawn %.1f frames/s while playing, worst second %d (%d s)", frame,
+              double(swaps_total) / swaps_seconds, swaps_worst, swaps_seconds);
+          swaps_total = swaps_seconds = 0, swaps_worst = 1 << 30;
+        }
+      }
       bool title = game::AtTitle(machine);
       if (title != at_title) {
         if (title) LOG("frame %d: title screen", frame);

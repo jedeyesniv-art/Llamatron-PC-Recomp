@@ -135,7 +135,8 @@ bool Machine::Load(const disk::Program& program, std::map<std::string, disk::Byt
   return true;
 }
 
-uint64_t Machine::Now() const { return cycles_done_ + uint64_t(cpu::CyclesRun()); }
+// ST time: the CPU runs speed_ cycles per ST cycle; cpu_rem_ carries the remainder between slices.
+uint64_t Machine::Now() const { return cycles_done_ + uint64_t(cpu::CyclesRun() + cpu_rem_) / uint64_t(speed_); }
 
 double Machine::FrameHz() const { return Is60Hz() ? kCpuHz / 133604.0 : kCpuHz / 160256.0; }
 
@@ -146,13 +147,17 @@ bool Machine::RunFrame() {
     if (timer_a_next_) next = std::min(next, timer_a_next_);
     if (!ikbd_out_.empty() && !acia_rx_full_) next = std::min(next, std::max(acia_next_, cycles_done_ + 1));
     int slice = int(std::max<uint64_t>(next - cycles_done_, 1));
-    cycles_done_ += uint64_t(cpu::Execute(slice));
+    uint64_t ran = uint64_t(cpu::Execute(slice * speed_)) + cpu_rem_;
+    cycles_done_ += ran / uint64_t(speed_);
+    cpu_rem_ = int(ran % uint64_t(speed_));
     RunTimers(cycles_done_);
     AciaService(cycles_done_);
   }
   // VBL: the frame just shown, then the interrupt; the shifter latches the new screen address.
   RenderFrame();
-  vbase_latched_ = uint32_t(vbase_hi_) << 16 | uint32_t(vbase_mid_) << 8;
+  uint32_t base = uint32_t(vbase_hi_) << 16 | uint32_t(vbase_mid_) << 8;
+  if (base != vbase_latched_) ++swaps_;  // the game shows a new frame
+  vbase_latched_ = base;
   vbl_pending_ = true;
   UpdateIrq();
   frame_start_ = frame_end;
@@ -220,6 +225,7 @@ void Machine::TimerAReload() {
   }
   int data = mfp_[TADR] ? mfp_[TADR] : 256;
   timer_a_period_ = kPrescale[mode] * data * kCyclesPerMfp;
+  if (trace_tos) LOG("timer A: mode %d data %d -> %.0f Hz", mode, data, kMfpHz / (kPrescale[mode] * data));
   timer_a_frac_ = 0;
   timer_a_next_ = Now() + uint64_t(timer_a_period_);
 }

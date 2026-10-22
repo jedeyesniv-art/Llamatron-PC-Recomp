@@ -19,6 +19,9 @@ void EndSlice();          // makes the current Execute return after this instruc
 void SetIrq(int level);
 uint32_t Get(Reg r);
 void Set(Reg r, uint32_t v);
+// If set, called before every instruction with its address and the interrupt mask (profiling; slow).
+extern void (*g_profile)(uint32_t pc, int ipl);
+
 // One-line disassembly (for traces).
 const char* Disassemble(uint32_t pc, int* size);
 

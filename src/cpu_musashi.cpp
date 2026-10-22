@@ -7,6 +7,10 @@ extern "C" {
 #include "m68k.h"
 }
 
+namespace cpu {
+void (*g_profile)(uint32_t pc, int ipl) = nullptr;
+}
+
 namespace {
 st::Machine* g_machine = nullptr;
 bool g_in_execute = false;
@@ -32,6 +36,9 @@ unsigned int m68k_read_disassembler_32(unsigned int a) {
 }
 int st_int_ack(int level) { return g_machine->InterruptAck(level); }
 int st_illegal(int opcode) { return g_machine->IllegalOpcode(opcode) ? 1 : 0; }
+void st_instruction(unsigned int pc) {
+  if (cpu::g_profile) cpu::g_profile(pc, (m68k_get_reg(nullptr, M68K_REG_SR) >> 8) & 7);
+}
 }
 
 namespace cpu {

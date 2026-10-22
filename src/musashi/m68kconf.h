@@ -216,8 +216,8 @@
  * instruction.
  */
 #ifndef M68K_INSTRUCTION_HOOK
-#define M68K_INSTRUCTION_HOOK       M68K_OPT_OFF
-#define M68K_INSTRUCTION_CALLBACK(pc) your_instruction_hook_function(pc)
+#define M68K_INSTRUCTION_HOOK       M68K_OPT_SPECIFY_HANDLER
+#define M68K_INSTRUCTION_CALLBACK(pc) st_instruction(pc)
 #endif
 
 
@@ -279,5 +279,6 @@
 
 int st_int_ack(int level);
 int st_illegal(int opcode);
+void st_instruction(unsigned int pc);
 
 #endif /* M68KCONF__HEADER */

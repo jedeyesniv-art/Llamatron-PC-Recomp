@@ -3,6 +3,7 @@
 // few TOS calls the game makes (high-level: there is no TOS ROM).
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <deque>
@@ -30,6 +31,13 @@ class Machine {
   // Files on the game disk; saves go to `save_dir` (files written by the game shadow the disk's).
   bool Load(const disk::Program& program, std::map<std::string, disk::Bytes> files, const std::string& save_dir,
             std::string* error);
+
+  // CPU speed as a multiple of the ST's 8 MHz (1 = original). Everything else keeps its real-time rate, so a
+  // faster CPU only means the game's work is done sooner. Can change between frames.
+  void SetCpuSpeed(int k) { speed_ = std::max(1, k); }
+  int CpuSpeed() const { return speed_; }
+  // Screen swaps (the game showing a new frame) since the last call.
+  int TakeSwaps() { int n = swaps_; swaps_ = 0; return n; }
 
   // Runs one video frame (until the next VBL). Returns false if the program ended.
   bool RunFrame();
@@ -97,6 +105,10 @@ class Machine {
   std::array<uint8_t, kRomSize> rom_{};
   std::array<uint32_t, kScreenW * kScreenH> frame_{};
 
+  int speed_ = 1;              // CPU cycles per ST cycle
+  int cpu_rem_ = 0;            // CPU cycles run that don't make a whole ST cycle yet
+  int swaps_ = 0;
+  // Time is counted in ST cycles (8 MHz).
   uint64_t frame_start_ = 0;   // cycle of the last VBL
   uint64_t cycles_done_ = 0;   // cycles run before the current execute slice
   uint64_t audio_synced_ = 0;  // cycle the YM has been run up to

@@ -76,6 +76,22 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
 - The log (default userdata\llamatron.log) has pads connected and "title screen" / "left the title
   (twin-stick|one stick)".
 
+## Performance: the faster CPU during play (owner 2026-10-22: "levels 3, 7 and 8 have severe slowdown")
+- How the game runs (profile, --profile): ALL game logic is in the 50 Hz VBL (in-game hook $1EDA via $52FC2:
+  movement, bullets $11A0, enemies, joystick $23AA) - never misses a VBL even on wave 8. The main loop only draws
+  (74% of the CPU: background restore $5C40-$5C80, sprites $76E0-$7720) and swaps screens at a VBL ($5BFE). On
+  the 8 MHz ST it draws 16-25 frames/s, worst seconds lower: the "slowdown" is the picture updating rarely.
+- So the CPU runs faster (--cpu=N, default 8) while the gameplay hook is installed (game::Playing): measured
+  every second of play on waves 1/3/7/8 at 50 drawn frames/s from x4 up (x1: 16-25). Game speed unchanged
+  (llama 1 px per VBL at x1/x2/x8). Cost: 2 minutes of play in ~3 s of one core.
+- Only during play: the version screen and instruction scroller are timed by CPU speed (at x8 the title came at
+  frame 156 instead of 2819); intros, wave transitions, pause run at x1 too.
+- Timing: devices count ST cycles; the CPU runs speed_ cycles per ST cycle (Machine::Now, cpu_rem_), so the
+  speed can change every frame. Log: every 10 s "drawn N frames/s while playing, worst second M".
+- Test tools added: --cpu=N, --poke=N:<off>:<word> (wave: $4BFD2 = wave-1, poke every frame 3002-3040 after a
+  j0fire start at 3000), --watch=<off>[,..], --profile=N:M:<file> (per 16-byte block, main vs interrupt; uses
+  Musashi's instruction hook, compiled in).
+
 ## Game patches (src\game.cpp, applied after loading, original bytes checked)
 - No screen flashes (owner 2026-10-22: remove the white flash on enemy kills; "jokes about it giving people
   epilepsy"). The VBL ($5398) plays a colour list (*$25EA, one entry per frame, 0 ends) into palette 0: $25E6 white

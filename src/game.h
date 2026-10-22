@@ -16,6 +16,10 @@ inline uint32_t Long(st::Machine& m, uint32_t off) {
 // The title screen is up: its frame handler ($551C, the option selector) is the VBL hook ($52FC2).
 inline bool AtTitle(st::Machine& m) { return Long(m, 0x52FC2) == m.TextBase() + 0x551C; }
 
+// Playing: the gameplay VBL handler ($1EDA, all the game logic) is the VBL hook. Not during the intros, the
+// instructions scroller, wave intros/transitions or the pause screens (some of those are timed by CPU speed).
+inline bool Playing(st::Machine& m) { return Long(m, 0x52FC2) == m.TextBase() + 0x1EDA; }
+
 // Title mode (bits 0-1 of $4CF9A): 0 = 1 PLAYER, 1 = PLAYER + DROID, 3 = TEAM.
 inline int Mode(st::Machine& m) { return m.Ram()[m.TextBase() + 0x4CF9A] & 3; }  // btst.b: the high byte
 
