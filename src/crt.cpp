@@ -14,7 +14,7 @@ struct Params {
   float dst[4];
   float beam[4];    // scanline strength, beam width min, max, horizontal blur
   float glow[4];    // mask strength, mask bleed, halation, halation size
-  float shape[4];   // curvature, vignette, colour overflow, brightness
+  float shape[4];   // curvature, 0, colour overflow, brightness
   float colour[4];  // saturation, contrast, temperature
 };
 
@@ -90,10 +90,17 @@ void Toggle() {
   LOG("crt %s", g_on ? "on" : "off");
 }
 
-// Defaults from the owner's ShaderGlass profile (newgridbigger.sgp, crt-yah) where it has a matching number.
+// Defaults from the owner's ShaderGlass profile (newgridbigger.sgp, crt-yah) where it has a matching number, then
+// the owner's changes (2026-10-22): no curvature (the picture keeps its size), no vignette, true blacks with more
+// contrast, halation 90% less. crt_defaults = the version of these defaults: older files get them once.
 void LoadSettings() {
-  auto get = [](const char* key, double def) { return float(settings::Get(key, def)); };
-  g_on = get("crt", 1) != 0;
+  constexpr int kDefaults = 2;
+  bool reset = settings::Get("crt_defaults", 1) < kDefaults;
+  auto get = [reset](const char* key, double def) {
+    if (reset) settings::Set(key, def);
+    return float(settings::Get(key, def));
+  };
+  g_on = settings::Get("crt", 1) != 0;
   Params& p = g_params;
   p.beam[0] = get("crt_scanlines", 0.35);
   p.beam[1] = get("crt_beam_min", 0.35);
@@ -101,15 +108,19 @@ void LoadSettings() {
   p.beam[3] = get("crt_blur", 0.4);
   p.glow[0] = get("crt_mask", 0.35);
   p.glow[1] = get("crt_mask_bleed", 0.5);
-  p.glow[2] = get("crt_halation", 0.2);
+  p.glow[2] = get("crt_halation", 0.02);
   p.glow[3] = get("crt_halation_size", 0.4);
-  p.shape[0] = get("crt_curvature", 0.05);
-  p.shape[1] = get("crt_vignette", 0.15);
+  p.shape[0] = get("crt_curvature", 0);
   p.shape[2] = get("crt_overflow", 0.75);
-  p.shape[3] = get("crt_brightness", -0.05);
+  p.shape[3] = get("crt_brightness", 0);
   p.colour[0] = get("crt_saturation", 0.95);
-  p.colour[1] = get("crt_contrast", -0.25);
+  p.colour[1] = get("crt_contrast", 0.3);
   p.colour[2] = get("crt_temperature", 0.3);
+  if (reset) {
+    settings::Set("crt_defaults", kDefaults);
+    settings::Save();
+    LOG("crt settings: new defaults (version %d)", kDefaults);
+  }
 }
 
 void DrawPicture(SDL_Renderer* renderer, SDL_Texture* texture, const SDL_FRect& view) {

@@ -258,7 +258,9 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   "timing: game frames/s, presents/s, longest present gap" (measured: 50.00 / 100.00 / 10.4 ms).
 
 ## CRT look (src/crt.cpp, src/shaders/crt.frag.hlsl; 2026-10-22, owner's request)
-Our own one-pass shader tuned to the owner's ShaderGlass profile (crt-yah): soft horizontal beam, scanlines
+Our own one-pass shader tuned to the owner's ShaderGlass profile (crt-yah), then owner-adjusted (crt_defaults=2: no
+curvature - the picture keeps its size, no vignette - it made a grey glare bubble, true blacks + S-curve contrast,
+halation 90% less): soft horizontal beam, scanlines
 thickening with brightness, halation, aperture grille + bleed, curvature, vignette, warm colour. settings.txt crt=1
 and crt_* (reread live). Toggle: X / C / F9 on the launcher, F9 in a game. Needs SDL's GPU renderer (D3D12; we ask
 for it with DXIL shaders, fallback = default renderer without CRT). Tools/build_shaders.py -> crt.dxil.h

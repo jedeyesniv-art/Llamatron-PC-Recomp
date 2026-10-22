@@ -1,15 +1,15 @@
 // CRT look for the ST picture, drawn straight to the screen at its full resolution (SDL GPU renderer custom
 // render state; Tools/build_shaders.py compiles it to crt.dxil.h).
 // Our own shader, tuned to the owner's ShaderGlass profile (crt-yah): soft horizontal beam, scanlines that
-// thicken with brightness, halation glow, an aperture-grille mask with colour bleed, slight curvature and
-// vignette, warm colour. All the numbers come from settings.txt (crt_*), see crt.cpp.
+// thicken with brightness, a faint halation glow, an aperture-grille mask with colour bleed, warm colour, deep
+// blacks. No vignette or glare (owner). All the numbers come from settings.txt (crt_*), see crt.cpp.
 
 cbuffer Params : register(b0, space3) {
   float4 src;      // source texture w, h, 1/w, 1/h
   float4 dst;      // the picture on the screen in pixels: w, h, 0, 0
   float4 beam;     // scanline strength, beam width min, beam width max, horizontal blur
   float4 glow;     // mask strength, mask colour bleed, halation intensity, halation size
-  float4 shape;    // curvature, vignette, colour overflow, brightness
+  float4 shape;    // curvature, 0, colour overflow, brightness
   float4 colour;   // saturation, contrast, temperature, 0
 };
 
@@ -63,9 +63,9 @@ PSOutput main(PSInput input) {
   float2 uv = input.v_uv;
   float2 pix = uv * dst.xy;  // this pixel on the screen, for the mask
 
-  // Curvature (barrel) and the rounded edge of the tube.
+  // Curvature (barrel; off by default, owner: the picture keeps its size): the middles of the edges stay put.
   float2 d = uv - 0.5;
-  uv = 0.5 + d * (1.0 + shape.x * dot(d, d) * 2.0) / (1.0 + shape.x * 0.5);
+  uv = 0.5 + d * (1.0 + shape.x * 2.0 * (dot(d, d) - 0.25));
   float2 edge = saturate((0.5 - abs(uv - 0.5)) * dst.xy * 0.5);  // a 2-pixel soft border
   if (uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1) {
     output.o_color = float4(0, 0, 0, 1);
@@ -107,7 +107,7 @@ PSOutput main(PSInput input) {
   }
 
   // Colour: overflow (a channel past full spills into the others, towards white), temperature, saturation,
-  // contrast and brightness.
+  // contrast (an S-curve that keeps black black and white white) and brightness.
   float3 over = max(c - 1.0, 0.0);
   c += (over.r + over.g + over.b - over) * 0.5 * shape.z;
   c *= float3(1.0 + 0.08 * colour.z, 1.0, 1.0 - 0.12 * colour.z);
@@ -115,12 +115,9 @@ PSOutput main(PSInput input) {
   c = lerp(float3(l, l, l), c, colour.x);
   c = saturate(c);
   float3 g = pow(c, 1.0 / 2.2);  // back to gamma space
-  g = ((g - 0.5) * (1.0 + 0.25 * colour.y) + 0.5) * (1.0 + shape.w);
-
-  // Vignette and the tube's edge.
-  float2 v = uv * (1.0 - uv);
-  float vig = pow(saturate(v.x * v.y * 16.0), 0.25);
-  g *= lerp(1.0, vig, shape.y) * edge.x * edge.y;
+  g = saturate(g);
+  g = lerp(g, g * g * (3.0 - 2.0 * g), saturate(colour.y)) * (1.0 + shape.w);
+  if (shape.x > 0) g *= edge.x * edge.y;  // the tube's soft edge, with curvature
 
   output.o_color = float4(saturate(g), 1.0) * float4(input.v_color.rgb, 1.0);
   return output;
