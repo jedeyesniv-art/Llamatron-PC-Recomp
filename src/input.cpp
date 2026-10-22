@@ -219,7 +219,10 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
     case SDL_EVENT_KEY_UP: {
       bool down = e.type == SDL_EVENT_KEY_DOWN;
       if (e.key.scancode < SDL_SCANCODE_COUNT) g_keys[e.key.scancode] = down;
-      if (e.key.repeat || IsJoystickKey(e.key.scancode)) return true;
+      if (e.key.repeat) return true;
+      // Joystick keys are only joystick, except on the pause screen (S = samples on/off there); releases always
+      // go through so no key stays down in the game.
+      if (IsJoystickKey(e.key.scancode) && down && !game::Paused(*m)) return true;
       if (e.key.scancode == SDL_SCANCODE_ESCAPE) {
         if (down) MenuButton(m);
         return true;

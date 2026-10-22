@@ -1,11 +1,13 @@
 cmake_minimum_required(VERSION 3.24)
-project(Llamatron VERSION 0.1.0 LANGUAGES C CXX)
+project(Llamatron VERSION 1.0.0 LANGUAGES C CXX RC)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release)
 endif()
+# The C/C++ runtime linked statically: the portable folder is just the exe.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 # Release builds keep a PDB (crash dumps, profiles).
 if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   string(APPEND CMAKE_C_FLAGS_RELEASE " -gcodeview -gline-tables-only")
@@ -48,7 +50,9 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(musashi PRIVATE -w)
 endif()
 
+configure_file(res/llamatron.rc.in ${CMAKE_BINARY_DIR}/llamatron.rc @ONLY)
 add_executable(llamatron WIN32
+  ${CMAKE_BINARY_DIR}/llamatron.rc
   src/main.cpp
   src/machine.cpp
   src/cpu_musashi.cpp

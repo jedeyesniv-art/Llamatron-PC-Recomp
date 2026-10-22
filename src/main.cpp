@@ -163,12 +163,13 @@ void LogDisplayModes() {
   if (const SDL_DisplayMode* d = SDL_GetDesktopDisplayMode(display))
     LOG("display: desktop %dx%d @ %.3f Hz", d->w, d->h, d->refresh_rate);
   int n = 0;
-  if (SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(display, &n)) {
-    std::string rates;
+  const SDL_DisplayMode* desk = SDL_GetDesktopDisplayMode(display);
+  if (SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(display, &n); modes && desk) {
+    std::string rates;  // the refresh rates at the desktop resolution
     for (int i = 0; i < n; ++i)
-      rates += std::to_string(modes[i]->w) + "x" + std::to_string(modes[i]->h) + "@" +
-               std::to_string(modes[i]->refresh_rate).substr(0, 6) + " ";
-    LOG("display modes: %s", rates.c_str());
+      if (modes[i]->w == desk->w && modes[i]->h == desk->h)
+        rates += std::to_string(modes[i]->refresh_rate).substr(0, 6) + " ";
+    LOG("display refresh rates at %dx%d: %s", desk->w, desk->h, rates.c_str());
     SDL_free(modes);
   }
 }
@@ -294,6 +295,8 @@ int main(int argc, char** argv) {
   LOG("cpu speed during play x%d", opt.cpu_speed);
 
   SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+  SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON, "1");  // the window/taskbar icon: our resource 1
+  SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON_SMALL, "1");
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
     LOG("SDL_Init: %s", SDL_GetError());
     return 1;

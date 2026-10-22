@@ -10,7 +10,15 @@ Goal: a native Windows app (SDL3) that plays well on an Xbox pad, twin-stick sty
   the ST hardware and TOS emulated at a high level (src\machine.cpp). Boots, shareware screen, version screen,
   instruction scroller, title, twin-stick game verified with scripted input (screenshots); audio produced (WAV
   dump). Not yet tested by the owner with a real pad.
-- Stage 2 TODO: static recompilation of the 68000 code to C++ (Tools\ to write), with the interpreter kept as the
+- 2026-10-22: 1.0.0 portable version done (owner: "we're done, make a portable version ready for general
+  play"). Tools\package_portable.ps1 [-GameData <msa>] [-Release] -> dist\Llamatron\ (exe + README + licences +
+  game\; with -GameData the owner's disk is copied in) and distelease\Llamatron-<ver>-windows.zip (no game
+  data, leak-checked) + -symbols.zip. Static C runtime: the exe needs only Windows DLLs. Original icon
+  (Tools\make_icon.py -> res\llamatron.ico, a pixel llama, no game art), version resource from CMake VERSION.
+  Tested: the zip unpacked fresh + the .msa in game\ plays. Not published anywhere; Steam Deck not tested.
+  Next (owner): Gridrunner (GRIDRUNR.PRG on the disk), then package both games together.
+- Recompilation: discussed 2026-10-22, not worth it for this game (interpreter ~2.5% of a core; risks: SMC,
+  CPU-timed screens) - owner agreed to skip for now. Stage 2 (if ever): static recompilation of the 68000 code to C++ (Tools\ to write), with the interpreter kept as the
   reference (lockstep compare) and as fallback for code it can't place (self-modifying code, see below).
 - Not yet looked at: GRIDRUNR.PRG (the bonus game on the disk, "Pompey Packer 2.5" packed).
 
@@ -22,6 +30,8 @@ Goal: a native Windows app (SDL3) that plays well on an Xbox pad, twin-stick sty
                         crash.cpp (unhandled exception -> stack in the log), musashi\m68kconf.h (our Musashi config,
                         copied over the submodule's at build time).
 - third_party\          submodules: musashi (kstenerud/Musashi, MIT-style), SDL (3.4.16, static).
+- res\                  README.txt (the player's readme), llamatron.ico + .rc.in (icon, version info).
+- licenses\             THIRD-PARTY-NOTICES.txt (SDL zlib, Musashi MIT-style, SoftFloat 2b, ayumi MIT).
 - Tools\                st_disk.py (msa -> files), depack.py (TRON1MEG.PRG -> tron.bin + tron.reloc),
                         dis.py (capstone disassembly of tron.bin: dis.py <hex addr> [count]), xref.py (absolute
                         operand references: xref.py <hex>[,<hex>]). pip: capstone, pillow.
@@ -124,7 +134,8 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   power-up's extra shots ($10C0, spread from the 8-way direction $2318).
   Test input: --press=N:aim<degrees>:frames (0 = right, 90 = down).
 
-## Text in the program (for the curious; text offsets, the game's \c colour /  newline codes)
+## Text in the program (for the curious; text offsets, the game's \c colour / 
+ newline codes)
 - $39CBA: an unused font test before the version screen text: Inspiral Carpets lyrics ("marys crying for her
   baby", "commercial rain"), "inspiral carpets" x5, the alphabet and a rude word.
 - $3A356 credits: "perpetrated by yak, coded on devpac developer, samples grabbed with replay-8", the "oh f..!"

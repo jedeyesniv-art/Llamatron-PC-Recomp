@@ -1,0 +1,126 @@
+Llamatron PC - third-party notices
+
+This program contains code from the following projects. Their licences follow.
+
+1. SDL 3 (Simple DirectMedia Layer) - https://libsdl.org - zlib licence
+2. Musashi 68000 emulator by Karl Stenerud - https://github.com/kstenerud/Musashi - MIT-style licence
+3. SoftFloat Release 2b by John R. Hauser (part of Musashi) - licence notice below
+4. The YM2149 volume table from ayumi by Peter Sovietov - https://github.com/true-grue/ayumi - MIT licence
+
+Llamatron itself is (c) 1991 Jeff Minter / Llamasoft. The game is not included in this program; it runs the
+player's own copy of the game disk.
+
+==============================================================================================================
+1. SDL 3
+==============================================================================================================
+Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
+  
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+  
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required. 
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+
+==============================================================================================================
+2. Musashi
+==============================================================================================================
+Copyright 1998-2002 Karl Stenerud.  All rights reserved.
+
+
+
+INTRODUCTION:
+------------
+
+Musashi is a Motorola 68000, 68010, 68EC020, 68020, 68EC030, 68030, 68EC040 and
+68040 emulator written in C.  This emulator was written with two goals in mind:
+portability and speed.
+
+The emulator is written to ANSI C89 specifications.  It also uses inline
+functions, which are C9X compliant.
+
+It has been successfully running in the MAME project (www.mame.net) for years
+and so has had time to mature.
+
+
+
+LICENSE AND COPYRIGHT:
+---------------------
+
+Copyright Â(c) 1998-2001 Karl Stenerud
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+==============================================================================================================
+3. SoftFloat Release 2b
+==============================================================================================================
+This C source file is part of the SoftFloat IEC/IEEE Floating-point Arithmetic
+Package, Release 2b.
+
+Written by John R. Hauser.  This work was made possible in part by the
+International Computer Science Institute, located at Suite 600, 1947 Center
+Street, Berkeley, California 94704.  Funding was partially provided by the
+National Science Foundation under grant MIP-9311980.  The original version
+of this code was written as part of a project to build a fixed-point vector
+processor in collaboration with the University of California at Berkeley,
+overseen by Profs. Nelson Morgan and John Wawrzynek.  More information
+is available through the Web page `http://www.cs.berkeley.edu/~jhauser/
+arithmetic/SoftFloat.html'.
+
+THIS SOFTWARE IS DISTRIBUTED AS IS, FOR FREE.  Although reasonable effort has
+been made to avoid it, THIS SOFTWARE MAY CONTAIN FAULTS THAT WILL AT TIMES
+RESULT IN INCORRECT BEHAVIOR.  USE OF THIS SOFTWARE IS RESTRICTED TO PERSONS
+AND ORGANIZATIONS WHO CAN AND WILL TAKE FULL RESPONSIBILITY FOR ALL LOSSES,
+COSTS, OR OTHER PROBLEMS THEY INCUR DUE TO THE SOFTWARE, AND WHO FURTHERMORE
+EFFECTIVELY INDEMNIFY JOHN HAUSER AND THE INTERNATIONAL COMPUTER SCIENCE
+INSTITUTE (possibly via similar legal warning) AGAINST ALL LOSSES, COSTS, OR
+OTHER PROBLEMS INCURRED BY THEIR CUSTOMERS AND CLIENTS DUE TO THE SOFTWARE.
+
+Derivative works are acceptable, even for commercial purposes, so long as
+(1) the source code for the derivative work includes prominent notice that
+the work is derivative, and (2) the source code includes prominent notice with
+these four paragraphs for those parts of this code that are retained.
+
+==============================================================================================================
+4. ayumi (YM2149 volume levels)
+==============================================================================================================
+Copyright (c) Peter Sovietov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
