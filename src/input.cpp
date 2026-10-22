@@ -15,7 +15,7 @@ bool g_keys[SDL_SCANCODE_COUNT] = {};
 bool g_a_held = false, g_a_to_stick0 = false;  // pad 1's A: which stick's fire it is while held
 
 // ST keys we tap for the player: pressed now, released a few frames later (the game polls key flags per VBL).
-constexpr uint8_t kKeyP = 0x19, kKeyO = 0x18, kKeyX = 0x2D;
+constexpr uint8_t kKeyP = 0x19, kKeyO = 0x18, kKeyX = 0x2D, kKeyT = 0x14, kKeyG = 0x22;
 struct Tap {
   uint8_t code;
   int frames;
@@ -34,6 +34,11 @@ void TapKey(st::Machine* m, uint8_t code) {
 void PauseButton(st::Machine* m) {
   if (game::Playing(*m)) TapKey(m, kKeyP);
   else if (game::Paused(*m)) TapKey(m, kKeyO);
+}
+
+// Y: on the pause screen, the tentacle on (T) / off (G).
+void TentacleButton(st::Machine* m) {
+  if (game::Paused(*m)) TapKey(m, game::Tentacle(*m) ? kKeyG : kKeyT);
 }
 
 // B (Esc): from the pause screen back to the title (the game's X key only works while playing: resume first);
@@ -192,6 +197,10 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
         PauseButton(m);
         return true;
       }
+      if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_NORTH) {
+        TentacleButton(m);
+        return true;
+      }
       if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
         MenuButton(m);
         return true;
@@ -217,7 +226,9 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
 bool QuitRequested() { return g_quit; }
 
 const char* Hint(st::Machine* m) {
-  if (game::Paused(*m)) return g_pads.empty() ? "O: resume   Esc: quit to title" : "Back: resume   B: quit to title";
+  if (game::Paused(*m))
+    return g_pads.empty() ? "O: resume   Esc: quit to title\nT / G: tentacle on / off"
+                          : "Back: resume   B: quit to title\nY: tentacle (left stick plays)";
   if (game::AtTitle(*m) && SDL_GetTicks() < g_quit_armed_ms)
     return g_pads.empty() ? "Press Esc again to quit" : "Press B again to quit";
   return nullptr;

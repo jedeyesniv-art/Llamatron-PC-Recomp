@@ -23,6 +23,10 @@ inline bool Playing(st::Machine& m) { return Long(m, 0x52FC2) == m.TextBase() + 
 // The game's pause screen (P): its VBL handler is $1D32 (set by $1F22).
 inline bool Paused(st::Machine& m) { return Long(m, 0x52FC2) == m.TextBase() + 0x1D32; }
 
+// On the pause screen, T shows the Ozric tentacle (played with joystick 1), G the game again: the screen
+// drawing routine $52FBE is $88BC (tentacle) or $2702 (game).
+inline bool Tentacle(st::Machine& m) { return Long(m, 0x52FBE) == m.TextBase() + 0x88BC; }
+
 // Title mode (bits 0-1 of $4CF9A): 0 = 1 PLAYER, 1 = PLAYER + DROID, 3 = TEAM.
 inline int Mode(st::Machine& m) { return m.Ram()[m.TextBase() + 0x4CF9A] & 3; }  // btst.b: the high byte
 

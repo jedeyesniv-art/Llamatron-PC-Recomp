@@ -34,12 +34,13 @@ struct Options {
   int cpu_speed = 8;        // --cpu=N: CPU speed multiple during play (1 = the ST's 8 MHz)
   // --aspect=square (320x200 with square pixels: 16:10) or pal (as on a UK TV: an ST pixel is 8 MHz wide on a
   // line where square pixels are 14.75 MHz, and two TV lines tall -> pixel aspect 0.92, picture ~1.48:1)
-  bool pal_aspect = false;
+  bool pal_aspect = true;
   bool headless = false;   // --headless: no window or audio (tests)
   int frames = 0;          // --frames=N: quit after N frames
   std::string wav;         // --wav=<file>: also write the audio to a WAV file (tests)
   std::map<int, std::string> shots;  // --shot=N:<file.bmp>
-  // --press=N:<key>[:frames]: hold a key (SDL scancode name) or "j0"/"j1"+"fire|up|down|left|right" from frame N
+  // --press=N:<what>[:frames]: from frame N hold a key (SDL scancode name), "j0"/"j1" + fire|up|down|left|right,
+  // or "pad" + an SDL gamepad button name (pady, padback...: button events only)
   struct Press {
     int frame, length;
     std::string what;
@@ -97,7 +98,7 @@ Options ParseArgs(int argc, char** argv) {
     else if (a == "--trace-tos") o.trace_tos = true;
     else if (a == "--fullscreen") o.fullscreen = true;
     else if (a == "--window") o.fullscreen = false;
-    else if (Arg(a, "aspect", &v)) o.pal_aspect = v == "pal";
+    else if (Arg(a, "aspect", &v)) o.pal_aspect = v != "square";
     else if (a == "--flashes") o.game.flashes = true;
     else if (Arg(a, "cpu", &v)) o.cpu_speed = std::max(1, std::atoi(v.c_str()));
     else if (Arg(a, "refresh", &v)) o.match_refresh = v != "desktop";
@@ -324,10 +325,15 @@ int main(int argc, char** argv) {
   int swaps_second = 0, swaps_total = 0, swaps_worst = 1 << 30, swaps_seconds = 0;
   bool playing_second = true;
   bool running = true, at_title = false;
+  uint64_t last_mouse_ms = 0;  // the game doesn't use the mouse: its cursor is hidden
   while (running) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
       if (e.type == SDL_EVENT_QUIT) running = false;
+      if (e.type == SDL_EVENT_MOUSE_MOTION) {  // the cursor shows while the mouse moves (windowed), then hides
+        last_mouse_ms = SDL_GetTicks();
+        if (!(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN)) SDL_ShowCursor();
+      }
       if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat &&
           (e.key.scancode == SDL_SCANCODE_F11 ||
            (e.key.scancode == SDL_SCANCODE_RETURN && (e.key.mod & SDL_KMOD_ALT)))) {
@@ -337,6 +343,9 @@ int main(int argc, char** argv) {
       input::HandleEvent(e, &machine);
     }
     if (input::QuitRequested()) running = false;
+    if (window && SDL_CursorVisible() &&
+        ((SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) || SDL_GetTicks() - last_mouse_ms > 2000))
+      SDL_HideCursor();
 
     // Pacing. If the display's refresh is a whole multiple k of the game's frame rate, one game frame every k
     // vsyncs (presents block on vsync): even motion. Otherwise game frames are due by the wall clock (at most a
@@ -369,6 +378,12 @@ int main(int argc, char** argv) {
           int port;
           uint8_t bits = PressBits(p.what, &port);
           machine.SetJoystick(port, bits);
+        } else if (p.what.rfind("pad", 0) == 0) {  // pad<button>: SDL gamepad button name (a, b, y, back...)
+          if (frame != p.frame && frame != p.frame + p.length - 1) continue;
+          SDL_Event be{};
+          be.type = frame == p.frame ? SDL_EVENT_GAMEPAD_BUTTON_DOWN : SDL_EVENT_GAMEPAD_BUTTON_UP;
+          be.gbutton.button = uint8_t(SDL_GetGamepadButtonFromString(p.what.c_str() + 3));
+          input::HandleEvent(be, &machine);
         } else if (frame == p.frame || frame == p.frame + p.length - 1) {
           SDL_Scancode sc = SDL_GetScancodeFromName(p.what.c_str());
           SDL_Event ke{};
@@ -447,13 +462,23 @@ int main(int argc, char** argv) {
       SDL_RenderClear(renderer);
       SDL_FRect view{0, 0, float(st::kScreenW), float(view_h)};
       SDL_RenderTexture(renderer, texture, nullptr, &view);
-      if (const char* hint = input::Hint(&machine)) {  // 8x8 debug font, in the 320x200 logical space
-        float w = float(std::strlen(hint) * 8), x = (st::kScreenW - w) / 2, y = float(view_h - 22);
-        SDL_FRect box{x - 4, y - 3, w + 8, 14};
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderFillRect(renderer, &box);
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDebugText(renderer, x, y, hint);
+      if (const char* hint = input::Hint(&machine)) {  // 8x8 debug font in the logical space, lines at the bottom
+        std::vector<std::string> lines;
+        for (const char* p = hint; *p;) {
+          const char* nl = std::strchr(p, '\n');
+          lines.emplace_back(p, nl ? nl : p + std::strlen(p));
+          p = nl ? nl + 1 : p + std::strlen(p);
+        }
+        float y = float(view_h - 12 - 10 * int(lines.size()));
+        for (const std::string& line : lines) {
+          float w = float(line.size() * 8), x = (st::kScreenW - w) / 2;
+          SDL_FRect box{x - 4, y - 1, w + 8, 10};
+          SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+          SDL_RenderFillRect(renderer, &box);
+          SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+          SDL_RenderDebugText(renderer, x, y, line.c_str());
+          y += 10;
+        }
       }
       SDL_RenderPresent(renderer);
       uint64_t now = SDL_GetTicksNS();

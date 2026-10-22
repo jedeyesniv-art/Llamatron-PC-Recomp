@@ -7,6 +7,7 @@
 //   right stick         = joystick 0 directions     X = joystick 1 fire (on the title: a one-stick game)
 //                                                   Start, RB, RT = joystick 0 fire
 //   Back                = pause / resume (the game's P and O keys)
+//   Y                   = paused: the Ozric tentacle on / off (the game's T and G keys)
 //   B                   = paused: quit to the title (the game's X key, which only works in play); title: quit
 //                         the program (press twice). Keyboard: Esc.
 // On the title screen joystick 1 left/right picks 1 PLAYER / PLAYER + DROID / TEAM, up/down 1 or 2 players.
