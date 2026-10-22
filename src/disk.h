@@ -25,4 +25,7 @@ struct Program {
 };
 bool UnpackLlamatron(const Bytes& prg, Program* out, std::string* error);
 
+// A standard TOS program (.PRG): text + data as loaded at 0, its relocations and BSS size.
+bool LoadPrg(const Bytes& prg, Program* out, std::string* error);
+
 }  // namespace disk

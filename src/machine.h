@@ -1,6 +1,6 @@
-// The Atari ST as Llamatron uses it: 1 MB of RAM, the MFP 68901 (timer A, the keyboard ACIA interrupt), the
-// keyboard processor (IKBD: joysticks and keys), the shifter (low resolution, palette), the YM2149, and the
-// few TOS calls the game makes (high-level: there is no TOS ROM).
+// The Atari ST as Llamatron and Gridrunner use it: 1 MB of RAM, the MFP 68901 (timers, the keyboard ACIA
+// interrupt), the keyboard processor (IKBD: joysticks, mouse, keys), the shifter (low resolution, palette, drawn
+// line by line for raster effects), the YM2149, and the TOS calls the games make (high-level: no TOS ROM).
 #pragma once
 
 #include <algorithm>
@@ -54,6 +54,8 @@ class Machine {
   // Input: joystick states (port 0 = the mouse port, 1 = the joystick port) and ST key scancodes.
   void SetJoystick(int port, uint8_t state);
   void KeyEvent(uint8_t scancode, bool down);
+  // Mouse movement (ST mouse units, y down) and buttons (bit 0 right, bit 1 left, as the IKBD reports them).
+  void MouseInput(int dx, int dy, uint8_t buttons);
 
   // Bus (used by the CPU).
   uint32_t Read8(uint32_t a);
@@ -87,16 +89,21 @@ class Machine {
   uint8_t MfpRead(int reg);
   void MfpWrite(int reg, uint8_t v);
   void MfpRaise(int channel);
-  void TimerAReload();
+  int TimerMode(int t) const;  // control mode: 0 stopped, 1-7 delay (prescaler), 8 event count
+  void TimerReload(int t);
   void RunTimers(uint64_t until);
+  void DisplayLineEnd();  // timer B event count input (display enable)
 
   // ACIA 6850 + IKBD.
   void IkbdCommand(uint8_t b);
   void IkbdSend(std::initializer_list<uint8_t> bytes);
   void AciaService(uint64_t until);
+  void SendMouse();
+  void IkbdSysHle();         // TOS's IKBD handler: packets -> Kbdvbase vectors, keys -> the console buffer
+  void ConsoleKey(uint8_t scancode);
 
   // Shifter.
-  void RenderFrame();
+  void RenderLine(int y);
 
   // TOS.
   bool Gemdos(uint32_t args, uint32_t* d0);
@@ -121,9 +128,13 @@ class Machine {
 
   // MFP.
   uint8_t mfp_[24] = {};       // registers by index (reg = (addr - 0xFFFA01) / 2)
-  uint64_t timer_a_next_ = 0;  // cycle of the next timer A underflow (0 = stopped)
-  double timer_a_period_ = 0;  // cycles per underflow
-  double timer_a_frac_ = 0;
+  struct Timer {
+    uint64_t next = 0;  // delay mode: cycle of the next underflow (0 = not running)
+    double period = 0;  // cycles per underflow
+    double frac = 0;
+    int count = 0;      // event count mode: the main counter
+  } timers_[4];         // A, B, C, D
+  int line_ = 0;        // next display line to draw this frame
 
   // VBL.
   bool vbl_pending_ = false;
@@ -134,8 +145,18 @@ class Machine {
   uint8_t acia_data_ = 0, acia_ctrl_ = 0;
   bool acia_rx_full_ = false;
   std::vector<uint8_t> ikbd_cmd_;
-  bool joy_events_ = false;  // IKBD joystick event reporting (command $14)
+  bool joy_events_ = true;   // IKBD joystick event reporting (power-on default; command $14)
   uint8_t joy_[2] = {};
+  bool mouse_on_ = true;     // relative mouse reporting (command $08; off with $12 or joystick commands)
+  bool mouse_y_up_ = false;  // command $0F: y = 0 at the bottom
+  int mouse_thr_x_ = 1, mouse_thr_y_ = 1;
+  int mouse_dx_ = 0, mouse_dy_ = 0;
+  uint8_t mouse_buttons_ = 0, mouse_sent_buttons_ = 0;
+  std::vector<uint8_t> packet_;  // TOS handler: the packet being received
+  size_t packet_need_ = 0;
+  uint8_t packet_joy_[2] = {};
+  std::deque<uint32_t> console_keys_;  // TOS console buffer: scancode << 16 | ASCII
+  bool shift_ = false;
 
   // Shifter.
   uint8_t vbase_hi_ = 0, vbase_mid_ = 0, res_ = 0, sync_ = 2;

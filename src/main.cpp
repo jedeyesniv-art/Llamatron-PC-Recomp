@@ -36,6 +36,7 @@ struct Options {
   // --aspect=square (320x200 with square pixels: 16:10) or pal (as on a UK TV: an ST pixel is 8 MHz wide on a
   // line where square pixels are 14.75 MHz, and two TV lines tall -> pixel aspect 0.92, picture ~1.48:1)
   bool pal_aspect = true;
+  std::string program = "TRON1MEG.PRG";  // --program=<file on the disk>: GRIDRUNR.PRG = the bonus Gridrunner
   bool headless = false;   // --headless: no window or audio (tests)
   int frames = 0;          // --frames=N: quit after N frames
   std::string wav;         // --wav=<file>: also write the audio to a WAV file (tests)
@@ -58,6 +59,8 @@ struct Options {
   // --profile=N:M:<file>: count instructions per 16-byte block of the game's text, split by interrupt mask
   // (main loop = mask < 4, VBL/MFP handlers >= 4), over frames N..M; written to <file>.
   int profile_from = -1, profile_to = -1;
+  int dump_frame = -1;     // --dump=N:<file>: write the 1 MB of RAM at frame N (tests, analysis)
+  std::string dump_file;
   std::string profile_file;  // --watch=<hex text offset>[,...]: log these words every 10 frames (tests)
 };
 
@@ -91,6 +94,10 @@ Options ParseArgs(int argc, char** argv) {
       for (size_t p = 0; p < v.size(); p = v.find(',', p) == std::string::npos ? v.size() : v.find(',', p) + 1)
         o.watches.push_back(uint32_t(std::strtoul(v.c_str() + p, nullptr, 16)));
     }
+    else if (Arg(a, "dump", &v)) {
+      o.dump_frame = std::atoi(v.c_str());
+      o.dump_file = v.substr(v.find(':') + 1);
+    }
     else if (Arg(a, "profile", &v)) {
       size_t c1 = v.find(':'), c2 = v.find(':', c1 + 1);
       o.profile_from = std::atoi(v.c_str()), o.profile_to = std::atoi(v.c_str() + c1 + 1);
@@ -99,6 +106,10 @@ Options ParseArgs(int argc, char** argv) {
     else if (a == "--trace-tos") o.trace_tos = true;
     else if (a == "--fullscreen") o.fullscreen = true;
     else if (a == "--window") o.fullscreen = false;
+    else if (Arg(a, "program", &v)) {
+      o.program = v;
+      std::transform(o.program.begin(), o.program.end(), o.program.begin(), ::toupper);
+    }
     else if (Arg(a, "aspect", &v)) o.pal_aspect = v != "square";
     else if (a == "--flashes") o.game.flashes = true;
     else if (a == "--aim=8") o.aim = 0;
@@ -250,8 +261,13 @@ int main(int argc, char** argv) {
   disk::Bytes image = disk::LoadImage(disk_path, &error);
   auto files = disk::ReadFiles(image);
   disk::Program program;
-  if (image.empty() || !files.count("TRON1MEG.PRG") || !disk::UnpackLlamatron(files["TRON1MEG.PRG"], &program, &error)) {
-    if (error.empty()) error = "TRON1MEG.PRG not found on the disk";
+  const bool llamatron = opt.program == "TRON1MEG.PRG";
+  bool loaded = false;
+  if (!image.empty() && files.count(opt.program))
+    loaded = llamatron ? disk::UnpackLlamatron(files[opt.program], &program, &error)
+                       : disk::LoadPrg(files[opt.program], &program, &error);
+  if (!loaded) {
+    if (error.empty()) error = opt.program + " not found on the disk";
     std::string msg = disk_path + ":\n" + error;
     LOG("%s", msg.c_str());
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Llamatron", msg.c_str(), nullptr);
@@ -264,7 +280,8 @@ int main(int argc, char** argv) {
   for (const auto& e : fs::directory_iterator(save_dir, ec)) {
     std::string name = e.path().filename().string();
     std::transform(name.begin(), name.end(), name.begin(), ::toupper);
-    if (name.size() > 4 && name.substr(name.size() - 4) == ".LOG") continue;
+    std::string ext = name.size() > 4 ? name.substr(name.size() - 4) : "";
+    if (ext == ".LOG" || ext == ".TXT") continue;  // our log and settings, not game files
     disk::Bytes d;
     if (FILE* f = std::fopen(e.path().string().c_str(), "rb")) {
       d.resize(size_t(fs::file_size(e.path(), ec)));
@@ -281,7 +298,8 @@ int main(int argc, char** argv) {
     LOG("load failed: %s", error.c_str());
     return 1;
   }
-  game::ApplyPatches(machine, opt.game);
+  game::g_llamatron = llamatron;
+  if (llamatron) game::ApplyPatches(machine, opt.game);
   // Settings (userdata\settings.txt, key=value): analog_aim.
   fs::path settings = save_dir / "settings.txt";
   if (FILE* f = std::fopen(settings.string().c_str(), "r")) {
@@ -342,10 +360,16 @@ int main(int argc, char** argv) {
   bool playing_second = true;
   bool running = true, at_title = false;
   uint64_t last_mouse_ms = 0;  // the game doesn't use the mouse: its cursor is hidden
+  float mouse_x = 0, mouse_y = 0;  // ST mouse movement not sent yet (other programs)
+  if (window && !llamatron) SDL_SetWindowRelativeMouseMode(window, true);
   while (running) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
       if (e.type == SDL_EVENT_QUIT) running = false;
+      if (!llamatron && e.type == SDL_EVENT_MOUSE_MOTION) {  // other programs (Gridrunner): the ST mouse
+        mouse_x += e.motion.xrel * 0.25f, mouse_y += e.motion.yrel * 0.25f;
+        continue;
+      }
       if (e.type == SDL_EVENT_MOUSE_MOTION) {  // the cursor shows while the mouse moves (windowed), then hides
         last_mouse_ms = SDL_GetTicks();
         if (!(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN)) SDL_ShowCursor();
@@ -396,6 +420,20 @@ int main(int argc, char** argv) {
     for (int i = 0; i < run && running; ++i) {
       frames_due += 1;
       input::Update(&machine);
+      if (!llamatron) {
+        SDL_MouseButtonFlags mb = opt.headless ? 0 : SDL_GetMouseState(nullptr, nullptr);
+        uint8_t buttons = uint8_t((mb & SDL_BUTTON_LMASK ? 2 : 0) | (mb & SDL_BUTTON_RMASK ? 1 : 0));
+        for (const auto& p : opt.presses) {  // scripted mouse (tests): mleft, mright, mx<dx>, my<dy> per frame
+          if (frame < p.frame || frame >= p.frame + p.length) continue;
+          if (p.what == "mleft") buttons |= 2;
+          if (p.what == "mright") buttons |= 1;
+          if (p.what.rfind("mx", 0) == 0) mouse_x += float(std::atof(p.what.c_str() + 2));
+          if (p.what.rfind("my", 0) == 0) mouse_y += float(std::atof(p.what.c_str() + 2));
+        }
+        int dx = int(mouse_x), dy = int(mouse_y);
+        mouse_x -= float(dx), mouse_y -= float(dy);
+        machine.MouseInput(dx, dy, buttons);
+      }
       for (const auto& p : opt.presses) {  // scripted input (tests)
         if (frame < p.frame || frame >= p.frame + p.length) continue;
         if (p.what.rfind("aim", 0) == 0) {  // aim<degrees>: the aiming stick at an angle (0 = right, 90 = down)
@@ -430,6 +468,13 @@ int main(int argc, char** argv) {
         if (p.frame != frame) continue;
         uint8_t* at = machine.Ram() + machine.TextBase() + p.offset;
         at[0] = uint8_t(p.value >> 8), at[1] = uint8_t(p.value);
+      }
+      if (frame == opt.dump_frame) {
+        if (FILE* f = std::fopen(opt.dump_file.c_str(), "wb")) {
+          std::fwrite(machine.Ram(), 1, st::kRamSize, f);
+          std::fclose(f);
+          LOG("RAM dumped to %s", opt.dump_file.c_str());
+        }
       }
       if (frame == opt.profile_from) g_profile_base = machine.TextBase(), cpu::g_profile = ProfileHook;
       if (frame == opt.profile_to) cpu::g_profile = nullptr, WriteProfile(opt.profile_file);

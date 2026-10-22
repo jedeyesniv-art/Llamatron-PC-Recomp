@@ -12,7 +12,8 @@ Goal: a native Windows app (SDL3) that plays well on an Xbox pad, twin-stick sty
   dump). Not yet tested by the owner with a real pad.
 - 2026-10-22: 1.0.0 portable version done (owner: "we're done, make a portable version ready for general
   play"). Tools\package_portable.ps1 [-GameData <msa>] [-Release] -> dist\Llamatron\ (exe + README + licences +
-  game\; with -GameData the owner's disk is copied in) and distelease\Llamatron-<ver>-windows.zip (no game
+  game\; with -GameData the owner's disk is copied in) and dist
+elease\Llamatron-<ver>-windows.zip (no game
   data, leak-checked) + -symbols.zip. Static C runtime: the exe needs only Windows DLLs. Original icon
   (Tools\make_icon.py -> res\llamatron.ico, a pixel llama, no game art), version resource from CMake VERSION.
   Tested: the zip unpacked fresh + the .msa in game\ plays. Not published anywhere; Steam Deck not tested.
@@ -20,7 +21,7 @@ Goal: a native Windows app (SDL3) that plays well on an Xbox pad, twin-stick sty
 - Recompilation: discussed 2026-10-22, not worth it for this game (interpreter ~2.5% of a core; risks: SMC,
   CPU-timed screens) - owner agreed to skip for now. Stage 2 (if ever): static recompilation of the 68000 code to C++ (Tools\ to write), with the interpreter kept as the
   reference (lockstep compare) and as fallback for code it can't place (self-modifying code, see below).
-- Not yet looked at: GRIDRUNR.PRG (the bonus game on the disk, "Pompey Packer 2.5" packed).
+- Gridrunner: runs (2026-10-22), see its section; controller design pending.
 
 ## Layout (C:\LlamatronRecomp)
 - Private\              (git-ignored) Llamatron ST.msa (owner's copy), disk\ = its files, tron.bin/.reloc =
@@ -50,6 +51,26 @@ Scripted path: press j1fire at frame 150 (leaves the shareware screen), title is
 starts a twin-stick game. Screenshots -> PNG with pillow to view them.
 Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --obj=build\llamatron.exe
 0x140000000+offset.
+
+## Gridrunner (GRIDRUNR.PRG, --program=GRIDRUNR.PRG) - runs, controls TBD (owner: "really challenging")
+- Standard TOS PRG, Pompey Packer 2.5: unpacks itself in our ST (disk::LoadPrg). Its stub reads the packed
+  length below A4: TOS's loader leaves A4 = end of text+data (Machine::Load sets it). After unpacking the code is
+  at its runtime addresses (no relocation needed to read dumps): --dump=N:<file> then dis.py/xref.py <file>.
+- Title says "CRACKED BY THE ALIEN... (DAMAGED KARMAS ALL ROUND!)": the copy on this disk is a cracked release.
+  HISCORES.COW is its high score file (Fopen/Fread at the title).
+- Uses: Initmous(relative, topmode 1 = y origin at the BOTTOM -> IKBD $0F, threshold 1/1, mousevec $4B7B6),
+  Xbtimer(timer B, event count, data 1, $4B750) = an interrupt after every display line (raster colours),
+  TOS's IKBD handler (Kbdvbase()->mousevec gets the packets: our IkbdSysHle), console via TOS maybe.
+- Mouse handler: buttons (packet header) -> $54DD8 (bit 1 left, bit 0 right), dx/dy -> $54DD4/$54DD6, pointer
+  x $54DD0 (0..319) += dx, y $54DD2 (0..199) -= dy; ignored while $4CF2E (attract demo, which moves the pointer
+  itself at $1271C). Joystick fire is ignored.
+- The ship sits at the pointer (anywhere on the grid); left = fire (hold), right = drop the drone at the pointer
+  ($12916; it then moves towards its spot at 2 px/frame). Menus are point-and-click: title "press fire" = left;
+  level select ($11F06): [-] x $65-$80 / [+] x $BB-$D6 at y $6E-$82, [LET'S BLAST!!] y $A2+, pointer starts at
+  (160,170) = on LET'S BLAST; another 3-row menu at $10A70 (y $50-$59, $64-$6D, $82-$8B); high score name entry
+  ($10686): a 10x4 on-screen keyboard, cells 20 px from (65,80), characters at $1096E.
+- Test inputs: --press=N:mleft|mright[:frames], mx<dx>, my<dy> (per frame). Flow: mleft at 600 (Llamasoft
+  core screen), 1500 (title), 2000 (LET'S BLAST), 2400 (intro), then play (left held = fire).
 
 ## The program (TRON1MEG.PRG)
 - 263 KB self-extractor: a 38-byte mover, an LZ77 stream (unpacks to basepage+$100, its own text start), a

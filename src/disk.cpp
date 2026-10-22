@@ -97,6 +97,30 @@ std::map<std::string, Bytes> ReadFiles(const Bytes& d) {
   return files;
 }
 
+bool LoadPrg(const Bytes& prg, Program* out, std::string* error) {
+  if (prg.size() < 28 || Be16(prg.data()) != 0x601A) return *error = "not a TOS program", false;
+  uint32_t tl = Be32(&prg[2]), dl = Be32(&prg[6]), bl = Be32(&prg[10]), sl = Be32(&prg[14]);
+  bool no_reloc = Be16(&prg[26]) != 0;
+  if (28 + uint64_t(tl) + dl + sl > prg.size()) return *error = "truncated program", false;
+  out->text.assign(prg.begin() + 28, prg.begin() + 28 + tl + dl);
+  out->relocs.clear();
+  out->bss_size = bl;
+  size_t r = 28 + size_t(tl) + dl + sl;
+  if (no_reloc || r + 4 > prg.size()) return true;
+  uint32_t off = Be32(&prg[r]);
+  if (!off) return true;
+  out->relocs.push_back(off);
+  for (size_t i = r + 4; i < prg.size() && prg[i]; ++i) {
+    if (prg[i] == 1) {
+      off += 254;
+    } else {
+      off += prg[i];
+      out->relocs.push_back(off);
+    }
+  }
+  return true;
+}
+
 bool UnpackLlamatron(const Bytes& prg, Program* out, std::string* error) {
   // The PRG is a self-extractor: a 38-byte mover, then an LZ77 stream that unpacks to the text start, followed
   // by a GEMDOS relocation table; the depacker then clears $965 words of BSS (Tools/depack.py).

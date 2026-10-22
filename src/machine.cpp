@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "cpu.h"
@@ -13,13 +14,15 @@ namespace {
 // TOS stand-ins in the ROM area (offsets from kRomBase).
 constexpr uint32_t kRomTrap1 = 0x000, kRomTrap13 = 0x004, kRomTrap14 = 0x008;  // ILLEGAL; RTE
 constexpr uint32_t kRomRte = 0x00C, kRomRts = 0x010;
-constexpr uint32_t kRomIkbdDefault = 0x014;  // tst.b $fffc02.w; rts (TOS's handler, discarding)
+constexpr uint32_t kRomIkbdDefault = 0x014;  // TOS's IKBD handler (ikbdsys): ILLEGAL -> IkbdSysHle
 constexpr uint32_t kRomPterm = 0x01C;        // the program's return address: ILLEGAL
-constexpr uint32_t kRomAcia = 0x040;         // MFP ACIA interrupt (see BuildRom)
+constexpr uint32_t kRomAcia = 0x040;         // MFP ACIA interrupt (see Load)
+constexpr uint32_t kRomIkbdCall = 0x080;     // calls a Kbdvbase vector with a packet (see Load)
 constexpr uint32_t kRomVectors = 0x400;      // one ILLEGAL per exception vector: unhandled exceptions
 
 constexpr uint32_t kSsp = 0x8000;        // supervisor stack (TOS's is in low memory too)
 constexpr uint32_t kKbdvbase = 0x2000;   // the IKBD vector table (XBIOS Kbdvbase), 9 longs
+constexpr uint32_t kIkbdTarget = kKbdvbase + 0x40, kIkbdPacket = kKbdvbase + 0x48;  // for kRomIkbdCall
 constexpr uint32_t kScreen = 0xF8000;    // TOS's screen at the top of RAM
 constexpr uint32_t kHitpa = kScreen;
 
@@ -30,7 +33,8 @@ constexpr uint64_t kAciaByteCycles = 10240;  // 7812.5 baud, 10 bits per byte
 // MFP register indices ((address - $FFFA01) / 2).
 enum { GPIP, AER, DDR, IERA, IERB, IPRA, IPRB, ISRA, ISRB, IMRA, IMRB, VR, TACR, TBCR, TCDCR, TADR };
 
-constexpr int kChanAcia = 6, kChanTimerA = 13;
+constexpr int kChanAcia = 6;
+constexpr int kTimerChannel[4] = {13, 8, 5, 4};  // MFP channels of timers A, B, C, D
 constexpr int kPrescale[8] = {0, 4, 10, 16, 50, 64, 100, 200};  // timer delay modes 1-7
 
 void Put16(uint8_t* p, uint16_t v) { p[0] = uint8_t(v >> 8), p[1] = uint8_t(v); }
@@ -61,7 +65,7 @@ bool Machine::Load(const disk::Program& program, std::map<std::string, disk::Byt
   rom16(kRomTrap14, {0x4AFC, 0x4E73});
   rom16(kRomRte, {0x4E73});
   rom16(kRomRts, {0x4E75});
-  rom16(kRomIkbdDefault, {0x4A38, 0xFC02, 0x4E75});
+  rom16(kRomIkbdDefault, {0x4AFC});
   rom16(kRomPterm, {0x4AFC});
   // The ACIA interrupt, as TOS does it: call the IKBD handler (Kbdvbase()->ikbdsys) while the ACIA still
   // requests an interrupt (GPIP bit 4 low), then end the MFP's in-service bit.
@@ -73,6 +77,12 @@ bool Machine::Load(const disk::Program& program, std::map<std::string, disk::Byt
                    0x08B8, 0x0006, 0xFA11,                 // bclr #6,$fffffa11.w (ISRB)
                    0x4CDF, 0x0F0F,                         // movem.l (sp)+,d0-d3/a0-a3
                    0x4E73});                               // rte
+  // A packet for a Kbdvbase vector, as TOS calls them: the packet address in a0 and on the stack.
+  rom16(kRomIkbdCall, {0x2F08,                                                          // move.l a0,-(sp)
+                       0x2279, uint16_t(kIkbdTarget >> 16), uint16_t(kIkbdTarget),      // movea.l target,a1
+                       0x4E91,                                                          // jsr (a1)
+                       0x588F,                                                          // addq.l #4,sp
+                       0x4E75});                                                        // rts
   for (uint32_t v = 0; v < 256; ++v) Put16(&rom_[kRomVectors + v * 2], 0x4AFC);
 
   // Low memory: exception vectors, system variables, the IKBD vector table.
@@ -132,6 +142,9 @@ bool Machine::Load(const disk::Program& program, std::map<std::string, disk::Byt
   cpu::Set(cpu::USP, usp);
   cpu::Set(cpu::SR, 0x0300);
   cpu::Set(cpu::PC, kTextBase);
+  // TOS's loader leaves A4 at the end of the program's text + data (the BSS start); packers rely on it (the
+  // Pompey Packer stub on GRIDRUNR.PRG reads its packed length from just below A4).
+  cpu::Set(cpu::Reg(cpu::A0 + 4), text_end);
   return true;
 }
 
@@ -141,10 +154,18 @@ uint64_t Machine::Now() const { return cycles_done_ + uint64_t(cpu::CyclesRun() 
 double Machine::FrameHz() const { return Is60Hz() ? kCpuHz / 133604.0 : kCpuHz / 160256.0; }
 
 bool Machine::RunFrame() {
-  uint64_t frame_end = frame_start_ + (Is60Hz() ? 133604 : 160256);
+  // A frame is 313 lines of 512 cycles (50 Hz) or 263 of 508 (60 Hz); the 200 displayed lines start at line 63
+  // (34); a line's display ends 376 cycles into it - then it's drawn and timer B counts it.
+  const bool hz60 = Is60Hz();
+  const uint64_t cpl = hz60 ? 508 : 512, first = hz60 ? 34 : 63;
+  uint64_t frame_end = frame_start_ + (hz60 ? 133604 : 160256);
+  auto line_end = [&](int l) { return frame_start_ + (first + uint64_t(l)) * cpl + 376; };
+  line_ = 0;
   while (!ended_ && cycles_done_ < frame_end) {
     uint64_t next = frame_end;
-    if (timer_a_next_) next = std::min(next, timer_a_next_);
+    for (const Timer& t : timers_)
+      if (t.next) next = std::min(next, t.next);
+    if (line_ < kScreenH) next = std::min(next, line_end(line_));
     if (!ikbd_out_.empty() && !acia_rx_full_) next = std::min(next, std::max(acia_next_, cycles_done_ + 1));
     int slice = int(std::max<uint64_t>(next - cycles_done_, 1));
     uint64_t ran = uint64_t(cpu::Execute(slice * speed_)) + cpu_rem_;
@@ -152,9 +173,13 @@ bool Machine::RunFrame() {
     cpu_rem_ = int(ran % uint64_t(speed_));
     RunTimers(cycles_done_);
     AciaService(cycles_done_);
+    while (line_ < kScreenH && line_end(line_) <= cycles_done_) {
+      RenderLine(line_++);
+      DisplayLineEnd();
+    }
   }
-  // VBL: the frame just shown, then the interrupt; the shifter latches the new screen address.
-  RenderFrame();
+  while (line_ < kScreenH) RenderLine(line_++);  // (the program ended mid-frame)
+  // VBL: the shifter latches the new screen address.
   uint32_t base = uint32_t(vbase_hi_) << 16 | uint32_t(vbase_mid_) << 8;
   if (base != vbase_latched_) ++swaps_;  // the game shows a new frame
   vbase_latched_ = base;
@@ -217,26 +242,51 @@ void Machine::MfpRaise(int ch) {
   UpdateIrq();
 }
 
-void Machine::TimerAReload() {
-  int mode = mfp_[TACR] & 15;
-  if (mode == 0 || mode > 7) {  // stopped (event count / pulse modes aren't used)
-    timer_a_next_ = 0;
+int Machine::TimerMode(int t) const {
+  switch (t) {
+    case 0: return mfp_[TACR] & 15;
+    case 1: return mfp_[TBCR] & 15;
+    case 2: return (mfp_[TCDCR] >> 4) & 7;
+    default: return mfp_[TCDCR] & 7;
+  }
+}
+
+// After a control write: delay mode (1-7) runs on the clock; event count (8, timer B: display lines) and pulse
+// modes don't.
+void Machine::TimerReload(int t) {
+  Timer& tm = timers_[t];
+  int mode = TimerMode(t), data = mfp_[TADR + t] ? mfp_[TADR + t] : 256;
+  if (mode < 1 || mode > 7) {
+    tm.next = 0;
+    if (mode == 8 && tm.count <= 0) tm.count = data;
     return;
   }
-  int data = mfp_[TADR] ? mfp_[TADR] : 256;
-  timer_a_period_ = kPrescale[mode] * data * kCyclesPerMfp;
-  if (trace_tos) LOG("timer A: mode %d data %d -> %.0f Hz", mode, data, kMfpHz / (kPrescale[mode] * data));
-  timer_a_frac_ = 0;
-  timer_a_next_ = Now() + uint64_t(timer_a_period_);
+  if (tm.next) return;  // already running: a new prescaler applies from the next underflow
+  tm.period = kPrescale[mode] * data * kCyclesPerMfp;
+  if (trace_tos) LOG("timer %c: mode %d data %d -> %.0f Hz", 'A' + t, mode, data, kMfpHz / (kPrescale[mode] * data));
+  tm.frac = 0;
+  tm.next = Now() + uint64_t(tm.period);
 }
 
 void Machine::RunTimers(uint64_t until) {
-  while (timer_a_next_ && timer_a_next_ <= until) {
-    MfpRaise(kChanTimerA);
-    timer_a_frac_ += timer_a_period_;
-    uint64_t whole = uint64_t(timer_a_frac_);
-    timer_a_frac_ -= double(whole);
-    timer_a_next_ += std::max<uint64_t>(whole, 1);
+  for (int t = 0; t < 4; ++t) {
+    Timer& tm = timers_[t];
+    while (tm.next && tm.next <= until) {
+      MfpRaise(kTimerChannel[t]);
+      tm.frac += tm.period;
+      uint64_t whole = uint64_t(tm.frac);
+      tm.frac -= double(whole);
+      tm.next += std::max<uint64_t>(whole, 1);
+    }
+  }
+}
+
+void Machine::DisplayLineEnd() {
+  if (TimerMode(1) != 8) return;
+  Timer& tb = timers_[1];
+  if (--tb.count <= 0) {
+    MfpRaise(kTimerChannel[1]);
+    tb.count = mfp_[TADR + 1] ? mfp_[TADR + 1] : 256;
   }
 }
 
@@ -247,10 +297,15 @@ uint8_t Machine::MfpRead(int reg) {
       if (!acia_rx_full_) v |= 0x10;          // bit 4: ACIA interrupt (active low)
       return v;
     }
-    case TADR: {  // the current count
-      if (!timer_a_next_) return mfp_[TADR];
-      double left = double(timer_a_next_ - std::min(timer_a_next_, Now())) / timer_a_period_;
-      int data = mfp_[TADR] ? mfp_[TADR] : 256;
+    case TADR:
+    case TADR + 1:
+    case TADR + 2:
+    case TADR + 3: {  // the current count
+      const Timer& tm = timers_[reg - TADR];
+      if (TimerMode(reg - TADR) == 8) return uint8_t(tm.count);
+      if (!tm.next) return mfp_[reg];
+      double left = double(tm.next - std::min(tm.next, Now())) / tm.period;
+      int data = mfp_[reg] ? mfp_[reg] : 256;
       return uint8_t(int(left * data) + 1);
     }
     default:
@@ -272,13 +327,35 @@ void Machine::MfpWrite(int reg, uint8_t v) {
       mfp_[reg] &= v;  // writing 0 clears
       break;
     case TACR:
-      mfp_[TACR] = v & 0x1F;
-      TimerAReload();
+    case TBCR: {
+      int t = reg - TACR;
+      int old = TimerMode(t);
+      mfp_[reg] = v & 0x1F;
+      if (TimerMode(t) != old) timers_[t].next = 0;
+      TimerReload(t);
       break;
-    case TADR:  // a running timer takes the new count at its next underflow
-      mfp_[TADR] = v;
-      if (timer_a_next_) timer_a_period_ = kPrescale[mfp_[TACR] & 7] * (v ? v : 256) * kCyclesPerMfp;
+    }
+    case TCDCR: {
+      int oc = TimerMode(2), od = TimerMode(3);
+      mfp_[TCDCR] = v & 0x77;
+      if (TimerMode(2) != oc) timers_[2].next = 0;
+      if (TimerMode(3) != od) timers_[3].next = 0;
+      TimerReload(2);
+      TimerReload(3);
       break;
+    }
+    case TADR:
+    case TADR + 1:
+    case TADR + 2:
+    case TADR + 3: {  // a running timer takes the new count at its next underflow; a stopped one loads it
+      int t = reg - TADR;
+      mfp_[reg] = v;
+      Timer& tm = timers_[t];
+      int mode = TimerMode(t);
+      if (mode == 0) tm.count = v ? v : 256;
+      if (tm.next) tm.period = kPrescale[mode & 7] * (v ? v : 256) * kCyclesPerMfp;
+      break;
+    }
     default:
       if (reg < 24) mfp_[reg] = v;
       break;
@@ -305,10 +382,29 @@ void Machine::AciaService(uint64_t until) {
 void Machine::SetJoystick(int port, uint8_t state) {
   if (joy_[port] == state) return;
   joy_[port] = state;
-  if (joy_events_) IkbdSend({uint8_t(0xFE + port), state});
+  if (joy_events_ && !(port == 0 && mouse_on_)) IkbdSend({uint8_t(0xFE + port), state});  // port 0: the mouse
 }
 
 void Machine::KeyEvent(uint8_t scancode, bool down) { IkbdSend({uint8_t(down ? scancode : scancode | 0x80)}); }
+
+void Machine::MouseInput(int dx, int dy, uint8_t buttons) {
+  if (!mouse_on_) return;
+  mouse_dx_ += dx, mouse_dy_ += dy;
+  mouse_buttons_ = buttons;
+  SendMouse();
+}
+
+// Relative mouse packets: $F8 | buttons, dx, dy (each -128..127), once a threshold is reached or the buttons
+// change. Not too many queued: the ACIA moves ~780 bytes a second.
+void Machine::SendMouse() {
+  while (ikbd_out_.size() < 24 && (std::abs(mouse_dx_) >= mouse_thr_x_ || std::abs(mouse_dy_) >= mouse_thr_y_ ||
+                                   mouse_buttons_ != mouse_sent_buttons_)) {
+    int dx = std::clamp(mouse_dx_, -128, 127), dy = std::clamp(mouse_dy_, -128, 127);
+    mouse_dx_ -= dx, mouse_dy_ -= dy;
+    mouse_sent_buttons_ = mouse_buttons_;
+    IkbdSend({uint8_t(0xF8 | (mouse_buttons_ & 3)), uint8_t(int8_t(dx)), uint8_t(int8_t(mouse_y_up_ ? -dy : dy))});
+  }
+}
 
 void Machine::IkbdCommand(uint8_t b) {
   // Command lengths (command byte included); unknown commands are single bytes.
@@ -323,16 +419,32 @@ void Machine::IkbdCommand(uint8_t b) {
   uint8_t cmd = ikbd_cmd_[0];
   if (trace_tos) LOG("ikbd: command $%02X", cmd);
   switch (cmd) {
-    case 0x80:  // reset
+    case 0x80:  // reset: relative mouse, joystick events
       if (ikbd_cmd_[1] == 0x01) {
-        joy_events_ = false;
+        joy_events_ = true;
+        mouse_on_ = true, mouse_y_up_ = false, mouse_thr_x_ = mouse_thr_y_ = 1;
         IkbdSend({0xF0});
       }
       break;
-    case 0x14:  // joystick event reporting
+    case 0x08:  // relative mouse
+      mouse_on_ = true;
+      break;
+    case 0x0B:  // mouse threshold
+      mouse_thr_x_ = std::max(1, int(ikbd_cmd_[1])), mouse_thr_y_ = std::max(1, int(ikbd_cmd_[2]));
+      break;
+    case 0x0F: mouse_y_up_ = true; break;
+    case 0x10: mouse_y_up_ = false; break;
+    case 0x12:  // disable mouse
+      mouse_on_ = false;
+      break;
+    case 0x14:  // joystick event reporting (both ports: no mouse)
       joy_events_ = true;
+      mouse_on_ = false;
       break;
     case 0x15:
+      joy_events_ = false;
+      mouse_on_ = false;
+      break;
     case 0x1A:
       joy_events_ = false;
       break;
@@ -347,26 +459,73 @@ void Machine::IkbdCommand(uint8_t b) {
 
 // ---- Shifter ----
 
-void Machine::RenderFrame() {
+void Machine::RenderLine(int y) {
   uint32_t pal[16];
   for (int i = 0; i < 16; ++i) {
     unsigned c = palette_[i];
     auto ch = [](unsigned v) { return (v << 5) | (v << 2) | (v >> 1); };  // 3 bits -> 8
     pal[i] = 0xFF000000u | ch((c >> 8) & 7) << 16 | ch((c >> 4) & 7) << 8 | ch(c & 7);
   }
-  uint32_t base = vbase_latched_;
-  for (int y = 0; y < kScreenH; ++y) {
-    uint32_t* out = &frame_[y * kScreenW];
-    for (int g = 0; g < 20; ++g) {
-      uint32_t a = (base + uint32_t(y * 160 + g * 8)) % kRamSize;
-      uint16_t p0 = Get16(&ram_[a]), p1 = Get16(&ram_[a + 2]), p2 = Get16(&ram_[a + 4]), p3 = Get16(&ram_[a + 6]);
-      for (int x = 0; x < 16; ++x) {
-        int s = 15 - x;
-        int idx = ((p0 >> s) & 1) | ((p1 >> s) & 1) << 1 | ((p2 >> s) & 1) << 2 | ((p3 >> s) & 1) << 3;
-        out[g * 16 + x] = pal[idx];
-      }
+  uint32_t* out = &frame_[y * kScreenW];
+  for (int g = 0; g < 20; ++g) {
+    uint32_t a = (vbase_latched_ + uint32_t(y * 160 + g * 8)) % kRamSize;
+    uint16_t p0 = Get16(&ram_[a]), p1 = Get16(&ram_[a + 2]), p2 = Get16(&ram_[a + 4]), p3 = Get16(&ram_[a + 6]);
+    for (int x = 0; x < 16; ++x) {
+      int s = 15 - x;
+      int idx = ((p0 >> s) & 1) | ((p1 >> s) & 1) << 1 | ((p2 >> s) & 1) << 2 | ((p3 >> s) & 1) << 3;
+      out[g * 16 + x] = pal[idx];
     }
   }
+}
+
+// ---- TOS's IKBD handler ----
+
+// Called (via Kbdvbase()->ikbdsys) for each byte from the keyboard processor: packets go to the Kbdvbase
+// vectors (mouse, joystick, status, clock) through kRomIkbdCall, key presses to the console buffer.
+void Machine::IkbdSysHle() {
+  uint8_t b = uint8_t(Read8(0xFFFC02));
+  cpu::Set(cpu::PC, kRomBase + kRomRts);
+  if (!packet_need_) {
+    if (b < 0xF6) {
+      ConsoleKey(b);
+      return;
+    }
+    static const uint8_t kLen[10] = {8, 6, 3, 3, 3, 3, 7, 3, 2, 2};  // $F6..$FF
+    packet_ = {b};
+    packet_need_ = kLen[b - 0xF6];
+    return;
+  }
+  packet_.push_back(b);
+  if (packet_.size() < packet_need_) return;
+  packet_need_ = 0;
+  uint8_t h = packet_[0];
+  uint32_t vec_off = h == 0xF6 ? 0x0C : h <= 0xFB ? 0x10 : h == 0xFC ? 0x14 : 0x18;
+  std::vector<uint8_t> pkt = packet_;
+  if (h >= 0xFE) {  // TOS passes joystick packets as [header, joystick 0, joystick 1]
+    packet_joy_[h - 0xFE] = packet_[1];
+    pkt = {h, packet_joy_[0], packet_joy_[1]};
+  }
+  uint32_t vec = Get32(&ram_[kbdvbase_ + vec_off]);
+  if (vec == kRomBase + kRomRts) return;
+  std::memcpy(&ram_[kIkbdPacket], pkt.data(), pkt.size());
+  Put32(&ram_[kIkbdTarget], vec);
+  cpu::Set(cpu::A0, kIkbdPacket);
+  cpu::Set(cpu::PC, kRomBase + kRomIkbdCall);
+}
+
+void Machine::ConsoleKey(uint8_t sc) {
+  bool up = sc & 0x80;
+  uint8_t code = sc & 0x7F;
+  if (code == 0x2A || code == 0x36) {
+    shift_ = !up;
+    return;
+  }
+  if (up || console_keys_.size() >= 32) return;
+  // ASCII for the main block (UK layout, enough for names and menus).
+  static const char kLow[] = "\0\x1b" "1234567890-=\b\tqwertyuiop[]\r\0asdfghjkl;'`\0#zxcvbnm,./\0\0\0 ";
+  static const char kHigh[] = "\0\x1b" "!\"#$%^&*()_+\b\tQWERTYUIOP{}\r\0ASDFGHJKL:@~\0~ZXCVBNM<>?\0\0\0 ";
+  char a = code < sizeof(kLow) - 1 ? (shift_ ? kHigh : kLow)[code] : 0;
+  console_keys_.push_back(uint32_t(code) << 16 | uint8_t(a));
 }
 
 // ---- Bus ----
@@ -475,6 +634,10 @@ bool Machine::IllegalOpcode(int) {
   }
   if (pc < kRomBase || pc >= kRomBase + kRomSize) return false;
   uint32_t off = pc - kRomBase;
+  if (off == kRomIkbdDefault) {
+    IkbdSysHle();
+    return true;
+  }
   if (off == kRomPterm) {
     LOG("program returned (rts from its entry)");
     ended_ = true;
@@ -531,6 +694,9 @@ bool Machine::IllegalOpcode(int) {
   }
   bool handled = off == kRomTrap1 ? Gemdos(args, &d0) : off == kRomTrap13 ? Bios(args, &d0) : Xbios(args, &d0);
   if (!handled) {
+    LOG("args: %04X %04X %04X %04X %04X %04X %04X", Get16(&ram_[args + 2]), Get16(&ram_[args + 4]),
+        Get16(&ram_[args + 6]), Get16(&ram_[args + 8]), Get16(&ram_[args + 10]), Get16(&ram_[args + 12]),
+        Get16(&ram_[args + 14]));
     LOG("unimplemented %s call %u from $%06X", off == kRomTrap1 ? "GEMDOS" : off == kRomTrap13 ? "BIOS" : "XBIOS",
         fn, ret);
     d0 = uint32_t(-32);  // EINVFN
@@ -552,6 +718,19 @@ bool Machine::Gemdos(uint32_t args, uint32_t* d0) {
       LOG("program ended (Pterm)");
       ended_ = true;
       cpu::EndSlice();
+      return true;
+    case 0x01:  // Cconin
+    case 0x07:  // Crawcin
+    case 0x08:  // Cnecin
+      if (!console_keys_.empty()) *d0 = console_keys_.front(), console_keys_.pop_front();
+      else *d0 = 0;
+      return true;
+    case 0x0B:  // Cconis
+      *d0 = console_keys_.empty() ? 0 : uint32_t(-1);
+      return true;
+    case 0x09:  // Cconws(string)
+      LOG("gemdos Cconws: %s", ReadString(Get32(p + 2)).c_str());
+      *d0 = 0;
       return true;
     case 0x0E: *d0 = 1; return true;  // Dsetdrv: drive bitmap (A:)
     case 0x19: *d0 = 0; return true;  // Dgetdrv
@@ -625,7 +804,13 @@ bool Machine::Gemdos(uint32_t args, uint32_t* d0) {
 bool Machine::Bios(uint32_t args, uint32_t* d0) {
   const uint8_t* p = &ram_[args];
   switch (Get16(p)) {
-    case 1: *d0 = 0; return true;            // Bconstat
+    case 1:  // Bconstat(dev): 2 = console
+      *d0 = Get16(p + 2) == 2 && !console_keys_.empty() ? uint32_t(-1) : 0;
+      return true;
+    case 2:  // Bconin(dev): doesn't wait - 0 if there is no key
+      if (Get16(p + 2) == 2 && !console_keys_.empty()) *d0 = console_keys_.front(), console_keys_.pop_front();
+      else *d0 = 0;
+      return true;
     case 3:                                  // Bconout(dev, c)
       if (Get16(p + 2) == 4) IkbdCommand(uint8_t(Get16(p + 4)));
       *d0 = 1;
@@ -637,7 +822,7 @@ bool Machine::Bios(uint32_t args, uint32_t* d0) {
       return true;
     }
     case 8: *d0 = uint32_t(-1); return true;  // Bcostat: ready
-    case 11: *d0 = 0; return true;            // Kbshift
+    case 11: *d0 = shift_ ? 1 : 0; return true;  // Kbshift
     default: return false;
   }
 }
@@ -645,6 +830,52 @@ bool Machine::Bios(uint32_t args, uint32_t* d0) {
 bool Machine::Xbios(uint32_t args, uint32_t* d0) {
   const uint8_t* p = &ram_[args];
   switch (Get16(p)) {
+    case 0: {  // Initmous(type, params, vector): 0 off, 1 relative, (2 absolute, 4 keycode: not done)
+      int type = Get16(p + 2);
+      uint32_t params = Get32(p + 4) & 0xFFFFFF, vec = Get32(p + 8);
+      if (type == 0) {
+        IkbdCommand(0x12);
+        return true;
+      }
+      Put32(&ram_[kbdvbase_ + 0x10], vec);
+      if (type != 1) LOG("Initmous type %d: treated as relative", type);
+      // params: y origin (1 = at the bottom: y grows upwards), buttons, x threshold, y threshold. (Gridrunner
+      // passes 1 and subtracts dy from its pointer's screen y: so 1 = bottom.)
+      IkbdCommand(ram_[params] ? 0x0F : 0x10);
+      for (uint8_t b : {uint8_t(0x08), uint8_t(0x0B), ram_[params + 2], ram_[params + 3]}) IkbdCommand(b);
+      if (trace_tos) LOG("Initmous: relative, threshold %d/%d, vector $%X", ram_[params + 2], ram_[params + 3], vec);
+      return true;
+    }
+    case 13: {  // Mfpint(channel, vector)
+      int ch = Get16(p + 2) & 15;
+      Put32(&ram_[(0x40 + ch) * 4], Get32(p + 4));
+      return true;
+    }
+    case 26:    // Jdisint(channel)
+    case 27: {  // Jenabint(channel)
+      int ch = Get16(p + 2) & 15;
+      uint8_t bit = uint8_t(1u << (ch & 7));
+      int ier = ch >= 8 ? IERA : IERB, imr = ch >= 8 ? IMRA : IMRB;
+      if (Get16(p) == 27) MfpWrite(ier, mfp_[ier] | bit), MfpWrite(imr, mfp_[imr] | bit);
+      else MfpWrite(ier, uint8_t(mfp_[ier] & ~bit)), MfpWrite(imr, uint8_t(mfp_[imr] & ~bit));
+      return true;
+    }
+    case 31: {  // Xbtimer(timer, control, data, vector): 0 A, 1 B, 2 C, 3 D
+      int t = Get16(p + 2) & 3, ctrl = Get16(p + 4) & 0xFF, data = Get16(p + 6) & 0xFF;
+      int ch = kTimerChannel[t];
+      Put32(&ram_[(0x40 + ch) * 4], Get32(p + 8));
+      static const int kCtrl[4] = {TACR, TBCR, TCDCR, TCDCR};
+      if (t < 2) MfpWrite(kCtrl[t], 0);
+      MfpWrite(TADR + t, uint8_t(data));
+      if (t == 2) MfpWrite(TCDCR, uint8_t((mfp_[TCDCR] & 0x07) | (ctrl & 7) << 4));
+      else if (t == 3) MfpWrite(TCDCR, uint8_t((mfp_[TCDCR] & 0x70) | (ctrl & 7)));
+      else MfpWrite(kCtrl[t], uint8_t(ctrl));
+      uint8_t bit = uint8_t(1u << (ch & 7));
+      int ier = ch >= 8 ? IERA : IERB, imr = ch >= 8 ? IMRA : IMRB;
+      MfpWrite(ier, mfp_[ier] | bit), MfpWrite(imr, mfp_[imr] | bit);
+      if (trace_tos) LOG("Xbtimer: timer %c control %d data %d vector $%X", 'A' + t, ctrl, data, Get32(p + 8));
+      return true;
+    }
     case 2:  // Physbase
     case 3:  // Logbase
       *d0 = uint32_t(vbase_hi_) << 16 | uint32_t(vbase_mid_) << 8;
