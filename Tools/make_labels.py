@@ -7,18 +7,48 @@ import os
 import sys
 
 import numpy as np
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 ROOT = os.path.join(os.path.dirname(__file__), '..')
 W, H = 512, 392
 # The drawn box in each photo, as fractions of the photo (left, top, right, bottom), from the 1500 x 2000 view.
 LABELS = [
-    ('llamatron', 'llamatron-photo.jpg', (150 / 1500, 558 / 2000, 1268 / 1500, 1408 / 2000)),
-    ('gridrunner', 'gridrunner-photo.jpg', (188 / 1500, 732 / 2000, 1252 / 1500, 1598 / 2000)),
+    ('llamatron', 'llamatron-photo.jpg', (150 / 1500, 558 / 2000, 1268 / 1500, 1408 / 2000), None),
+    ('gridrunner', 'gridrunner-photo.jpg', (188 / 1500, 732 / 2000, 1252 / 1500, 1598 / 2000), 'touch_up_g'),
 ]
 
 
-def process(path, box):
+def stroke_mask(size, lines, width):
+    m = Image.new('L', size, 0)
+    d = ImageDraw.Draw(m)
+    for pts in lines:
+        d.line(pts, fill=255, width=width, joint='curve')
+        r = width // 2
+        for x, y in (pts[0], pts[-1]):
+            d.ellipse((x - r, y - r, x + r, y + r), fill=255)
+    return np.asarray(m, dtype=np.float32) / 255
+
+
+def touch_up_g(a):
+    """The owner's G in "Gridrunner" read as an E: its middle stroke ran across the C. Erase that stroke inside the
+    C and add a G's hook (up from the bottom curve, a bar inwards) in the same felt pen: solid ink, rough edges.
+    Coordinates in the full-resolution crop (2128 x 1732); the G's box starts at (170, 658)."""
+    ox, oy = 170, 658
+    size = (a.shape[1], a.shape[0])
+    shift = lambda pts: [(x + ox, y + oy) for x, y in pts]
+    a = np.maximum(a, stroke_mask(size, [shift([(176, 168), (314, 98)])], 48) * 255)
+    a = np.maximum(a, stroke_mask(size, [shift([(166, 161), (200, 144)])], 12) * 255)  # a hairline left of it
+    rng = np.random.default_rng(1991)
+    ink = stroke_mask(size, [shift([(268, 204), (283, 178), (288, 153)]), shift([(290, 151), (240, 153)])], 30)
+    ink = np.asarray(Image.fromarray((ink * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(2.5)),
+                     dtype=np.float32) / 255
+    noise = np.asarray(Image.fromarray((rng.random(ink.shape) * 255).astype(np.uint8)).filter(
+        ImageFilter.GaussianBlur(1.6)), dtype=np.float32) / 255
+    stroke = (ink > 0.5 + 1.6 * (noise - 0.5)) & ~((rng.random(ink.shape) > 0.995) & (ink < 0.9))
+    return np.where(stroke, np.minimum(a, 255 * 0.04 * rng.random(ink.shape)), a)
+
+
+def process(path, box, touch_up=None):
     im = ImageOps.exif_transpose(Image.open(path)).convert('L')  # phone photos: stored sideways + a flag
     w, h = im.size
     im = im.crop((int(box[0] * w), int(box[1] * h), int(box[2] * w), int(box[3] * h)))
@@ -27,8 +57,10 @@ def process(path, box):
     paper = small.filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(12)).resize(im.size, Image.BILINEAR)
     g = np.asarray(im, dtype=np.float32) / np.maximum(np.asarray(paper, dtype=np.float32), 1)
     # Ink well below the paper (~1.0); ruled lines and paper texture near it.
-    v = np.clip((g - 0.40) / (0.68 - 0.40), 0, 1)
-    out = Image.fromarray((v * 255).astype(np.uint8)).resize((W, H), Image.LANCZOS)
+    v = np.clip((g - 0.40) / (0.68 - 0.40), 0, 1) * 255
+    if touch_up:
+        v = touch_up(v)
+    out = Image.fromarray(v.clip(0, 255).astype(np.uint8)).resize((W, H), Image.LANCZOS)
     return out
 
 
@@ -46,8 +78,8 @@ def rle(data):
 
 def main():
     arrays = []
-    for name, photo, box in LABELS:
-        img = process(os.path.join(ROOT, 'res', 'labels', photo), box)
+    for name, photo, box, touch_up in LABELS:
+        img = process(os.path.join(ROOT, 'res', 'labels', photo), box, globals()[touch_up] if touch_up else None)
         img.save(os.path.join(ROOT, 'res', 'labels', name + '.png'))
         packed = rle(img.tobytes())
         arrays.append((name, packed))
