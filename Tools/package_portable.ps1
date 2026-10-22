@@ -57,7 +57,7 @@ if ($Release) {
     Copy-Item $exe, (Join-Path $repo "res\README.txt") $stage
     Copy-Item -Recurse (Join-Path $dist "licenses") $stage
     New-Item -ItemType Directory -Force (Join-Path $stage "game") | Out-Null
-    Set-Content -Path (Join-Path $stage "game\PUT YOUR LLAMATRON DISK IMAGE HERE.txt") -Value "Copy your Llamatron disk image (.msa or .st) into this folder."
+    Set-Content -Path (Join-Path $stage "game\PUT YOUR LLAMATRON DISK IMAGE HERE.txt") -Value "Copy your Llamatron disk image (.msa or .st) into this folder. It has both games: Llamatron and Super Gridrunner. You can download it from Jeff Minter's site."
     # Leak check: no game files, no user data.
     $bad = Get-ChildItem -Recurse $stage | Where-Object { $_.Extension -in ".msa", ".st", ".prg", ".yak", ".cow", ".bin", ".log" -or $_.FullName -match "\\userdata" }
     if ($bad) { throw "release would contain: $($bad.FullName -join ', ')" }

@@ -14,5 +14,6 @@ bool Reload();
 
 double Get(const std::string& key, double def);
 void Set(const std::string& key, double value);
+void Erase(const std::string& key);
 
 }  // namespace settings

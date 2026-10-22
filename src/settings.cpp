@@ -66,4 +66,6 @@ double Get(const std::string& key, double def) {
 
 void Set(const std::string& key, double value) { g_values[key] = value; }
 
+void Erase(const std::string& key) { g_values.erase(key); }
+
 }  // namespace settings
