@@ -62,6 +62,7 @@ add_executable(llamatron WIN32
   src/game.cpp
   src/gridrunner.cpp
   src/launcher.cpp
+  src/crt.cpp
   src/settings.cpp
   src/log.cpp
   src/crash.cpp)

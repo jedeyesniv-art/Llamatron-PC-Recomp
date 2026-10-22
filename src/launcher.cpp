@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "crt.h"
+
 namespace launcher {
 namespace {
 
@@ -162,6 +164,7 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
       case SDL_GAMEPAD_BUTTON_SOUTH:
       case SDL_GAMEPAD_BUTTON_START: play(); break;
       case SDL_GAMEPAD_BUTTON_NORTH: info_ = !info_; break;
+      case SDL_GAMEPAD_BUTTON_WEST: if (crt::Available()) crt::Toggle(); break;
       case SDL_GAMEPAD_BUTTON_EAST:
       case SDL_GAMEPAD_BUTTON_BACK: return back();
       default: break;
@@ -172,6 +175,7 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
       case SDL_SCANCODE_RIGHT: case SDL_SCANCODE_D: Choose(1); break;
       case SDL_SCANCODE_RETURN: case SDL_SCANCODE_SPACE: play(); break;
       case SDL_SCANCODE_F1: case SDL_SCANCODE_I: case SDL_SCANCODE_H: case SDL_SCANCODE_TAB: info_ = !info_; break;
+      case SDL_SCANCODE_F9: case SDL_SCANCODE_C: if (crt::Available()) crt::Toggle(); break;
       case SDL_SCANCODE_ESCAPE: return back();
       default: break;
     }
@@ -341,7 +345,9 @@ void Launcher::Render() {
   }
   DrawText("LLAMASOFT ON THE ATARI ST", w / 2, h * 0.06f, s, {120, 120, 135, 255}, true);
   const char* hint = SDL_GetTicks() < quit_armed_ms_ ? "PRESS B AGAIN TO QUIT"
-                                                      : "LEFT/RIGHT CHOOSE    A PLAY    Y HOW TO PLAY    B QUIT";
+                     : !crt::Available() ? "LEFT/RIGHT CHOOSE    A PLAY    Y HOW TO PLAY    B QUIT"
+                     : crt::Enabled() ? "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT: ON   B QUIT"
+                                      : "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT: OFF   B QUIT";
   DrawText(hint, w / 2, h * 0.92f, s * 0.9f, {150, 150, 165, 255}, true);
 
   if (info_) {

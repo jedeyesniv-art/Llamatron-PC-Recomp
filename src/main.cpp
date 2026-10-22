@@ -20,6 +20,7 @@
 #include "gridrunner.h"
 #include "settings.h"
 #include "input.h"
+#include "crt.h"
 #include "launcher.h"
 #include "log.h"
 #include "machine.h"
@@ -56,6 +57,7 @@ struct Options {
   int frames = 0;          // --frames=N: quit after N frames
   std::string wav;         // --wav=<file>: also write the audio to a WAV file (tests)
   std::map<int, std::string> shots;  // --shot=N:<file.bmp>
+  std::map<int, std::string> rshots;  // --rshot=N:<file.bmp>: the screen as shown (CRT look included)
   // --press=N:<what>[:frames]: from frame N hold a key (SDL scancode name), "j0"/"j1" + fire|up|down|left|right,
   // or "pad" + an SDL gamepad button name (pady, padback...: button events only)
   struct Press {
@@ -96,6 +98,7 @@ Options ParseArgs(int argc, char** argv) {
     else if (Arg(a, "frames", &v)) o.frames = std::atoi(v.c_str());
     else if (Arg(a, "wav", &v)) o.wav = v;
     else if (Arg(a, "shot", &v)) o.shots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
+    else if (Arg(a, "rshot", &v)) o.rshots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
     else if (Arg(a, "press", &v)) {
       size_t c1 = v.find(':'), c2 = v.find(':', c1 + 1);
       o.presses.push_back({std::atoi(v.c_str()), c2 == std::string::npos ? 3 : std::atoi(v.c_str() + c2 + 1),
@@ -167,6 +170,13 @@ std::string FindDisk(const Options& o) {
     }
   }
   return {};
+}
+
+void SaveRenderShot(SDL_Renderer* r, const std::string& path) {
+  if (SDL_Surface* s = SDL_RenderReadPixels(r, nullptr)) {
+    if (SDL_SaveBMP(s, path.c_str())) LOG("screenshot %s", path.c_str());
+    SDL_DestroySurface(s);
+  }
 }
 
 void SaveShot(const st::Machine& m, const std::string& path) {
@@ -377,11 +387,16 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
         SDL_SetWindowFullscreen(window, !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));
         continue;
       }
+      if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.scancode == SDL_SCANCODE_F9) {
+        crt::Toggle();
+        continue;
+      }
       input::HandleEvent(e, &machine);
     }
     if (input::QuitRequested()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
     if (frame % 50 == 0 && settings::Reload()) {  // edited while running
       grid::LoadSettings();
+      crt::LoadSettings();
       if (opt.aim < 0) game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
     }
     if (window && SDL_CursorVisible() &&
@@ -557,7 +572,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
       SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
       SDL_RenderClear(renderer);
       SDL_FRect view{0, 0, float(st::kScreenW), float(view_h)};
-      SDL_RenderTexture(renderer, texture, nullptr, &view);
+      crt::DrawPicture(renderer, texture, view);
       if (const char* hint = input::Hint(&machine)) {  // 8x8 debug font in the logical space, lines at the bottom
         std::vector<std::string> lines;
         for (const char* p = hint; *p;) {
@@ -576,6 +591,8 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
           y += 10;
         }
       }
+      auto rshot = opt.rshots.find(frame);
+      if (rshot != opt.rshots.end()) SaveRenderShot(renderer, rshot->second);
       SDL_RenderPresent(renderer);
       uint64_t now = SDL_GetTicksNS();
       if (last_present) worst_gap = std::max(worst_gap, now - last_present);
@@ -593,13 +610,6 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
   if (audio) SDL_ClearAudioStream(audio);
   LOG("%s ended after %d frames", program_name.c_str(), frame);
   return end;
-}
-
-void SaveRenderShot(SDL_Renderer* r, const std::string& path) {
-  if (SDL_Surface* s = SDL_RenderReadPixels(r, nullptr)) {
-    if (SDL_SaveBMP(s, path.c_str())) LOG("screenshot %s", path.c_str());
-    SDL_DestroySurface(s);
-  }
 }
 
 // The start screen until the player picks a game (kPlay) or quits.
@@ -693,7 +703,8 @@ int main(int argc, char** argv) {
   if (!opt.headless) {
     c.window = SDL_CreateWindow("Llamatron", st::kScreenW * 4, st::kScreenH * 4,
                                 SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
-    c.renderer = SDL_CreateRenderer(c.window, nullptr);
+    c.renderer = crt::CreateRenderer(c.window);
+    if (c.renderer) crt::Init(c.renderer);
     SDL_SetRenderVSync(c.renderer, 1);
     if (opt.match_refresh) ChooseFullscreenMode(c.window, 50.0);
     if (opt.fullscreen) SDL_SetWindowFullscreen(c.window, true);
@@ -724,6 +735,7 @@ int main(int argc, char** argv) {
   input::Shutdown();
   if (c.audio) SDL_DestroyAudioStream(c.audio);
   if (c.texture) SDL_DestroyTexture(c.texture);
+  crt::Shutdown();
   if (c.renderer) SDL_DestroyRenderer(c.renderer);
   if (c.window) SDL_DestroyWindow(c.window);
   SDL_Quit();

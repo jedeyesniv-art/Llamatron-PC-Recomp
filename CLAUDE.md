@@ -256,3 +256,13 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   Fixed 60 Hz without VRR or a 50 Hz mode: 5 frames in 6 refreshes, a hitch 10x a second (unavoidable).
   Audio: ~50 ms queued, SDL stream frequency ratio +-0.5% to follow. Log: "pacing: ..." and every 10 s
   "timing: game frames/s, presents/s, longest present gap" (measured: 50.00 / 100.00 / 10.4 ms).
+
+## CRT look (src/crt.cpp, src/shaders/crt.frag.hlsl; 2026-10-22, owner's request)
+Our own one-pass shader tuned to the owner's ShaderGlass profile (crt-yah): soft horizontal beam, scanlines
+thickening with brightness, halation, aperture grille + bleed, curvature, vignette, warm colour. settings.txt crt=1
+and crt_* (reread live). Toggle: X / C / F9 on the launcher, F9 in a game. Needs SDL's GPU renderer (D3D12; we ask
+for it with DXIL shaders, fallback = default renderer without CRT). Tools/build_shaders.py -> crt.dxil.h
+(committed; the Windows SDK dxc has no SPIR-V). LLAMATRON_RENDERER=direct3d11 picks another renderer for tests.
+Lessons: SDL_shadercross names every vertex output TEXCOORDn, so a custom pixel shader's inputs must be
+TEXCOORD0 (colour) / TEXCOORD1 (uv), else D3D12 "Could not create graphics pipeline state" (logged only via
+SDL_GetError, picture black). In-game --rshot=N:<bmp> reads the screen back (CRT included).
