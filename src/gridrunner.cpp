@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <deque>
 #include <vector>
 
 #include "log.h"
@@ -15,6 +16,13 @@ constexpr uint32_t kStateVar = 0x4B632, kPointerX = 0x54DD0, kPointerY = 0x54DD2
 // Frames per drawn frame: the main loop only draws (the game logic runs in the VBL, $4B55A) and waits for this
 // many VBLs between frames (set to 2 once at $4B2C8: 25 frames/s). 1 = a new picture every VBL.
 constexpr uint32_t kFramesPerDraw = 0x4D2E4;
+
+// Name entry: the 10 x 4 on-screen keyboard (cells of 20 pixels from (65, 80), characters at $1096E: a-z ! . ? -,
+// ^ = delete, _ = done); its "letter flying to the name" animation runs while $10966 or $105BC is set.
+constexpr uint32_t kNameKeys = 0x1096E, kNameBusy1 = 0x10966, kNameBusy2 = 0x105BC;
+// The other screens' click areas (from their code): level select $11F06, options $10A70.
+constexpr int kMinusX = 115, kPlusX = 200, kLevelButtonsY = 120, kBlastX = 157, kBlastY = 172;
+constexpr int kOptionRows[4] = {84, 104, 134, 186};  // pause mode demo, freeze, reset message, quit (back)
 
 // ST scancodes we press for the player.
 constexpr uint8_t kRShift = 0x36, kLShift = 0x2A, kCtrl = 0x1D, kAlt = 0x38, kSpace = 0x39, kQ = 0x10;
@@ -43,6 +51,17 @@ bool g_quit = false;
 bool g_running = false;  // the game has unpacked itself and reached its title
 bool g_test = false;
 TestPad g_test_pad;
+
+// Virtual clicks: the pointer put on (x, y) (x < 0: where it is), an optional modifier key held, the left
+// button pressed for 4 frames.
+struct Click {
+  int x, y;
+  uint8_t modifier;
+};
+std::deque<Click> g_clicks;
+int g_click_frame = -1;  // the front click's progress (-1: not started)
+int g_prev_state = -1;
+uint64_t g_title_hint_ms = 0;
 
 uint16_t Get16(st::Machine& m, uint32_t a) { return uint16_t(m.Ram()[a] << 8 | m.Ram()[a + 1]); }
 void Put16(st::Machine& m, uint32_t a, uint16_t v) { m.Ram()[a] = uint8_t(v >> 8), m.Ram()[a + 1] = uint8_t(v); }
@@ -76,6 +95,82 @@ void MenuButton(st::Machine* m) {
   }
 }
 
+void QueueClick(int x, int y, uint8_t modifier = 0) { g_clicks.push_back({x, y, modifier}); }
+
+// The pointer to the name entry cell (col, row), kept on the keyboard (row 3 has only ^ and _ in columns 8, 9).
+void NameCell(st::Machine* m, int col, int row) {
+  row = std::clamp(row, 0, 3);
+  col = row == 3 ? (col >= 9 ? 9 : 8) : std::clamp(col, 0, 9);
+  Put16(*m, kPointerX, uint16_t(75 + col * 20));
+  Put16(*m, kPointerY, uint16_t(90 + row * 20));
+}
+
+void NameMove(st::Machine* m, int dcol, int drow) {
+  int col = std::clamp((int16_t(Get16(*m, kPointerX)) - 65) / 20, 0, 9);
+  int row = std::clamp((int16_t(Get16(*m, kPointerY)) - 80) / 20, 0, 3);
+  if (row == 3 && dcol) col = dcol < 0 ? 8 : 9;
+  else col += dcol;
+  NameCell(m, col, row + drow);
+}
+
+// Clicks the name entry cell holding character c (if there is one).
+void NameChar(st::Machine* m, char c) {
+  for (int i = 0; i < 40; ++i) {
+    if (m->Ram()[kNameKeys + i] != uint8_t(c)) continue;
+    QueueClick(75 + (i % 10) * 20, 90 + (i / 10) * 20);
+    return;
+  }
+}
+
+void OptionsMove(st::Machine* m, int d) {
+  int y = int16_t(Get16(*m, kPointerY)), row = 0;
+  for (int i = 1; i < 4; ++i)
+    if (std::abs(kOptionRows[i] - y) < std::abs(kOptionRows[row] - y)) row = i;
+  row = std::clamp(row + d, 0, 3);
+  Put16(*m, kPointerX, 160);
+  Put16(*m, kPointerY, uint16_t(kOptionRows[row]));
+}
+
+// Pad buttons on the point-and-click screens. True if used.
+bool MenuShortcut(st::Machine* m, uint8_t button) {
+  switch (GameState(*m)) {
+    case kTitle:
+      if (button == SDL_GAMEPAD_BUTTON_WEST) return QueueClick(-1, 0, kLShift), true;
+      if (button == SDL_GAMEPAD_BUTTON_NORTH) return QueueClick(-1, 0, kAlt), true;
+      if (button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) return QueueClick(-1, 0, kCtrl), true;
+      return false;
+    case kLevelSelect:
+      if (button == SDL_GAMEPAD_BUTTON_DPAD_LEFT) return QueueClick(kMinusX, kLevelButtonsY), true;
+      if (button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) return QueueClick(kPlusX, kLevelButtonsY), true;
+      if (button == SDL_GAMEPAD_BUTTON_SOUTH) return QueueClick(kBlastX, kBlastY), true;
+      return false;
+    case kNameEntry:
+      switch (button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return NameMove(m, -1, 0), true;
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return NameMove(m, 1, 0), true;
+        case SDL_GAMEPAD_BUTTON_DPAD_UP: return NameMove(m, 0, -1), true;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return NameMove(m, 0, 1), true;
+        case SDL_GAMEPAD_BUTTON_SOUTH: return QueueClick(-1, 0), true;
+        case SDL_GAMEPAD_BUTTON_EAST: return NameChar(m, '^'), true;
+        case SDL_GAMEPAD_BUTTON_START: return NameChar(m, '_'), true;
+        default: return false;
+      }
+    case kOptions:
+      switch (button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP: return OptionsMove(m, -1), true;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return OptionsMove(m, 1), true;
+        case SDL_GAMEPAD_BUTTON_SOUTH: return QueueClick(-1, 0), true;
+        case SDL_GAMEPAD_BUTTON_EAST: return QueueClick(160, kOptionRows[3]), true;
+        default: return false;
+      }
+    default:
+      return false;
+  }
+}
+
+// The screens where the pad's d-pad and A are shortcuts, not pointer moves and the plain left button.
+bool ShortcutScreen(int s) { return s == kLevelSelect || s == kNameEntry || s == kOptions; }
+
 // A stick through the response curve: pixels per frame.
 void Curve(float x, float y, float* vx, float* vy) {
   float mag = std::sqrt(x * x + y * y);
@@ -103,6 +198,7 @@ void LoadSettings() {
 
 bool HandleEvent(const SDL_Event& e, st::Machine* m) {
   if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+    if (g_running && MenuShortcut(m, e.gbutton.button)) return true;
     switch (e.gbutton.button) {
       case SDL_GAMEPAD_BUTTON_BACK:
       case SDL_GAMEPAD_BUTTON_START: PauseButton(m); return true;
@@ -112,6 +208,20 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
   }
   if (e.type == SDL_EVENT_KEY_DOWN && e.key.scancode == SDL_SCANCODE_ESCAPE && !e.key.repeat) {
     MenuButton(m);
+    return true;
+  }
+  // Name entry by keyboard: the key's character is clicked on the on-screen keyboard.
+  if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && g_running && GameState(*m) == kNameEntry) {
+    SDL_Scancode k = e.key.scancode;
+    bool shift = e.key.mod & SDL_KMOD_SHIFT;
+    if (k >= SDL_SCANCODE_A && k <= SDL_SCANCODE_Z) NameChar(m, char('a' + (k - SDL_SCANCODE_A)));
+    else if (k == SDL_SCANCODE_PERIOD) NameChar(m, '.');
+    else if (k == SDL_SCANCODE_MINUS) NameChar(m, '-');
+    else if (k == SDL_SCANCODE_1 && shift) NameChar(m, '!');
+    else if (k == SDL_SCANCODE_SLASH && shift) NameChar(m, '?');
+    else if (k == SDL_SCANCODE_BACKSPACE) NameChar(m, '^');
+    else if (k == SDL_SCANCODE_RETURN) NameChar(m, '_');
+    else return false;
     return true;
   }
   return false;
@@ -153,10 +263,13 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     // The pointer: left stick through the curve, d-pad at a fixed slow speed.
     float vx, vy;
     Curve(axis(SDL_GAMEPAD_AXIS_LEFTX), axis(SDL_GAMEPAD_AXIS_LEFTY), &vx, &vy);
-    if (button(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) vx -= float(g_tune.dpad);
-    if (button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) vx += float(g_tune.dpad);
-    if (button(SDL_GAMEPAD_BUTTON_DPAD_UP)) vy -= float(g_tune.dpad);
-    if (button(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) vy += float(g_tune.dpad);
+    bool shortcuts = ShortcutScreen(GameState(*m));
+    if (!shortcuts) {
+      if (button(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) vx -= float(g_tune.dpad);
+      if (button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) vx += float(g_tune.dpad);
+      if (button(SDL_GAMEPAD_BUTTON_DPAD_UP)) vy -= float(g_tune.dpad);
+      if (button(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) vy += float(g_tune.dpad);
+    }
     if (g_running && (vx != 0 || vy != 0)) {
       g_px += vx, g_py += vy;
       int dx = int(g_px), dy = int(g_py);
@@ -167,7 +280,8 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     } else {
       g_px = g_py = 0;
     }
-    if (axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 0.4f || button(SDL_GAMEPAD_BUTTON_SOUTH)) buttons |= 2;  // left
+    if (axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 0.4f || (button(SDL_GAMEPAD_BUTTON_SOUTH) && !shortcuts))
+      buttons |= 2;  // left
     if (axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 0.4f) buttons |= 1;                                      // right
     // Nosecone shot direction: one step per flick of the right stick up or down, like a button (the game would
     // repeat while its key is held: a 2-frame tap is one step); the stick must come back near the centre first.
@@ -183,6 +297,31 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
   } else {
     Hold(m, 2, kCtrl, false);
   }
+  // The front virtual click (after any name entry animation has finished).
+  if (!g_clicks.empty() && g_running) {
+    const Click& c = g_clicks.front();
+    if (g_click_frame < 0 && !(GameState(*m) == kNameEntry && (Get16(*m, kNameBusy1) || Get16(*m, kNameBusy2))))
+      g_click_frame = 0;
+    if (g_click_frame == 0) {
+      if (c.x >= 0) Put16(*m, kPointerX, uint16_t(c.x)), Put16(*m, kPointerY, uint16_t(c.y));
+      if (c.modifier) m->KeyEvent(c.modifier, true);
+    }
+    if (g_click_frame >= 1 && g_click_frame <= 4) buttons |= 2;
+    if (g_click_frame == 5 && c.modifier) m->KeyEvent(c.modifier, false);
+    if (g_click_frame >= 0 && ++g_click_frame > 8) {
+      g_clicks.pop_front();
+      g_click_frame = -1;
+    }
+  }
+  if (g_running) {
+    int s = GameState(*m);
+    if (s != g_prev_state) {
+      if (s == kTitle) g_title_hint_ms = SDL_GetTicks() + 5000;
+      if (s == kNameEntry) NameCell(m, 0, 0);  // start on "a"
+      if (s != kNameEntry && s != kLevelSelect && s != kOptions) g_clicks.clear(), g_click_frame = -1;
+      g_prev_state = s;
+    }
+  }
   m->MouseInput(mouse_dx, mouse_dy, buttons);
 }
 
@@ -191,7 +330,15 @@ const char* Hint(st::Machine* m, bool have_pad) {
   if (s == kPause) return have_pad ? "Back: resume   B: quit to title" : "Space: resume   Q or Esc: quit to title";
   if (s == kTitle && SDL_GetTicks() < g_quit_armed_ms)
     return have_pad ? "Press B again to quit" : "Press Esc again to quit";
-  return nullptr;
+  if (!have_pad) return nullptr;
+  switch (s) {
+    case kTitle:
+      return SDL_GetTicks() < g_title_hint_ms ? "A: play   X: options   B: quit\nY: game secrets   LB: more info" : nullptr;
+    case kLevelSelect: return "D-pad: level - / +   A: let's blast!";
+    case kNameEntry: return "D-pad: letter   A: pick   B: delete\nStart: done";
+    case kOptions: return "D-pad: choose   A: select   B: back";
+    default: return nullptr;
+  }
 }
 
 bool QuitRequested() { return g_quit; }

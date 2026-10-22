@@ -47,7 +47,9 @@ Saves (hiscores: SCORES.YAK) go to userdata\ next to the exe; files there replac
 Options: --aspect=pal|square (default pal, owner's choice: PAL TV pixel aspect 0.92, picture 320x217 in square
 units; square = 16:10) --disk=<.msa|.st> --log=<file> (default userdata\llamatron.log) --trace-tos --window (fullscreen is the
 default; F11 / Alt+Enter toggle) --refresh=desktop (don't change the display mode)
-Tests: --headless --frames=N --shot=N:<file.bmp> --wav=<file> --press=N:<what>[:frames], what = j0|j1 +
+Tests: ALWAYS pass --userdata=logs\test-userdata (or similar) for scripted runs - otherwise they load and SAVE
+the owner's high scores and settings in build\userdata (2026-10-22: Gridrunner tests wrote test entries into the
+owner's HISCORES.COW; repaired by hand). --headless --frames=N --shot=N:<file.bmp> --wav=<file> --press=N:<what>[:frames], what = j0|j1 +
 fire|up|down|left|right, an SDL key name, or pad<button> (pady, padback, padb: SDL gamepad button names). The exe is a GUI app: from PowerShell use Start-Process -Wait.
 Scripted path: press j1fire at frame 150 (leaves the shareware screen), title is up by ~2900, j0fire there at 3000
 starts a twin-stick game. Screenshots -> PNG with pillow to view them.
@@ -94,6 +96,20 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   only in drawing bookkeeping (screen rotation, per-screen restore lists $54ECB/$55E6D/$56E0B, stack) - objects,
   score, state identical. Game memory is only written once the title has been seen (before that it holds the
   packed program). Log: "VBLs missed" next to the drawn-frames line. Tools: profile_summary.py, ramdiff.py.
+- Menus on the pad (owner 2026-10-22), src\gridrunner.cpp: virtual clicks (pointer to the target, optional
+  modifier held, left button 4 frames). Title (state 5; clicks only accepted ~800 frames after it appears): A
+  play, X = left Shift + click -> GAME OPTIONS (state 10: pause mode demo/freeze, reset power-up message, quit
+  rows y 84/104/134/186), Y = Alt + click -> GAME SECRETS (state 7), LB = Control + click -> ADDITIONAL
+  INFORMATION (the "may the fleas of 1000 camels infest..." curse on pirates - in a cracked copy). Level
+  select (6): d-pad left/right = [-]/[+] at (115,120)/(200,120), A = LET'S BLAST!! (157,172) (x 101-214, y
+  162-182); level variable $48BCE. Name entry (9): keyboard cells a-z ! . ? - / DEL OK ($1096E; ^ = delete,
+  _ = done), the pointer jumps cell to cell on the d-pad (starts on "a"), A picks, B = DEL, Start = OK; typed
+  letters / Backspace / Return click the cells; clicks wait for the letter animation ($10966/$105BC). Options:
+  d-pad rows, A select, B = the quit row. Hints per screen. On these screens the d-pad and A are shortcuts
+  (RT still clicks at the pointer).
+- High scores: HISCORES.COW, 40 x (8-digit score + 3 letters) + 3 messages; byte $217 = checksum: $27 + the
+  sum of bytes 0..$216 ($193AC); a bad checksum = the file is ignored silently (the built-in table $49520 is
+  used, which lacks the disk's "jon 55323"). Never hand-edit without fixing the checksum.
 - Test inputs: --press=N:mleft|mright[:frames], mx<dx>, my<dy> (per frame); pad: gl<deg>@<deflection>,
   gry<value>, glt, grt, grb; pad buttons as for Llamatron (padback, padb...). Flow: mleft at 600 (Llamasoft
   core screen), 1500 (title), 2000 (LET'S BLAST), 2400 (intro), then play (left held = fire).

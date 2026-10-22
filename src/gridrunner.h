@@ -12,6 +12,14 @@
 //   RT, A            left button (fire, click)        LT   right button (the nose)
 //   right stick      flick up / down: nosecone shot direction one step (up..down)   RB   Control (martyrdom)
 //   Back, Start      pause / resume                   B    pause: quit to the title; title: quit (twice)
+// The point-and-click screens get shortcuts (virtual clicks: the pointer is put on the target and the left
+// button pressed for a few frames):
+//   title         A play, X options (left Shift + click), Y game secrets (Alt + click), LB more info (Control +
+//                 click)
+//   level select  d-pad left / right = [-] / [+], A = LET'S BLAST!!
+//   name entry    d-pad = move from letter to letter, A = pick it, B = delete, Start = done; typing on the
+//                 keyboard picks letters (Backspace = delete, Return = done)
+//   options       d-pad up / down = row, A = select, B = back (its quit row)
 #pragma once
 
 #include <SDL3/SDL.h>
@@ -23,7 +31,9 @@
 namespace grid {
 
 // Game states ($4B632, dispatched from the VBL through the table at $12636).
-enum State { kPlay = 1, kIntro = 3, kTitle = 5, kLevelSelect = 6, kPausing = 11, kPause = 12 };
+enum State {
+  kPlay = 1, kIntro = 3, kTitle = 5, kLevelSelect = 6, kNameEntry = 9, kOptions = 10, kPausing = 11, kPause = 12
+};
 int GameState(st::Machine& m);
 
 // Rereads the grid_* settings (on start and when settings.txt changes).

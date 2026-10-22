@@ -29,6 +29,7 @@ namespace {
 struct Options {
   std::string disk;        // --disk=<.msa/.st>
   std::string log;         // --log=<file>
+  std::string userdata;    // --userdata=<dir>: saves, settings and log there (tests: keep the player's own)
   bool trace_tos = false;  // --trace-tos
   bool fullscreen = true;  // --window / --fullscreen
   bool match_refresh = true;  // --refresh=desktop: keep the desktop's refresh rate in fullscreen
@@ -79,6 +80,7 @@ Options ParseArgs(int argc, char** argv) {
     std::string a = argv[i], v;
     if (Arg(a, "disk", &v)) o.disk = v;
     else if (Arg(a, "log", &v)) o.log = v;
+    else if (Arg(a, "userdata", &v)) o.userdata = v;
     else if (Arg(a, "frames", &v)) o.frames = std::atoi(v.c_str());
     else if (Arg(a, "wav", &v)) o.wav = v;
     else if (Arg(a, "shot", &v)) o.shots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
@@ -248,7 +250,7 @@ int main(int argc, char** argv) {
   Options opt = ParseArgs(argc, argv);
   // The log: --log, else userdata\llamatron.log next to the exe.
   std::error_code ec;
-  fs::path save_dir = ExeDir() / "userdata";
+  fs::path save_dir = opt.userdata.empty() ? ExeDir() / "userdata" : fs::path(opt.userdata);
   fs::create_directories(save_dir, ec);
   logging::Open(opt.log.empty() ? (save_dir / "llamatron.log").string().c_str() : opt.log.c_str());
   InstallCrashHandler();
