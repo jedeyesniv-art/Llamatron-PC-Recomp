@@ -4,6 +4,8 @@
 #include <vector>
 
 #include "game.h"
+#include "gridrunner.h"
+#include "settings.h"
 #include "log.h"
 #include "machine.h"
 
@@ -12,6 +14,7 @@ namespace {
 
 std::vector<SDL_Gamepad*> g_pads;  // in connection order: [0] = player 1
 bool g_keys[SDL_SCANCODE_COUNT] = {};
+bool g_gridrunner = false;  // Gridrunner's controls (gridrunner.cpp) instead of Llamatron's
 bool g_a_held = false, g_a_to_stick0 = false;  // pad 1's A: which stick's fire it is while held
 
 // ST keys we tap for the player: pressed now, released a few frames later (the game polls key flags per VBL).
@@ -193,6 +196,16 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
         }
       }
       return true;
+    default:
+      break;
+  }
+  if (g_gridrunner) {  // its pad buttons and Esc; every key goes to the ST
+    if (grid::HandleEvent(e, m)) return true;
+    if ((e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) && !e.key.repeat)
+      if (uint8_t code = StScancode(e.key.scancode)) m->KeyEvent(code, e.type == SDL_EVENT_KEY_DOWN);
+    return false;
+  }
+  switch (e.type) {
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
     case SDL_EVENT_GAMEPAD_BUTTON_UP:
       if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) {
@@ -206,6 +219,8 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
       if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER &&
           game::AtTitle(*m)) {  // RB at the title: analog aim on / off
         game::SetAnalogAim(!game::AnalogAim());
+        settings::Set("analog_aim", game::AnalogAim() ? 1 : 0);
+        settings::Save();
         g_aim_hint_ms = SDL_GetTicks() + 3000;
         LOG("analog aim %s", game::AnalogAim() ? "on" : "off");
         return true;
@@ -235,9 +250,13 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
   }
 }
 
-bool QuitRequested() { return g_quit; }
+bool QuitRequested() { return g_quit || grid::QuitRequested(); }
+
+void SetGridrunner(bool on) { g_gridrunner = on; }
+SDL_Gamepad* FirstPad() { return g_pads.empty() ? nullptr : g_pads[0]; }
 
 const char* Hint(st::Machine* m) {
+  if (g_gridrunner) return grid::Hint(m, !g_pads.empty());
   if (game::Paused(*m))
     return g_pads.empty() ? "O: resume   Esc: quit to title\nT / G: tentacle on / off"
                           : "Back: resume   B: quit to title\nY: tentacle (left stick plays)";
@@ -252,6 +271,7 @@ const char* Hint(st::Machine* m) {
 }
 
 void Update(st::Machine* m) {
+  if (g_gridrunner) return;  // grid::Update, called by main with the mouse
   for (size_t i = 0; i < g_taps.size();) {  // release tapped keys
     if (--g_taps[i].frames > 0) {
       ++i;

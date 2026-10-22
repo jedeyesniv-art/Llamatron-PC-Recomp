@@ -156,7 +156,7 @@ class Machine {
   size_t packet_need_ = 0;
   uint8_t packet_joy_[2] = {};
   std::deque<uint32_t> console_keys_;  // TOS console buffer: scancode << 16 | ASCII
-  bool shift_ = false;
+  uint8_t modifiers_ = 0;  // Kbshift bits: 0 right shift, 1 left shift, 2 control, 3 alternate
 
   // Shifter.
   uint8_t vbase_hi_ = 0, vbase_mid_ = 0, res_ = 0, sync_ = 2;

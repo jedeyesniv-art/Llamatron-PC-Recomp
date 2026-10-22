@@ -516,15 +516,17 @@ void Machine::IkbdSysHle() {
 void Machine::ConsoleKey(uint8_t sc) {
   bool up = sc & 0x80;
   uint8_t code = sc & 0x7F;
-  if (code == 0x2A || code == 0x36) {
-    shift_ = !up;
+  static const uint8_t kModifier[4] = {0x36, 0x2A, 0x1D, 0x38};  // Kbshift bit order
+  for (int i = 0; i < 4; ++i) {
+    if (code != kModifier[i]) continue;
+    modifiers_ = uint8_t(up ? modifiers_ & ~(1u << i) : modifiers_ | (1u << i));
     return;
   }
   if (up || console_keys_.size() >= 32) return;
   // ASCII for the main block (UK layout, enough for names and menus).
   static const char kLow[] = "\0\x1b" "1234567890-=\b\tqwertyuiop[]\r\0asdfghjkl;'`\0#zxcvbnm,./\0\0\0 ";
   static const char kHigh[] = "\0\x1b" "!\"#$%^&*()_+\b\tQWERTYUIOP{}\r\0ASDFGHJKL:@~\0~ZXCVBNM<>?\0\0\0 ";
-  char a = code < sizeof(kLow) - 1 ? (shift_ ? kHigh : kLow)[code] : 0;
+  char a = code < sizeof(kLow) - 1 ? (modifiers_ & 3 ? kHigh : kLow)[code] : 0;
   console_keys_.push_back(uint32_t(code) << 16 | uint8_t(a));
 }
 
@@ -719,6 +721,12 @@ bool Machine::Gemdos(uint32_t args, uint32_t* d0) {
       ended_ = true;
       cpu::EndSlice();
       return true;
+    case 0x06:  // Crawio(c): $FF = read a key if there is one (else 0), otherwise write c
+      if ((Get16(p + 2) & 0xFF) == 0xFF) {
+        if (!console_keys_.empty()) *d0 = console_keys_.front(), console_keys_.pop_front();
+        else *d0 = 0;
+      }
+      return true;
     case 0x01:  // Cconin
     case 0x07:  // Crawcin
     case 0x08:  // Cnecin
@@ -822,7 +830,7 @@ bool Machine::Bios(uint32_t args, uint32_t* d0) {
       return true;
     }
     case 8: *d0 = uint32_t(-1); return true;  // Bcostat: ready
-    case 11: *d0 = shift_ ? 1 : 0; return true;  // Kbshift
+    case 11: *d0 = modifiers_; return true;  // Kbshift
     default: return false;
   }
 }

@@ -36,6 +36,9 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m);
 void Update(st::Machine* m);
 // The player asked to quit the program (B twice at the title).
 bool QuitRequested();
+// Gridrunner's controls (gridrunner.h) instead of Llamatron's.
+void SetGridrunner(bool on);
+SDL_Gamepad* FirstPad();
 // A line to show over the picture (pause screen help, quit confirmation), or null.
 const char* Hint(st::Machine* m);
 

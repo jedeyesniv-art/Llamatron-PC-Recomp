@@ -16,6 +16,8 @@
 #include "crash.h"
 #include "disk.h"
 #include "game.h"
+#include "gridrunner.h"
+#include "settings.h"
 #include "input.h"
 #include "log.h"
 #include "machine.h"
@@ -300,15 +302,13 @@ int main(int argc, char** argv) {
   }
   game::g_llamatron = llamatron;
   if (llamatron) game::ApplyPatches(machine, opt.game);
-  // Settings (userdata\settings.txt, key=value): analog_aim.
-  fs::path settings = save_dir / "settings.txt";
-  if (FILE* f = std::fopen(settings.string().c_str(), "r")) {
-    char line[128];
-    while (std::fgets(line, sizeof(line), f))
-      if (std::strncmp(line, "analog_aim=", 11) == 0) game::SetAnalogAim(line[11] == '1');
-    std::fclose(f);
-  }
+  // Settings (userdata\settings.txt, key=value; reread while running when it changes).
+  settings::Load((save_dir / "settings.txt").string());
+  game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
+  grid::LoadSettings();
+  settings::Save();  // so every setting is in the file, with its default
   if (opt.aim >= 0) game::SetAnalogAim(opt.aim == 1);
+  input::SetGridrunner(!llamatron);
   LOG("analog aim %s", game::AnalogAim() ? "on" : "off");
   LOG("cpu speed during play x%d", opt.cpu_speed);
 
@@ -383,6 +383,10 @@ int main(int argc, char** argv) {
       input::HandleEvent(e, &machine);
     }
     if (input::QuitRequested()) running = false;
+    if (frame % 50 == 0 && settings::Reload()) {  // edited while running
+      grid::LoadSettings();
+      if (opt.aim < 0) game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
+    }
     if (window && SDL_CursorVisible() &&
         ((SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) || SDL_GetTicks() - last_mouse_ms > 2000))
       SDL_HideCursor();
@@ -423,16 +427,30 @@ int main(int argc, char** argv) {
       if (!llamatron) {
         SDL_MouseButtonFlags mb = opt.headless ? 0 : SDL_GetMouseState(nullptr, nullptr);
         uint8_t buttons = uint8_t((mb & SDL_BUTTON_LMASK ? 2 : 0) | (mb & SDL_BUTTON_RMASK ? 1 : 0));
-        for (const auto& p : opt.presses) {  // scripted mouse (tests): mleft, mright, mx<dx>, my<dy> per frame
+        // Scripted mouse and pad (tests): mleft, mright, mx<dx>, my<dy> (per frame); pad: gl<degrees>@<deflection>
+        // (left stick), gry<value> (right stick y), glt, grt (triggers), grb.
+        grid::TestPad tp;
+        bool test_pad = false;
+        for (const auto& p : opt.presses) {
           if (frame < p.frame || frame >= p.frame + p.length) continue;
+          if (p.what.rfind("gl", 0) == 0 && p.what.size() > 2 && p.what[2] != 't') {
+            double deg = std::atof(p.what.c_str() + 2), mag = std::atof(p.what.c_str() + p.what.find('@') + 1);
+            tp.lx = float(std::cos(deg * 3.14159265 / 180) * mag), tp.ly = float(std::sin(deg * 3.14159265 / 180) * mag);
+            test_pad = true;
+          }
+          if (p.what.rfind("gry", 0) == 0) tp.ry = float(std::atof(p.what.c_str() + 3)), test_pad = true;
+          if (p.what == "glt") tp.lt = 1, test_pad = true;
+          if (p.what == "grt") tp.rt = 1, test_pad = true;
+          if (p.what == "grb") tp.rb = true, test_pad = true;
           if (p.what == "mleft") buttons |= 2;
           if (p.what == "mright") buttons |= 1;
           if (p.what.rfind("mx", 0) == 0) mouse_x += float(std::atof(p.what.c_str() + 2));
           if (p.what.rfind("my", 0) == 0) mouse_y += float(std::atof(p.what.c_str() + 2));
         }
+        if (test_pad) grid::SetTestPad(tp);
         int dx = int(mouse_x), dy = int(mouse_y);
         mouse_x -= float(dx), mouse_y -= float(dy);
-        machine.MouseInput(dx, dy, buttons);
+        grid::Update(&machine, input::FirstPad(), dx, dy, buttons);
       }
       for (const auto& p : opt.presses) {  // scripted input (tests)
         if (frame < p.frame || frame >= p.frame + p.length) continue;
@@ -574,12 +592,6 @@ int main(int argc, char** argv) {
   }
 
   LOG("exit after %d frames", frame);
-  if (opt.aim < 0) {
-    if (FILE* f = std::fopen(settings.string().c_str(), "w")) {
-      std::fprintf(f, "analog_aim=%d\n", game::AnalogAim() ? 1 : 0);
-      std::fclose(f);
-    }
-  }
   if (!opt.wav.empty()) SaveWav(opt.wav, wav, kRate);
   input::Shutdown();
   if (audio) SDL_DestroyAudioStream(audio);

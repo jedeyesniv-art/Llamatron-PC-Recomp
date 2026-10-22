@@ -71,7 +71,21 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   level select ($11F06): [-] x $65-$80 / [+] x $BB-$D6 at y $6E-$82, [LET'S BLAST!!] y $A2+, pointer starts at
   (160,170) = on LET'S BLAST; another 3-row menu at $10A70 (y $50-$59, $64-$6D, $82-$8B); high score name entry
   ($10686): a 10x4 on-screen keyboard, cells 20 px from (65,80), characters at $1096E.
-- Test inputs: --press=N:mleft|mright[:frames], mx<dx>, my<dy> (per frame). Flow: mleft at 600 (Llamasoft
+- States ($4B632, VBL dispatch table $12636): 5 title, 6 level select, 3 wave intro, 1 play, 12 pause screen
+  (11 entering it), 2 in between. Keys (TOS: Kbshift + Crawio): right Shift = pause (in play); pause screen:
+  Space = resume ("restart"), Q = quit to title, typing "pink-floyd-are-gods" there = cheat ($1384C); left
+  Shift / Alt = nosecone shot direction $49130 (0 up, 1 up+out, 2 sideways, 3 down+out, 4 down; held = repeat);
+  Control = "voluntary martyrdom" (lose a life, blow up the vulnerable enemies, ghost ship fights on); letters
+  a-z = a sound each ($4D870). Built-in manual "game secrets" at $10EC3.
+- Pad (owner 2026-10-22, src\gridrunner.cpp): left stick moves the pointer (= ship) through a response curve
+  (written straight into $54DD0/$54DD2), d-pad slowly; RT/A = left button (fire/click), LT = right button
+  (nosecone: held = attached); right stick up/down = left Shift/Alt (towards up/down); RB = Control; Back/Start
+  = pause/resume; B = pause: quit to title (Q), title: quit (twice). Keyboard: every key goes to the ST.
+  Tunables in userdata\settings.txt, reread while running (src\settings.cpp): grid_stick_speed (6 px/frame at
+  full deflection), grid_stick_curve (2 = quadratic), grid_stick_deadzone (0.15), grid_dpad_speed (1),
+  grid_fire_mode_swap (0). Measured: full stick 6 px/frame, half 1.0, inside the dead zone 0.
+- Test inputs: --press=N:mleft|mright[:frames], mx<dx>, my<dy> (per frame); pad: gl<deg>@<deflection>,
+  gry<value>, glt, grt, grb; pad buttons as for Llamatron (padback, padb...). Flow: mleft at 600 (Llamasoft
   core screen), 1500 (title), 2000 (LET'S BLAST), 2400 (intro), then play (left held = fire).
 
 ## The program (TRON1MEG.PRG)
