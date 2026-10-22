@@ -115,14 +115,25 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   stick-2 fire at the title any more), saved in userdata\settings.txt (analog_aim=0|1); --aim=8|analog for one
   run (not saved). The hooks are always installed; off = they leave shots alone. Code hooks
   (Machine::AddHook: the instruction becomes ILLEGAL, C++ runs and does its work): $10A8 (shot created, a0 = slot)
-  and $1198 (shot movement starts, VBL). Shots ($54FD4, 16-byte slots: x, y, dx, dy, sprite 29/30/31/32, $C hot
+  and $1198 (shot movement starts, VBL). Shots ($54FD4, 16-byte slots: x, y, dx, dy, sprite 29/30/31/32, $C reflective
   lifetime) move by integer dx/dy (-3/0/3); we keep an exact position/velocity per slot (any angle of the right
   stick, speed 3/max(|cos|,|sin|) = the original's at the 8 directions) and set dx/dy before each move. Shots
-  moved by anything else are dropped from our table. Hot bullets ($1634) bounce by looking dx/dy/sprite up in
+  moved by anything else are dropped from our table. Reflective shots (power-up, $1634; not "hot bullets") bounce by looking dx/dy/sprite up in
   the 8-direction table $2650 (an endless loop if nothing matches): then shots snap to the nearest of the 8.
-  Tested: 20 deg shot, a 360 deg sweep with hot bullets forced on (no hang). Not changed: the multi-shot
+  Tested: 20 deg shot, a 360 deg sweep with reflective shots forced on (no hang). Not changed: the multi-shot
   power-up's extra shots ($10C0, spread from the 8-way direction $2318).
   Test input: --press=N:aim<degrees>:frames (0 = right, 90 = down).
+
+## Text in the program (for the curious; text offsets, the game's \c colour /  newline codes)
+- $39CBA: an unused font test before the version screen text: Inspiral Carpets lyrics ("marys crying for her
+  baby", "commercial rain"), "inspiral carpets" x5, the alphabet and a rude word.
+- $3A356 credits: "perpetrated by yak, coded on devpac developer, samples grabbed with replay-8", the "oh f..!"
+  sample by m c urtis, sween "e" todd and andy "rubber chicken" capon; "programmer entertained by" a list
+  (Inspiral Carpets twice, Floyd, Ozric Tentacles, Grateful Dead, Lemmings, Thunderstrike PC VGA, Devil Crash on
+  the PC Engine, Buckley's Best Bitter, Pensarnau pizza...). $3A5B8 story (2112, the Zzyaxians), $3A794 enemy
+  and power-up guide (sheepipede, screaming mandy, false teeth, reflective shots, floyd bonus...).
+- HISCORES.COW on the disk isn't what the game opens (scores.yak); default names include "cup _of tea" and
+  messages "yak the hairy sez beat this!!!", "mint sauce is murder!", "keep welsh sheep radioactive!".
 
 ## Emulation notes (src\machine.cpp)
 - Memory: 1 MB RAM, our TOS stubs at $FC0000 (traps = ILLEGAL opcodes handled in C, ACIA interrupt stub in

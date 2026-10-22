@@ -32,12 +32,12 @@ void Put16(st::Machine& m, uint32_t a, uint16_t v) { m.Ram()[a] = uint8_t(v >> 8
 
 // ---- Analog aiming (twin-stick mode) ----
 // A shot ($54FD4, 16-byte slots, (a0) < 0 = free): +0 x, +2 y, +4 dx, +6 dy (pixels per frame: -3/0/3),
-// +8 sprite (29 horizontal, 30 vertical, 31 "/", 32 "\"), +$C hot bullet lifetime. The movement routine ($1198,
+// +8 sprite (29 horizontal, 30 vertical, 31 "/", 32 "\"), +$C reflective shot lifetime. The movement routine ($1198,
 // in the VBL) adds dx/dy. We keep an exact position and velocity per slot and set dx/dy before every move so the
 // shot follows any angle. Speed 3 / max(|cos|, |sin|): the original's 3 straight and 3 per axis diagonally.
-// Hot bullets ($1634) bounce off the walls by looking the shot up in the 8-direction table: then shots snap to
-// the nearest of the 8 directions.
-constexpr uint32_t kShots = 0x54FD4, kShotSlots = 64, kLlamaX = 0x4CFA4, kLlamaY = 0x4CFA6, kHot = 0x1634;
+// Reflective shots (the power-up, $1634) bounce off the walls by looking the shot up in the 8-direction table:
+// then shots snap to the nearest of the 8 directions.
+constexpr uint32_t kShots = 0x54FD4, kShotSlots = 64, kLlamaX = 0x4CFA4, kLlamaY = 0x4CFA6, kReflect = 0x1634;
 constexpr uint32_t kTwinStick = 0x8616;
 
 bool g_analog = false;  // the player's setting (RB at the title)
@@ -69,7 +69,7 @@ void OnShotCreated(st::Machine& m) {
   if (a0 < t + kShots || slot >= kShotSlots) return;
   Shot& s = g_shots[slot];
   s.on = false;
-  if (!g_analog || !g_aim.on || !Get16(m, t + kTwinStick) || Get16(m, t + kHot)) return;
+  if (!g_analog || !g_aim.on || !Get16(m, t + kTwinStick) || Get16(m, t + kReflect)) return;
   double len = std::hypot(g_aim.x, g_aim.y), c = g_aim.x / len, sn = g_aim.y / len;
   double speed = 3.0 / std::max(std::fabs(c), std::fabs(sn));
   s.on = true;
@@ -87,7 +87,7 @@ void OnShotsMove(st::Machine& m) {
   uint32_t t = m.TextBase(), base = t + kShots;
   cpu::Set(cpu::A0, base);
   cpu::Set(cpu::PC, t + 0x119E);
-  bool hot = Get16(m, t + kHot) != 0;
+  bool reflect = Get16(m, t + kReflect) != 0;
   for (uint32_t i = 0; i < kShotSlots; ++i) {
     Shot& s = g_shots[i];
     if (!s.on) continue;
@@ -97,7 +97,7 @@ void OnShotsMove(st::Machine& m) {
       s.on = false;
       continue;
     }
-    if (hot) {  // back to the nearest of the 8 directions (the bounce code needs one of them)
+    if (reflect) {  // back to the nearest of the 8 directions (the bounce code needs one of them)
       int16_t dx, dy;
       uint16_t sprite;
       Octant(s.vx, s.vy, &dx, &dy, &sprite);
