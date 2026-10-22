@@ -11,6 +11,7 @@
 
 #include "crash.h"
 #include "disk.h"
+#include "game.h"
 #include "input.h"
 #include "log.h"
 #include "machine.h"
@@ -123,7 +124,11 @@ uint8_t PressBits(const std::string& what, int* port) {
 
 int main(int argc, char** argv) {
   Options opt = ParseArgs(argc, argv);
-  if (!opt.log.empty()) logging::Open(opt.log.c_str());
+  // The log: --log, else userdata\llamatron.log next to the exe.
+  std::error_code ec;
+  fs::path save_dir = ExeDir() / "userdata";
+  fs::create_directories(save_dir, ec);
+  logging::Open(opt.log.empty() ? (save_dir / "llamatron.log").string().c_str() : opt.log.c_str());
   InstallCrashHandler();
 
   std::string disk_path = FindDisk(opt), error;
@@ -147,12 +152,10 @@ int main(int argc, char** argv) {
       program.relocs.size());
 
   // Saves: userdata\ next to the exe; files there replace the disk's.
-  fs::path save_dir = ExeDir() / "userdata";
-  std::error_code ec;
-  fs::create_directories(save_dir, ec);
   for (const auto& e : fs::directory_iterator(save_dir, ec)) {
     std::string name = e.path().filename().string();
     std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+    if (name.size() > 4 && name.substr(name.size() - 4) == ".LOG") continue;
     disk::Bytes d;
     if (FILE* f = std::fopen(e.path().string().c_str(), "rb")) {
       d.resize(size_t(fs::file_size(e.path(), ec)));
@@ -203,7 +206,7 @@ int main(int argc, char** argv) {
   uint64_t start = SDL_GetTicksNS();
   double frames_due = 0;
   int frame = 0;
-  bool running = true;
+  bool running = true, at_title = false;
   while (running) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -244,6 +247,12 @@ int main(int argc, char** argv) {
       }
       if (!machine.RunFrame()) running = false;
       ++frame;
+      bool title = game::AtTitle(machine);
+      if (title != at_title) {
+        if (title) LOG("frame %d: title screen", frame);
+        else LOG("frame %d: left the title (%s)", frame, game::TwinStick(machine) ? "twin-stick" : "one stick");
+        at_title = title;
+      }
       auto shot = opt.shots.find(frame);
       if (shot != opt.shots.end()) SaveShot(machine, shot->second);
       if (opt.frames && frame >= opt.frames) running = false;

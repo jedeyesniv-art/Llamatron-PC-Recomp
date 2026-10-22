@@ -65,9 +65,15 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   DROID, 3 = TEAM (two humans: joystick 0 is player 2); up/down toggle bit 2 (the 1/2 shown). Saved to $4EA.
 - Pause: P pauses; in pause H = 50/60 Hz, S = samples on/off, T = Ozric tentacle toy, G = back to the game screen,
   O = unpause.
-- Our mapping (src\input.h): pad 1 left stick/d-pad = joystick 1, A = its fire; right stick = joystick 0,
-  Start/RB/RT = its fire (Start at the title = twin-stick game); Back = pause/unpause (P/O). A second pad =
-  joystick 0 (TEAM). Keyboard: WASD + Space = joystick 1, cursors + Enter = joystick 0, other keys = ST keys.
+- Our mapping (src\input.h): pad 1 left stick/d-pad = joystick 1; right stick = joystick 0. A = joystick 1 fire,
+  except on the title screen, where A = joystick 0 fire = starts the twin-stick game (decided when pressed; not
+  in PLAYER + DROID, where the game ignores it). X = joystick 1 fire (title: one-stick game). Start/RB/RT =
+  joystick 0 fire. Back = pause/unpause (P/O). A second pad = joystick 0 (TEAM). Keyboard: WASD + Space =
+  joystick 1, cursors + Enter = joystick 0, other keys = ST keys.
+- 2026-10-22 owner: twin-stick worked with RT at the title, "otherwise it defaults to single stick" -> A at the
+  title now starts twin-stick. Title detection (src\game.h): VBL hook $52FC2 == text + $551C.
+- The log (default userdata\llamatron.log) has pads connected and "title screen" / "left the title
+  (twin-stick|one stick)".
 
 ## Emulation notes (src\machine.cpp)
 - Memory: 1 MB RAM, our TOS stubs at $FC0000 (traps = ILLEGAL opcodes handled in C, ACIA interrupt stub in

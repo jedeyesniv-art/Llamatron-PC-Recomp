@@ -3,6 +3,7 @@
 #include <cmath>
 #include <vector>
 
+#include "game.h"
 #include "log.h"
 #include "machine.h"
 
@@ -11,7 +12,8 @@ namespace {
 
 std::vector<SDL_Gamepad*> g_pads;  // in connection order: [0] = player 1
 bool g_keys[SDL_SCANCODE_COUNT] = {};
-bool g_paused = false;  // the pause we asked for with Back (the game pauses on P, resumes on O)
+bool g_paused = false;
+bool g_a_held = false, g_a_to_stick0 = false;  // pad 1's A: which stick's fire it is while held  // the pause we asked for with Back (the game pauses on P, resumes on O)
 
 // A stick as 8-way joystick bits: 45-degree sectors, centred on the axes.
 uint8_t StickBits(SDL_Gamepad* pad, SDL_GamepadAxis ax, SDL_GamepadAxis ay) {
@@ -191,15 +193,21 @@ void Update(st::Machine* m) {
 
   if (!g_pads.empty()) {
     SDL_Gamepad* p = g_pads[0];
+    auto button = [&](SDL_GamepadButton b) { return SDL_GetGamepadButton(p, b); };
     j1 |= StickBits(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY) | DpadBits(p);
-    if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_SOUTH)) j1 |= st::kJoyFire;
+    if (button(SDL_GAMEPAD_BUTTON_WEST)) j1 |= st::kJoyFire;  // X: always stick 1 (a one-stick game)
     if (g_pads.size() == 1) {  // twin-stick: the right stick is joystick 0
       j0 |= StickBits(p, SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY);
-      if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_START) ||
-          SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) ||
+      if (button(SDL_GAMEPAD_BUTTON_START) || button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) ||
           SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000)
         j0 |= st::kJoyFire;
-    } else if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_START)) {
+      // A at the title starts the twin-stick game (fire on stick 2), elsewhere it's stick 1's fire. Decided when
+      // it's pressed, so holding it through the start doesn't turn into the other stick's fire.
+      bool a = button(SDL_GAMEPAD_BUTTON_SOUTH);
+      if (a && !g_a_held) g_a_to_stick0 = game::AtTitle(*m) && game::TwinStickAllowed(*m);
+      g_a_held = a;
+      if (a) (g_a_to_stick0 ? j0 : j1) |= st::kJoyFire;
+    } else if (button(SDL_GAMEPAD_BUTTON_SOUTH) || button(SDL_GAMEPAD_BUTTON_START)) {
       j1 |= st::kJoyFire;
     }
   }
