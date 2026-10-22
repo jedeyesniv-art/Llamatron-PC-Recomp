@@ -2,7 +2,9 @@
 
 Hobby project, started 2026-10-22 after the Galaga Legions DX port (C:\GalagaRecomp, same owner and toolchain).
 Llamatron is shareware ("please spread this game everywhere", shareware screen at boot); the disk image is still
-kept out of git (Private\).
+kept out of git (Private\). The owner downloaded the image from Jeff Minter's own site (it includes the cracked
+Gridrunner: Minter distributes that copy himself). Release plan: no game files in the zip, the README points to
+Minter's site; bundling only with his OK.
 Goal: a native Windows app (SDL3) that plays well on an Xbox pad, twin-stick style. Owner's focus: controls.
 
 ## Status
