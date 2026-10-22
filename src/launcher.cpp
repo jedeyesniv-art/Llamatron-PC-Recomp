@@ -10,6 +10,8 @@
 namespace launcher {
 namespace {
 
+#include "labels.inc"
+
 constexpr float kPi = 3.14159265f;
 
 struct V3 {
@@ -74,87 +76,6 @@ float ScreenArea(const SDL_FPoint* p, int n) {
   return a / 2;
 }
 
-// ---- The hand-written label font: each letter a few strokes in a 4 x 6 box (y up). ----
-
-using Stroke = std::vector<SDL_FPoint>;
-const std::map<char, std::vector<Stroke>>& Glyphs() {
-  static const std::map<char, std::vector<Stroke>> g = {
-      {'A', {{{0, 0}, {2, 6}, {4, 0}}, {{0.8f, 2.4f}, {3.2f, 2.4f}}}},
-      {'B', {{{0, 0}, {0, 6}, {2.8f, 6}, {3.8f, 5}, {3.8f, 4}, {2.8f, 3.1f}, {0, 3.1f}},
-             {{2.8f, 3.1f}, {4, 2}, {4, 1}, {3, 0}, {0, 0}}}},
-      {'D', {{{0, 0}, {0, 6}, {2.4f, 6}, {4, 4.4f}, {4, 1.6f}, {2.4f, 0}, {0, 0}}}},
-      {'E', {{{4, 6}, {0, 6}, {0, 0}, {4, 0}}, {{0, 3.1f}, {3, 3.1f}}}},
-      {'G', {{{4, 5}, {3, 6}, {1, 6}, {0, 5}, {0, 1}, {1, 0}, {3, 0}, {4, 1}, {4, 2.8f}, {2.2f, 2.8f}}}},
-      {'I', {{{2, 0}, {2, 6}}, {{1, 6}, {3, 6}}, {{1, 0}, {3, 0}}}},
-      {'K', {{{0, 0}, {0, 6}}, {{4, 6}, {0, 2.4f}}, {{1.3f, 3.5f}, {4, 0}}}},
-      {'L', {{{0, 6}, {0, 0}, {4, 0}}}},
-      {'M', {{{0, 0}, {0, 6}, {2, 3}, {4, 6}, {4, 0}}}},
-      {'N', {{{0, 0}, {0, 6}, {4, 0}, {4, 6}}}},
-      {'O', {{{1, 0}, {0, 1}, {0, 5}, {1, 6}, {3, 6}, {4, 5}, {4, 1}, {3, 0}, {1, 0}}}},
-      {'P', {{{0, 0}, {0, 6}, {3, 6}, {4, 5}, {4, 4}, {3, 3}, {0, 3}}}},
-      {'R', {{{0, 0}, {0, 6}, {3, 6}, {4, 5}, {4, 4}, {3, 3}, {0, 3}}, {{2, 3}, {4, 0}}}},
-      {'S', {{{4, 5}, {3, 6}, {1, 6}, {0, 5}, {0, 4}, {1, 3.1f}, {3, 2.9f}, {4, 2}, {4, 1}, {3, 0}, {1, 0}, {0, 1}}}},
-      {'T', {{{0, 6}, {4, 6}}, {{2, 6}, {2, 0}}}},
-      {'U', {{{0, 6}, {0, 1}, {1, 0}, {3, 0}, {4, 1}, {4, 6}}}},
-      {'Y', {{{0, 6}, {2, 3}, {4, 6}}, {{2, 3}, {2, 0}}}},
-  };
-  return g;
-}
-
-struct Rng {
-  uint32_t s;
-  float Next() {  // -1..1
-    s = s * 1664525u + 1013904223u;
-    return float((s >> 8) & 0xFFFF) / 32768.0f - 1.0f;
-  }
-};
-
-void ThickLine(SDL_Renderer* r, SDL_FPoint a, SDL_FPoint b, float w, SDL_FColor c) {
-  float dx = b.x - a.x, dy = b.y - a.y, l = std::sqrt(dx * dx + dy * dy);
-  if (l < 0.01f) return;
-  float nx = -dy / l * w / 2, ny = dx / l * w / 2;
-  SDL_FPoint q[4] = {{a.x + nx, a.y + ny}, {b.x + nx, b.y + ny}, {b.x - nx, b.y - ny}, {a.x - nx, a.y - ny}};
-  Polygon(r, nullptr, q, nullptr, 4, c);
-}
-
-void Dot2(SDL_Renderer* r, SDL_FPoint p, float radius, SDL_FColor c) {
-  SDL_FPoint q[10];
-  for (int i = 0; i < 10; ++i) q[i] = {p.x + radius * std::cos(i * 2 * kPi / 10), p.y + radius * std::sin(i * 2 * kPi / 10)};
-  Polygon(r, nullptr, q, nullptr, 10, c);
-}
-
-// Text in marker pen: wobbly, a little slanted, letters of slightly different sizes. Returns the width drawn.
-float Scrawl(SDL_Renderer* r, const std::string& text, float x, float y, float size, float pen, SDL_FColor ink,
-             uint32_t seed, bool measure_only = false) {
-  Rng rng{seed};
-  float unit = size / 6, cursor = x;
-  for (char ch : text) {
-    if (ch == ' ') {
-      cursor += unit * 3.5f;
-      continue;
-    }
-    auto it = Glyphs().find(ch);
-    float scale = unit * (1 + 0.08f * rng.Next()), slant = 0.12f + 0.06f * rng.Next();
-    float base = y + unit * 0.35f * rng.Next(), tilt = 0.05f * rng.Next();
-    if (it != Glyphs().end() && !measure_only) {
-      for (const Stroke& s : it->second) {
-        std::vector<SDL_FPoint> pts;
-        for (SDL_FPoint p : s) {
-          float gx = p.x + 0.18f * rng.Next(), gy = p.y + 0.18f * rng.Next();
-          float px = gx + slant * gy, py = gy + tilt * gx;
-          pts.push_back({cursor + px * scale, base - py * scale});
-        }
-        for (size_t i = 0; i + 1 < pts.size(); ++i) ThickLine(r, pts[i], pts[i + 1], pen, ink);
-        for (SDL_FPoint p : pts) Dot2(r, p, pen / 2, ink);
-      }
-    } else {
-      for (int i = 0; i < 6; ++i) rng.Next();
-    }
-    cursor += scale * 5.1f;
-  }
-  return cursor - x;
-}
-
 struct Disk {
   const char* name;
   SDL_FColor body;
@@ -185,44 +106,23 @@ Launcher::~Launcher() {
     if (t) SDL_DestroyTexture(t);
 }
 
+// The owner's hand-written labels (Tools/make_labels.py -> labels.inc): grey ink on white, unpacked to textures.
 void Launcher::BuildLabels() {
-  const int w = 512, h = 392;  // the label is 76 x 58 mm
-  SDL_Texture* old = SDL_GetRenderTarget(r_);
+  const unsigned char* packed[2] = {kLabel_llamatron, kLabel_gridrunner};
+  const size_t sizes[2] = {sizeof(kLabel_llamatron), sizeof(kLabel_gridrunner)};
+  std::vector<uint32_t> pixels(size_t(kLabelW) * kLabelH);
   for (int i = 0; i < 2; ++i) {
-    labels_[i] = SDL_CreateTexture(r_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w, h);
+    size_t at = 0;
+    for (size_t k = 0; k + 1 < sizes[i] && at < pixels.size(); k += 2) {
+      uint32_t v = packed[i][k];
+      uint32_t argb = 0xFF000000u | v << 16 | v << 8 | v;
+      for (int n = 0; n < packed[i][k + 1] && at < pixels.size(); ++n) pixels[at++] = argb;
+    }
+    SDL_Surface* s = SDL_CreateSurfaceFrom(kLabelW, kLabelH, SDL_PIXELFORMAT_ARGB8888, pixels.data(), kLabelW * 4);
+    labels_[i] = SDL_CreateTextureFromSurface(r_, s);
+    SDL_DestroySurface(s);
     SDL_SetTextureScaleMode(labels_[i], SDL_SCALEMODE_LINEAR);
-    SDL_SetRenderTarget(r_, labels_[i]);
-    SDL_SetRenderDrawColor(r_, 246, 241, 226, 255);
-    SDL_RenderClear(r_);
-    // Printed: a coloured stripe along the top, ruled lines.
-    const Disk& d = kDisks[i];
-    SDL_SetRenderDrawColorFloat(r_, d.band.r, d.band.g, d.band.b, 1);
-    SDL_FRect band{0, 0, float(w), 34};
-    SDL_RenderFillRect(r_, &band);
-    SDL_SetRenderDrawColor(r_, 255, 255, 255, 255);
-    SDL_SetRenderScale(r_, 2, 2);
-    SDL_RenderDebugText(r_, 10, 6, "3.5\"  DOUBLE SIDED  DOUBLE DENSITY");
-    SDL_SetRenderScale(r_, 1, 1);
-    SDL_SetRenderDrawColor(r_, 150, 175, 215, 255);
-    for (int line = 0; line < 5; ++line) {
-      SDL_FRect rule{18, 96 + line * 62.0f, float(w - 36), 2};
-      SDL_RenderFillRect(r_, &rule);
-    }
-    // Hand-written in marker.
-    SDL_FColor ink{0.07f, 0.10f, 0.30f, 0.95f};
-    auto centred = [&](const std::string& t, float y, float size, float pen, uint32_t seed) {
-      float tw = Scrawl(r_, t, 0, 0, size, pen, ink, seed, true);
-      Scrawl(r_, t, (w - tw) / 2, y, size, pen, ink, seed);
-    };
-    if (i == 0) {
-      centred("LLAMATRON", 225, 118, 12, 0x1991u);
-    } else {
-      centred("SUPER", 165, 92, 11, 0x1989u);
-      centred("GRIDRUNNER", 300, 92, 11, 0x0420u);
-    }
-    Scrawl(r_, "BY YAK", w - 175, h - 22, 34, 5, ink, 0x7a4bu + i);
   }
-  SDL_SetRenderTarget(r_, old);
 }
 
 void Launcher::Enter(int game) {
@@ -424,7 +324,7 @@ void Launcher::Render() {
     float k = (0.12f + 0.88f * sel) * (1 - launch);
     float cx = (g == 0 ? -kDiskX : kDiskX);
     glow({cx, kFloorY, 10}, 62, 38, true, {0.30f * k, 0.30f * k, 0.34f * k, 1});
-    float bloom = (0.03f + 0.17f * sel) * (1 - launch);
+    float bloom = (0.012f + 0.088f * sel) * (1 - launch);  // a hint behind the other one
     glow({cx, 2 + 7 * sel, 14 * sel - 6}, 80, 82, false, {bloom, bloom, bloom * 1.1f, 1});
   }
   // The disks, the one further back first.

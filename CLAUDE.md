@@ -34,8 +34,11 @@ elease\Llamatron-<ver>-windows.zip (no game
                         copied over the submodule's at build time).
 - third_party\          submodules: musashi (kstenerud/Musashi, MIT-style), SDL (3.4.16, static).
 - src\launcher.cpp      the start screen (2026-10-22): two low-poly 3.5" disks (SDL_RenderGeometry, own projection
-                        and flat shading), hand-scrawled labels (stroke font; owner will supply label images),
-                        pools of light + bloom on pure black (owner: no beam, no grey floor), Y = how to play,
+                        and flat shading), the owner's hand-written labels (photos res\labels\*-photo.jpg, kept out of git: they show the room;
+                        Tools\make_labels.py crops the drawn box, divides out the lighting, black ink on white -> labels.png
+                        + src\labels.inc, run-length packed),
+                        pools of light + a faint bloom on pure black (owner: no beam, no grey floor, bloom halved, a hint
+                        on the unpicked disk), Y = how to play,
                         B twice quits; games return to it (B twice on their title). main.cpp: RunLauncher /
                         RunGame (a fresh st::Machine per game; input/game/grid::Reset). --program skips it.
                         Tests: --lpress=N:<pad button>, --lshot=N:<bmp>, --lframes=N.

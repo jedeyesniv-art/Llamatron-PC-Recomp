@@ -5,3 +5,4 @@
 /dist/
 /logs/
 __pycache__/
+/res/labels/*-photo.jpg
