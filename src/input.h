@@ -6,7 +6,9 @@
 //                                                     fire = starts the twin-stick game (where the mode allows)
 //   right stick         = joystick 0 directions     X = joystick 1 fire (on the title: a one-stick game)
 //                                                   Start, RB, RT = joystick 0 fire
-//   Back                = pause / unpause (the game's P and O keys)
+//   Back                = pause / resume (the game's P and O keys)
+//   B                   = paused: quit to the title (the game's X key, which only works in play); title: quit
+//                         the program (press twice). Keyboard: Esc.
 // On the title screen joystick 1 left/right picks 1 PLAYER / PLAYER + DROID / TEAM, up/down 1 or 2 players.
 // A second pad, if connected, drives joystick 0 entirely (left stick + A), for two players (TEAM); then pad 1's
 // A, X and Start are joystick 1 fire.
@@ -30,5 +32,9 @@ void Shutdown();
 bool HandleEvent(const SDL_Event& e, st::Machine* m);
 // Sends the current joystick states to the machine (call once per frame).
 void Update(st::Machine* m);
+// The player asked to quit the program (B twice at the title).
+bool QuitRequested();
+// A line to show over the picture (pause screen help, quit confirmation), or null.
+const char* Hint(st::Machine* m);
 
 }  // namespace input

@@ -6,6 +6,7 @@
 #include <array>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <map>
 #include <string>
@@ -31,6 +32,9 @@ struct Options {
   bool match_refresh = true;  // --refresh=desktop: keep the desktop's refresh rate in fullscreen
   game::Options game;       // --flashes: keep the original screen flashes
   int cpu_speed = 8;        // --cpu=N: CPU speed multiple during play (1 = the ST's 8 MHz)
+  // --aspect=square (320x200 with square pixels: 16:10) or pal (as on a UK TV: an ST pixel is 8 MHz wide on a
+  // line where square pixels are 14.75 MHz, and two TV lines tall -> pixel aspect 0.92, picture ~1.48:1)
+  bool pal_aspect = false;
   bool headless = false;   // --headless: no window or audio (tests)
   int frames = 0;          // --frames=N: quit after N frames
   std::string wav;         // --wav=<file>: also write the audio to a WAV file (tests)
@@ -93,6 +97,7 @@ Options ParseArgs(int argc, char** argv) {
     else if (a == "--trace-tos") o.trace_tos = true;
     else if (a == "--fullscreen") o.fullscreen = true;
     else if (a == "--window") o.fullscreen = false;
+    else if (Arg(a, "aspect", &v)) o.pal_aspect = v == "pal";
     else if (a == "--flashes") o.game.flashes = true;
     else if (Arg(a, "cpu", &v)) o.cpu_speed = std::max(1, std::atoi(v.c_str()));
     else if (Arg(a, "refresh", &v)) o.match_refresh = v != "desktop";
@@ -288,6 +293,8 @@ int main(int argc, char** argv) {
   SDL_AudioStream* audio = nullptr;
   const int kRate = 48000;
   machine.SetSampleRate(kRate);
+  // Picture height in a 320-wide space: PAL pixel aspect (14.75 / 8) / 2 = 0.92 -> 200 / 0.92 = 217.
+  const int view_h = opt.pal_aspect ? int(std::lround(st::kScreenH * 2.0 * 8.0 / 14.75)) : st::kScreenH;
   if (!opt.headless) {
     window = SDL_CreateWindow("Llamatron", st::kScreenW * 4, st::kScreenH * 4,
                               SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
@@ -295,10 +302,10 @@ int main(int argc, char** argv) {
     SDL_SetRenderVSync(renderer, 1);
     if (opt.match_refresh) ChooseFullscreenMode(window, 50.0);
     if (opt.fullscreen) SDL_SetWindowFullscreen(window, true);
-    SDL_SetRenderLogicalPresentation(renderer, st::kScreenW, st::kScreenH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    SDL_SetRenderLogicalPresentation(renderer, st::kScreenW, view_h, SDL_LOGICAL_PRESENTATION_LETTERBOX);
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, st::kScreenW,
                                 st::kScreenH);
-    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_PIXELART);  // sharp, and even at non-integer scales
     SDL_AudioSpec spec{SDL_AUDIO_F32, 1, kRate};
     audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
     if (audio) SDL_ResumeAudioStreamDevice(audio);
@@ -329,6 +336,7 @@ int main(int argc, char** argv) {
       }
       input::HandleEvent(e, &machine);
     }
+    if (input::QuitRequested()) running = false;
 
     // Pacing. If the display's refresh is a whole multiple k of the game's frame rate, one game frame every k
     // vsyncs (presents block on vsync): even motion. Otherwise game frames are due by the wall clock (at most a
@@ -437,7 +445,16 @@ int main(int argc, char** argv) {
       SDL_UpdateTexture(texture, nullptr, machine.Frame(), st::kScreenW * 4);
       SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
       SDL_RenderClear(renderer);
-      SDL_RenderTexture(renderer, texture, nullptr, nullptr);
+      SDL_FRect view{0, 0, float(st::kScreenW), float(view_h)};
+      SDL_RenderTexture(renderer, texture, nullptr, &view);
+      if (const char* hint = input::Hint(&machine)) {  // 8x8 debug font, in the 320x200 logical space
+        float w = float(std::strlen(hint) * 8), x = (st::kScreenW - w) / 2, y = float(view_h - 22);
+        SDL_FRect box{x - 4, y - 3, w + 8, 14};
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderFillRect(renderer, &box);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDebugText(renderer, x, y, hint);
+      }
       SDL_RenderPresent(renderer);
       uint64_t now = SDL_GetTicksNS();
       if (last_present) worst_gap = std::max(worst_gap, now - last_present);

@@ -31,7 +31,7 @@ Goal: a native Windows app (SDL3) that plays well on an Xbox pad, twin-stick sty
 ## Running and testing
 build\llamatron.exe finds the disk image itself (game\ next to the exe, the exe's folder, nearest Private\ up).
 Saves (hiscores: SCORES.YAK) go to userdata\ next to the exe; files there replace the disk's.
-Options: --disk=<.msa|.st> --log=<file> (default userdata\llamatron.log) --trace-tos --window (fullscreen is the
+Options: --aspect=square|pal (pal: PAL TV pixel aspect 0.92, picture 320x217 in square units) --disk=<.msa|.st> --log=<file> (default userdata\llamatron.log) --trace-tos --window (fullscreen is the
 default; F11 / Alt+Enter toggle) --refresh=desktop (don't change the display mode)
 Tests: --headless --frames=N --shot=N:<file.bmp> --wav=<file> --press=N:<what>[:frames], what = j0|j1 +
 fire|up|down|left|right, or an SDL key name. The exe is a GUI app: from PowerShell use Start-Process -Wait.
@@ -71,6 +71,11 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   in PLAYER + DROID, where the game ignores it). X = joystick 1 fire (title: one-stick game). Start/RB/RT =
   joystick 0 fire. Back = pause/unpause (P/O). A second pad = joystick 0 (TEAM). Keyboard: WASD + Space =
   joystick 1, cursors + Enter = joystick 0, other keys = ST keys.
+- Quitting (owner: "a way to exit to the menu from a run, and then to exit the game"): the game's own X key
+  ($78, VBL hook $1F46 -> $2BBA = 3 -> $21E title) aborts to the title, but only in play, not on the pause
+  screen (P: VBL hook $1D32). Back = pause/resume (taps P/O by game state); B (Esc) on the pause screen =
+  resume + X; B (Esc) twice within 3 s at the title = quit the program. A hint line is drawn over the picture
+  (SDL_RenderDebugText): pause help, quit confirmation. Key codes in the game are ASCII (p, o, x, h, s, t, g).
 - 2026-10-22 owner: twin-stick worked with RT at the title, "otherwise it defaults to single stick" -> A at the
   title now starts twin-stick. Title detection (src\game.h): VBL hook $52FC2 == text + $551C.
 - The log (default userdata\llamatron.log) has pads connected and "title screen" / "left the title

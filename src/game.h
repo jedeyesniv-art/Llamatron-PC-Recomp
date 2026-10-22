@@ -20,6 +20,9 @@ inline bool AtTitle(st::Machine& m) { return Long(m, 0x52FC2) == m.TextBase() + 
 // instructions scroller, wave intros/transitions or the pause screens (some of those are timed by CPU speed).
 inline bool Playing(st::Machine& m) { return Long(m, 0x52FC2) == m.TextBase() + 0x1EDA; }
 
+// The game's pause screen (P): its VBL handler is $1D32 (set by $1F22).
+inline bool Paused(st::Machine& m) { return Long(m, 0x52FC2) == m.TextBase() + 0x1D32; }
+
 // Title mode (bits 0-1 of $4CF9A): 0 = 1 PLAYER, 1 = PLAYER + DROID, 3 = TEAM.
 inline int Mode(st::Machine& m) { return m.Ram()[m.TextBase() + 0x4CF9A] & 3; }  // btst.b: the high byte
 

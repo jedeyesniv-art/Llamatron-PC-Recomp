@@ -12,8 +12,41 @@ namespace {
 
 std::vector<SDL_Gamepad*> g_pads;  // in connection order: [0] = player 1
 bool g_keys[SDL_SCANCODE_COUNT] = {};
-bool g_paused = false;
-bool g_a_held = false, g_a_to_stick0 = false;  // pad 1's A: which stick's fire it is while held  // the pause we asked for with Back (the game pauses on P, resumes on O)
+bool g_a_held = false, g_a_to_stick0 = false;  // pad 1's A: which stick's fire it is while held
+
+// ST keys we tap for the player: pressed now, released a few frames later (the game polls key flags per VBL).
+constexpr uint8_t kKeyP = 0x19, kKeyO = 0x18, kKeyX = 0x2D;
+struct Tap {
+  uint8_t code;
+  int frames;
+};
+std::vector<Tap> g_taps;
+int g_quit_to_title = 0;      // frames left waiting for the game to resume before tapping X (quit to title)
+uint64_t g_quit_armed_ms = 0; // B at the title: quit if pressed again before this time
+bool g_quit = false;
+
+void TapKey(st::Machine* m, uint8_t code) {
+  m->KeyEvent(code, true);
+  g_taps.push_back({code, 3});
+}
+
+// Back: the game's pause (P) / resume (O).
+void PauseButton(st::Machine* m) {
+  if (game::Playing(*m)) TapKey(m, kKeyP);
+  else if (game::Paused(*m)) TapKey(m, kKeyO);
+}
+
+// B (Esc): from the pause screen back to the title (the game's X key only works while playing: resume first);
+// at the title, quit (press twice).
+void MenuButton(st::Machine* m) {
+  if (game::Paused(*m)) {
+    TapKey(m, kKeyO);
+    g_quit_to_title = 50;
+  } else if (game::AtTitle(*m)) {
+    if (SDL_GetTicks() < g_quit_armed_ms) g_quit = true;
+    else g_quit_armed_ms = SDL_GetTicks() + 3000;
+  }
+}
 
 // A stick as 8-way joystick bits: 45-degree sectors, centred on the axes.
 uint8_t StickBits(SDL_Gamepad* pad, SDL_GamepadAxis ax, SDL_GamepadAxis ay) {
@@ -155,10 +188,12 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
       return true;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
     case SDL_EVENT_GAMEPAD_BUTTON_UP:
-      if (e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) {  // pause / unpause: tap P or O
-        bool down = e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
-        m->KeyEvent(g_paused ? 0x18 : 0x19, down);  // O : P
-        if (!down) g_paused = !g_paused;
+      if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) {
+        PauseButton(m);
+        return true;
+      }
+      if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
+        MenuButton(m);
         return true;
       }
       return false;
@@ -167,8 +202,10 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
       bool down = e.type == SDL_EVENT_KEY_DOWN;
       if (e.key.scancode < SDL_SCANCODE_COUNT) g_keys[e.key.scancode] = down;
       if (e.key.repeat || IsJoystickKey(e.key.scancode)) return true;
-      if (e.key.scancode == SDL_SCANCODE_P) g_paused = true;
-      if (e.key.scancode == SDL_SCANCODE_O) g_paused = false;
+      if (e.key.scancode == SDL_SCANCODE_ESCAPE) {
+        if (down) MenuButton(m);
+        return true;
+      }
       if (uint8_t code = StScancode(e.key.scancode)) m->KeyEvent(code, down);
       return true;
     }
@@ -177,7 +214,30 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
   }
 }
 
+bool QuitRequested() { return g_quit; }
+
+const char* Hint(st::Machine* m) {
+  if (game::Paused(*m)) return g_pads.empty() ? "O: resume   Esc: quit to title" : "Back: resume   B: quit to title";
+  if (game::AtTitle(*m) && SDL_GetTicks() < g_quit_armed_ms)
+    return g_pads.empty() ? "Press Esc again to quit" : "Press B again to quit";
+  return nullptr;
+}
+
 void Update(st::Machine* m) {
+  for (size_t i = 0; i < g_taps.size();) {  // release tapped keys
+    if (--g_taps[i].frames > 0) {
+      ++i;
+      continue;
+    }
+    m->KeyEvent(g_taps[i].code, false);
+    g_taps.erase(g_taps.begin() + long(i));
+  }
+  if (g_quit_to_title && --g_quit_to_title >= 0 && game::Playing(*m)) {
+    TapKey(m, kKeyX);
+    g_quit_to_title = 0;
+    LOG("quit to the title");
+  }
+
   uint8_t j0 = 0, j1 = 0;
   auto key = [](SDL_Scancode k) { return g_keys[k]; };
   if (key(SDL_SCANCODE_W)) j1 |= st::kJoyUp;
