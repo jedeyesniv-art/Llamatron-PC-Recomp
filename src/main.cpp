@@ -100,6 +100,7 @@ Options ParseArgs(int argc, char** argv) {
     else if (a == "--window") o.fullscreen = false;
     else if (Arg(a, "aspect", &v)) o.pal_aspect = v != "square";
     else if (a == "--flashes") o.game.flashes = true;
+    else if (a == "--aim=8") o.game.analog_aim = false;
     else if (Arg(a, "cpu", &v)) o.cpu_speed = std::max(1, std::atoi(v.c_str()));
     else if (Arg(a, "refresh", &v)) o.match_refresh = v != "desktop";
     else if (a == "--headless") o.headless = true;
@@ -382,7 +383,17 @@ int main(int argc, char** argv) {
       input::Update(&machine);
       for (const auto& p : opt.presses) {  // scripted input (tests)
         if (frame < p.frame || frame >= p.frame + p.length) continue;
-        if (p.what[0] == 'j') {
+        if (p.what.rfind("aim", 0) == 0) {  // aim<degrees>: the aiming stick at an angle (0 = right, 90 = down)
+          double rad = std::atof(p.what.c_str() + 3) * 3.14159265358979 / 180;
+          float x = float(std::cos(rad)), y = float(std::sin(rad));
+          game::SetAim(true, x, y);
+          uint8_t bits = 0;
+          if (x > 0.38f) bits |= st::kJoyRight;
+          if (x < -0.38f) bits |= st::kJoyLeft;
+          if (y > 0.38f) bits |= st::kJoyDown;
+          if (y < -0.38f) bits |= st::kJoyUp;
+          machine.SetJoystick(0, bits);
+        } else if (p.what[0] == 'j') {
           int port;
           uint8_t bits = PressBits(p.what, &port);
           machine.SetJoystick(port, bits);

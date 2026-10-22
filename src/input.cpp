@@ -262,6 +262,7 @@ void Update(st::Machine* m) {
   if (key(SDL_SCANCODE_RIGHT)) j0 |= st::kJoyRight;
   if (key(SDL_SCANCODE_RETURN)) j0 |= st::kJoyFire;
 
+  bool aim = false;
   if (!g_pads.empty()) {
     SDL_Gamepad* p = g_pads[0];
     auto button = [&](SDL_GamepadButton b) { return SDL_GetGamepadButton(p, b); };
@@ -269,6 +270,10 @@ void Update(st::Machine* m) {
     if (button(SDL_GAMEPAD_BUTTON_WEST)) j1 |= st::kJoyFire;  // X: always stick 1 (a one-stick game)
     if (g_pads.size() == 1) {  // twin-stick: the right stick is joystick 0
       j0 |= StickBits(p, SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY);
+      float ax = SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
+      float ay = SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
+      aim = ax * ax + ay * ay >= 0.35f * 0.35f;  // the same dead zone as the 8-way direction
+      if (aim) game::SetAim(true, ax, ay);
       if (button(SDL_GAMEPAD_BUTTON_START) || button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) ||
           SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000)
         j0 |= st::kJoyFire;
@@ -287,6 +292,7 @@ void Update(st::Machine* m) {
     j0 |= StickBits(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY) | DpadBits(p);
     if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_SOUTH)) j0 |= st::kJoyFire;
   }
+  if (!aim) game::SetAim(false, 0, 0);
   m->SetJoystick(0, Clean(j0));
   m->SetJoystick(1, Clean(j1));
 }

@@ -469,6 +469,10 @@ std::string Machine::ReadString(uint32_t a) {
 
 bool Machine::IllegalOpcode(int) {
   uint32_t pc = cpu::Get(cpu::PPC) & 0xFFFFFF;
+  if (auto hook = hooks_.find(pc); hook != hooks_.end()) {
+    hook->second();
+    return true;
+  }
   if (pc < kRomBase || pc >= kRomBase + kRomSize) return false;
   uint32_t off = pc - kRomBase;
   if (off == kRomPterm) {

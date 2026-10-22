@@ -39,8 +39,12 @@ inline bool TwinStick(st::Machine& m) { return m.Ram()[m.TextBase() + 0x8616 + 1
 
 // Changes to the game's code, applied after loading (each checks the original bytes first).
 struct Options {
-  bool flashes = false;  // the background flashes and strobes (white on every kill...); original: on
+  bool flashes = false;     // the background flashes and strobes (white on every kill...); original: on
+  bool analog_aim = true;   // twin-stick shots in any direction (original: 8)
 };
 void ApplyPatches(st::Machine& m, const Options& o);
+
+// The aiming stick's direction (screen coordinates, y down) for analog aim; on = deflected.
+void SetAim(bool on, float x, float y);
 
 }  // namespace game
