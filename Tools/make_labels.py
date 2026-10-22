@@ -30,16 +30,14 @@ def stroke_mask(size, lines, width):
 
 
 def touch_up_g(a):
-    """The owner's G in "Gridrunner" read as an E: its middle stroke ran across the C. Erase that stroke inside the
-    C and add a G's hook (up from the bottom curve, a bar inwards) in the same felt pen: solid ink, rough edges.
+    """The owner's G in "Gridrunner" read as an E. Owner's idea: just join the end of the C's bottom curve up to
+    its middle stroke (a G with an overhanging bar), in the same felt pen: solid ink, rough edges.
     Coordinates in the full-resolution crop (2128 x 1732); the G's box starts at (170, 658)."""
     ox, oy = 170, 658
     size = (a.shape[1], a.shape[0])
     shift = lambda pts: [(x + ox, y + oy) for x, y in pts]
-    a = np.maximum(a, stroke_mask(size, [shift([(176, 168), (314, 98)])], 48) * 255)
-    a = np.maximum(a, stroke_mask(size, [shift([(166, 161), (200, 144)])], 12) * 255)  # a hairline left of it
     rng = np.random.default_rng(1991)
-    ink = stroke_mask(size, [shift([(268, 204), (283, 178), (288, 153)]), shift([(290, 151), (240, 153)])], 30)
+    ink = stroke_mask(size, [shift([(268, 202), (280, 168), (284, 124)])], 30)
     ink = np.asarray(Image.fromarray((ink * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(2.5)),
                      dtype=np.float32) / 255
     noise = np.asarray(Image.fromarray((rng.random(ink.shape) * 255).astype(np.uint8)).filter(
