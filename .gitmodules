@@ -1,0 +1,6 @@
+[submodule "third_party/musashi"]
+	path = third_party/musashi
+	url = https://github.com/kstenerud/Musashi
+[submodule "third_party/SDL"]
+	path = third_party/SDL
+	url = https://github.com/libsdl-org/SDL
