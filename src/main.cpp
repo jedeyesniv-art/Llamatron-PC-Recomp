@@ -357,6 +357,7 @@ int main(int argc, char** argv) {
   // Screen swaps (frames the game finished drawing) per second of ST time, counting only seconds spent playing.
   // Every 10 s: average and the worst second.
   int swaps_second = 0, swaps_total = 0, swaps_worst = 1 << 30, swaps_seconds = 0;
+  int vbls_second = 0, vbls_missed = 0;  // VBL interrupts the program didn't take (while playing)
   bool playing_second = true;
   bool running = true, at_title = false;
   uint64_t last_mouse_ms = 0;  // the game doesn't use the mouse: its cursor is hidden
@@ -498,13 +499,14 @@ int main(int argc, char** argv) {
       if (frame == opt.profile_to) cpu::g_profile = nullptr, WriteProfile(opt.profile_file);
       // The faster CPU only while playing: the drawing keeps up with the sprites (the game logic is in the 50 Hz
       // VBL either way); other screens are timed by CPU speed and keep the original.
-      bool playing = game::Playing(machine);
+      bool playing = llamatron ? game::Playing(machine) : grid::GameState(machine) == grid::kPlay;
       machine.SetCpuSpeed(playing ? opt.cpu_speed : 1);
       playing_second &= playing;
       if (!machine.RunFrame()) running = false;
       ++frame;
       ++stats_frames;
       swaps_second += machine.TakeSwaps();
+      vbls_second += machine.TakeVbls();
       if (!opt.watches.empty() && frame % 10 == 0) {
         std::string line;
         for (uint32_t w : opt.watches) {
@@ -517,16 +519,17 @@ int main(int argc, char** argv) {
       }
       if (frame % 50 == 0) {
         if (playing_second) {
+          vbls_missed += std::max(0, 50 - vbls_second);
           swaps_total += swaps_second;
           swaps_worst = std::min(swaps_worst, swaps_second);
           ++swaps_seconds;
         }
-        swaps_second = 0;
+        swaps_second = vbls_second = 0;
         playing_second = true;
         if (frame % 500 == 0 && swaps_seconds) {
-          LOG("frame %d: drawn %.1f frames/s while playing, worst second %d (%d s)", frame,
-              double(swaps_total) / swaps_seconds, swaps_worst, swaps_seconds);
-          swaps_total = swaps_seconds = 0, swaps_worst = 1 << 30;
+          LOG("frame %d: drawn %.1f frames/s while playing, worst second %d (%d s), VBLs missed %d", frame,
+              double(swaps_total) / swaps_seconds, swaps_worst, swaps_seconds, vbls_missed);
+          swaps_total = swaps_seconds = vbls_missed = 0, swaps_worst = 1 << 30;
         }
       }
       bool title = game::AtTitle(machine);

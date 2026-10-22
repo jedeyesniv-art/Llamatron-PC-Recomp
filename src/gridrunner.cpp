@@ -12,6 +12,9 @@ namespace {
 
 // Gridrunner's variables (absolute: the program unpacks itself where TOS loaded it, at $10100).
 constexpr uint32_t kStateVar = 0x4B632, kPointerX = 0x54DD0, kPointerY = 0x54DD2;
+// Frames per drawn frame: the main loop only draws (the game logic runs in the VBL, $4B55A) and waits for this
+// many VBLs between frames (set to 2 once at $4B2C8: 25 frames/s). 1 = a new picture every VBL.
+constexpr uint32_t kFramesPerDraw = 0x4D2E4;
 
 // ST scancodes we press for the player.
 constexpr uint8_t kRShift = 0x36, kLShift = 0x2A, kCtrl = 0x1D, kAlt = 0x38, kSpace = 0x39, kQ = 0x10;
@@ -24,6 +27,7 @@ struct Tuning {
   // The fire direction modes ($49130) run 0 up, 1 up and out, 2 sideways, 3 down and out, 4 down; left Shift
   // steps towards 0, Alt towards 4. Right stick up = left Shift (towards up), unless swapped.
   int fire_mode_swap = 0;
+  int draw_50 = 1;  // draw 50 frames/s in play (the original: 25)
 } g_tune;
 
 struct Tap {
@@ -36,6 +40,7 @@ uint8_t g_held_keys = 0;   // bit 2 Control (held by the pad)
 int g_flick = 0;           // right stick: -1 up, 1 down, 0 back near the centre (ready for the next flick)
 uint64_t g_quit_armed_ms = 0;
 bool g_quit = false;
+bool g_running = false;  // the game has unpacked itself and reached its title
 bool g_test = false;
 TestPad g_test_pad;
 
@@ -91,6 +96,7 @@ void LoadSettings() {
   g_tune.deadzone = std::clamp(settings::Get("grid_stick_deadzone", 0.15), 0.0, 0.9);
   g_tune.dpad = settings::Get("grid_dpad_speed", 1.0);
   g_tune.fire_mode_swap = settings::Get("grid_fire_mode_swap", 0.0) != 0;
+  g_tune.draw_50 = settings::Get("grid_50fps", 1.0) != 0;
   LOG("gridrunner stick: speed %.2f, curve %.2f, dead zone %.2f, d-pad %.2f", g_tune.speed, g_tune.curve,
       g_tune.deadzone, g_tune.dpad);
 }
@@ -120,6 +126,10 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     m->KeyEvent(g_taps[i].code, false);
     g_taps.erase(g_taps.begin() + long(i));
   }
+  // 50 frames/s while playing (with the faster CPU); the original 25 elsewhere (other screens may count draws).
+  // Only once the game is running: before it has unpacked itself these addresses hold its packed data.
+  g_running |= GameState(*m) == kTitle;
+  if (g_running) Put16(*m, kFramesPerDraw, g_tune.draw_50 && GameState(*m) == kPlay ? 1 : 2);
   uint8_t buttons = mouse_buttons;
   bool test = g_test;
   g_test = false;
@@ -147,7 +157,7 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     if (button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) vx += float(g_tune.dpad);
     if (button(SDL_GAMEPAD_BUTTON_DPAD_UP)) vy -= float(g_tune.dpad);
     if (button(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) vy += float(g_tune.dpad);
-    if (vx != 0 || vy != 0) {
+    if (g_running && (vx != 0 || vy != 0)) {
       g_px += vx, g_py += vy;
       int dx = int(g_px), dy = int(g_py);
       g_px -= float(dx), g_py -= float(dy);

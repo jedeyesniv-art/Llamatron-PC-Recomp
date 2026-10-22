@@ -227,7 +227,7 @@ int Machine::InterruptAck(int level) {
     UpdateIrq();
     return 24;  // spurious
   }
-  if (level == 4) vbl_pending_ = false;
+  if (level == 4) vbl_pending_ = false, ++vbls_taken_;
   UpdateIrq();
   return -1;  // autovector (M68K_INT_ACK_AUTOVECTOR)
 }

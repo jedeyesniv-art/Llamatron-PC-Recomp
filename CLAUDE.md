@@ -85,6 +85,15 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   Tunables in userdata\settings.txt, reread while running (src\settings.cpp): grid_stick_speed (6 px/frame at
   full deflection), grid_stick_curve (2 = quadratic), grid_stick_deadzone (0.15), grid_dpad_speed (1),
   grid_fire_mode_swap (0). Measured: full stick 6 px/frame, half 1.0, inside the dead zone 0.
+- Performance (owner: "fairly severe slowdown"): like Llamatron, all logic is in the VBL ($4B55A: rasters,
+  pending screen $4D2E8, then the state machine; play state $1278A moves the objects via $14F7A) and never
+  misses a VBL; the main loop ($4BA12) only draws into 3 rotating screens and waits $4D2E4 VBLs per frame (2,
+  set once at $4B2C8: 25 fps by design; at 8 MHz it drops to 13-20). Now: x8 CPU in play (state 1) and $4D2E4
+  = 1 in play (setting grid_50fps, default 1; 2 elsewhere) -> 50 drawn frames/s in every second of play.
+  Verified the game itself is unchanged: same scripted input with 25 vs 50 fps, RAM at the same frame differs
+  only in drawing bookkeeping (screen rotation, per-screen restore lists $54ECB/$55E6D/$56E0B, stack) - objects,
+  score, state identical. Game memory is only written once the title has been seen (before that it holds the
+  packed program). Log: "VBLs missed" next to the drawn-frames line. Tools: profile_summary.py, ramdiff.py.
 - Test inputs: --press=N:mleft|mright[:frames], mx<dx>, my<dy> (per frame); pad: gl<deg>@<deflection>,
   gry<value>, glt, grt, grb; pad buttons as for Llamatron (padback, padb...). Flow: mleft at 600 (Llamasoft
   core screen), 1500 (title), 2000 (LET'S BLAST), 2400 (intro), then play (left held = fire).

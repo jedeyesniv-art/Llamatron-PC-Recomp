@@ -38,6 +38,8 @@ class Machine {
   int CpuSpeed() const { return speed_; }
   // Screen swaps (the game showing a new frame) since the last call.
   int TakeSwaps() { int n = swaps_; swaps_ = 0; return n; }
+  // VBL interrupts the CPU took since the last call (fewer than frames: the program missed some).
+  int TakeVbls() { int n = vbls_taken_; vbls_taken_ = 0; return n; }
 
   // Runs one video frame (until the next VBL). Returns false if the program ended.
   bool RunFrame();
@@ -119,7 +121,7 @@ class Machine {
 
   int speed_ = 1;              // CPU cycles per ST cycle
   int cpu_rem_ = 0;            // CPU cycles run that don't make a whole ST cycle yet
-  int swaps_ = 0;
+  int swaps_ = 0, vbls_taken_ = 0;
   // Time is counted in ST cycles (8 MHz).
   uint64_t frame_start_ = 0;   // cycle of the last VBL
   uint64_t cycles_done_ = 0;   // cycles run before the current execute slice
