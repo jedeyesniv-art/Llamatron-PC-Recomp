@@ -107,6 +107,15 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   letters / Backspace / Return click the cells; clicks wait for the letter animation ($10966/$105BC). Options:
   d-pad rows, A select, B = the quit row. Hints per screen. On these screens the d-pad and A are shortcuts
   (RT still clicks at the pointer).
+- Entry lane (owner 2026-10-22: "can see a few pixels of [snakes] on the top rows ... but can't shoot them";
+  chose "invisible until vulnerable", on by default, --entry-lane = the original look). Snakes (objects: table
+  $46770, $B4 bytes x 15; +2 x, +4 y, +6 type: 2 head / 3 body, +$20 shootable, +$2E hits the ship) come in
+  along y = 5 under the top rail; shots only hit at shot y >= 20 ($1345E: a deliberate safe zone); the sprites'
+  lowest row (y + 6) shows at lines 10-11 below the rail (rail lines 3-9, grid from 10). Hook on the object draw
+  routine $1655E ("cmpi.w #$1D,6(a3); beq rts $12C3C"): objects with y < 14 aren't drawn. Installed once the
+  title has been seen (code checked first). Same input with / without: RAM differs only in the per-screen restore
+  lists + 1 stack byte. Rejected (owner agreed): hittable in the lane (breaks the safe zone / balance), a taller
+  playfield (frame, rails, limits, HUD all move). Tool: grid_objects.py <dump> lists the objects.
 - High scores: HISCORES.COW, 40 x (8-digit score + 3 letters) + 3 messages; byte $217 = checksum: $27 + the
   sum of bytes 0..$216 ($193AC); a bad checksum = the file is ignored silently (the built-in table $49520 is
   used, which lacks the disk's "jon 55323"). Never hand-edit without fixing the checksum.

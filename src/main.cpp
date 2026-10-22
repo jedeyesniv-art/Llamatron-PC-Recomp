@@ -34,6 +34,7 @@ struct Options {
   bool fullscreen = true;  // --window / --fullscreen
   bool match_refresh = true;  // --refresh=desktop: keep the desktop's refresh rate in fullscreen
   game::Options game;       // --flashes: keep the original screen flashes
+  bool entry_lane = false;  // --entry-lane: Gridrunner shows the edges of enemies in the entry lane (original)
   int aim = -1;             // --aim=8|analog for this run (else the saved setting, RB at the title)
   int cpu_speed = 8;        // --cpu=N: CPU speed multiple during play (1 = the ST's 8 MHz)
   // --aspect=square (320x200 with square pixels: 16:10) or pal (as on a UK TV: an ST pixel is 8 MHz wide on a
@@ -116,6 +117,7 @@ Options ParseArgs(int argc, char** argv) {
     }
     else if (Arg(a, "aspect", &v)) o.pal_aspect = v != "square";
     else if (a == "--flashes") o.game.flashes = true;
+    else if (a == "--entry-lane") o.entry_lane = true;
     else if (a == "--aim=8") o.aim = 0;
     else if (a == "--aim=analog") o.aim = 1;
     else if (Arg(a, "cpu", &v)) o.cpu_speed = std::max(1, std::atoi(v.c_str()));
@@ -311,6 +313,7 @@ int main(int argc, char** argv) {
   settings::Save();  // so every setting is in the file, with its default
   if (opt.aim >= 0) game::SetAnalogAim(opt.aim == 1);
   input::SetGridrunner(!llamatron);
+  grid::SetHideEntryLane(!opt.entry_lane);
   LOG("analog aim %s", game::AnalogAim() ? "on" : "off");
   LOG("cpu speed during play x%d", opt.cpu_speed);
 

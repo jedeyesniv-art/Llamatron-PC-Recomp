@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <deque>
 #include <vector>
 
+#include "cpu.h"
 #include "log.h"
 #include "settings.h"
 
@@ -23,6 +25,13 @@ constexpr uint32_t kNameKeys = 0x1096E, kNameBusy1 = 0x10966, kNameBusy2 = 0x105
 // The other screens' click areas (from their code): level select $11F06, options $10A70.
 constexpr int kMinusX = 115, kPlusX = 200, kLevelButtonsY = 120, kBlastX = 157, kBlastY = 172;
 constexpr int kOptionRows[4] = {84, 104, 134, 186};  // pause mode demo, freeze, reset message, quit (back)
+
+// The entry lane: snakes come in along a lane at y = 5 under the top rail, hidden by design - shots only hit at
+// y >= 20 ($1345E) - but the bottom of their sprites (y + 6) shows below the rail. The object draw routine
+// ($1655E, a3 = the object; "cmpi.w #$1D,6(a3); beq rts") is hooked to skip objects whose lowest row is above
+// line 20, i.e. y < 14: invisible until they can be hit.
+constexpr uint32_t kDrawObject = 0x1655E, kDrawObjectNext = 0x16568, kDrawObjectSkip = 0x12C3C;
+constexpr int kLaneHiddenBelowY = 14;
 
 // ST scancodes we press for the player.
 constexpr uint8_t kRShift = 0x36, kLShift = 0x2A, kCtrl = 0x1D, kAlt = 0x38, kSpace = 0x39, kQ = 0x10;
@@ -49,6 +58,8 @@ int g_flick = 0;           // right stick: -1 up, 1 down, 0 back near the centre
 uint64_t g_quit_armed_ms = 0;
 bool g_quit = false;
 bool g_running = false;  // the game has unpacked itself and reached its title
+bool g_hide_entry_lane = true;
+bool g_hooked = false;
 bool g_test = false;
 TestPad g_test_pad;
 
@@ -96,6 +107,24 @@ void MenuButton(st::Machine* m) {
 }
 
 void QueueClick(int x, int y, uint8_t modifier = 0) { g_clicks.push_back({x, y, modifier}); }
+
+// Installed once the game has unpacked itself (its code isn't there before).
+void InstallHooks(st::Machine* m) {
+  g_hooked = true;
+  static const uint8_t kExpect[10] = {0x0C, 0x6B, 0x00, 0x1D, 0x00, 0x06, 0x67, 0x00, 0xC6, 0xD6};
+  if (std::memcmp(m->Ram() + kDrawObject, kExpect, sizeof(kExpect)) != 0) {
+    LOG("gridrunner: unexpected code at $%X, entry lane hook not installed", kDrawObject);
+    return;
+  }
+  Put16(*m, kDrawObject, 0x4AFC);
+  m->AddHook(kDrawObject, [m] {
+    uint32_t obj = cpu::Get(cpu::Reg(cpu::A0 + 3)) & 0xFFFFFF;
+    int type = Get16(*m, obj + 6), y = int16_t(Get16(*m, obj + 4));
+    bool skip = type == 0x1D || (g_hide_entry_lane && y < kLaneHiddenBelowY);
+    cpu::Set(cpu::PC, skip ? kDrawObjectSkip : kDrawObjectNext);
+  });
+  LOG("gridrunner: entry lane hook installed (%s)", g_hide_entry_lane ? "hiding it" : "original look");
+}
 
 // The pointer to the name entry cell (col, row), kept on the keyboard (row 3 has only ^ and _ in columns 8, 9).
 void NameCell(st::Machine* m, int col, int row) {
@@ -239,6 +268,7 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
   // 50 frames/s while playing (with the faster CPU); the original 25 elsewhere (other screens may count draws).
   // Only once the game is running: before it has unpacked itself these addresses hold its packed data.
   g_running |= GameState(*m) == kTitle;
+  if (g_running && !g_hooked) InstallHooks(m);
   if (g_running) Put16(*m, kFramesPerDraw, g_tune.draw_50 && GameState(*m) == kPlay ? 1 : 2);
   uint8_t buttons = mouse_buttons;
   bool test = g_test;
@@ -342,6 +372,8 @@ const char* Hint(st::Machine* m, bool have_pad) {
 }
 
 bool QuitRequested() { return g_quit; }
+
+void SetHideEntryLane(bool on) { g_hide_entry_lane = on; }
 
 void SetTestPad(const TestPad& t) {
   g_test = true;

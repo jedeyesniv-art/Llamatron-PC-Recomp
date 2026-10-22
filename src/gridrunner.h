@@ -44,6 +44,8 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m);
 void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_t mouse_buttons);
 const char* Hint(st::Machine* m, bool have_pad);
 bool QuitRequested();
+// Hide objects in the entry lane under the top rail until they can be shot (default on; --entry-lane = off).
+void SetHideEntryLane(bool on);
 
 // Tests: a scripted pad for the next Update (sticks -1..1, triggers 0..1, RB).
 struct TestPad {
