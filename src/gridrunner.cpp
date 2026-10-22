@@ -32,7 +32,8 @@ struct Tap {
 };
 std::vector<Tap> g_taps;
 float g_px = 0, g_py = 0;  // pointer movement not applied yet (sub-pixel)
-uint8_t g_held_keys = 0;   // bit 0 left Shift, 1 Alt, 2 Control (held by the pad)
+uint8_t g_held_keys = 0;   // bit 2 Control (held by the pad)
+int g_flick = 0;           // right stick: -1 up, 1 down, 0 back near the centre (ready for the next flick)
 uint64_t g_quit_armed_ms = 0;
 bool g_quit = false;
 bool g_test = false;
@@ -41,9 +42,9 @@ TestPad g_test_pad;
 uint16_t Get16(st::Machine& m, uint32_t a) { return uint16_t(m.Ram()[a] << 8 | m.Ram()[a + 1]); }
 void Put16(st::Machine& m, uint32_t a, uint16_t v) { m.Ram()[a] = uint8_t(v >> 8), m.Ram()[a + 1] = uint8_t(v); }
 
-void TapKey(st::Machine* m, uint8_t code) {
+void TapKey(st::Machine* m, uint8_t code, int frames = 3) {
   m->KeyEvent(code, true);
-  g_taps.push_back({code, 3});
+  g_taps.push_back({code, frames});
 }
 
 void Hold(st::Machine* m, int bit, uint8_t code, bool down) {
@@ -158,16 +159,18 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     }
     if (axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 0.4f || button(SDL_GAMEPAD_BUTTON_SOUTH)) buttons |= 2;  // left
     if (axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 0.4f) buttons |= 1;                                      // right
-    // Fire direction mode: the right stick held up or down (the game repeats while the key is held).
+    // Nosecone shot direction: one step per flick of the right stick up or down, like a button (the game would
+    // repeat while its key is held: a 2-frame tap is one step); the stick must come back near the centre first.
     float ry = axis(SDL_GAMEPAD_AXIS_RIGHTY);
-    bool up = ry < -0.5f, down = ry > 0.5f;
-    bool lshift = g_tune.fire_mode_swap ? down : up, alt = g_tune.fire_mode_swap ? up : down;
-    Hold(m, 0, kLShift, lshift);
-    Hold(m, 1, kAlt, alt);
+    if (g_flick == 0 && std::fabs(ry) > 0.5f) {
+      g_flick = ry < 0 ? -1 : 1;
+      bool towards_up = (g_flick < 0) != g_tune.fire_mode_swap;
+      TapKey(m, towards_up ? kLShift : kAlt, 2);
+    } else if (g_flick != 0 && std::fabs(ry) < 0.3f) {
+      g_flick = 0;
+    }
     Hold(m, 2, kCtrl, button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER));
   } else {
-    Hold(m, 0, kLShift, false);
-    Hold(m, 1, kAlt, false);
     Hold(m, 2, kCtrl, false);
   }
   m->MouseInput(mouse_dx, mouse_dy, buttons);

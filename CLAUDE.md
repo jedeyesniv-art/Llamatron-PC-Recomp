@@ -79,7 +79,8 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   a-z = a sound each ($4D870). Built-in manual "game secrets" at $10EC3.
 - Pad (owner 2026-10-22, src\gridrunner.cpp): left stick moves the pointer (= ship) through a response curve
   (written straight into $54DD0/$54DD2), d-pad slowly; RT/A = left button (fire/click), LT = right button
-  (nosecone: held = attached); right stick up/down = left Shift/Alt (towards up/down); RB = Control; Back/Start
+  (nosecone: held = attached); right stick flicked up/down = one left Shift/Alt tap (one step towards up/down;
+  owner: "like a button", no repeat while held; next flick after it returns below 30%); RB = Control; Back/Start
   = pause/resume; B = pause: quit to title (Q), title: quit (twice). Keyboard: every key goes to the ST.
   Tunables in userdata\settings.txt, reread while running (src\settings.cpp): grid_stick_speed (6 px/frame at
   full deflection), grid_stick_curve (2 = quadratic), grid_stick_deadzone (0.15), grid_dpad_speed (1),

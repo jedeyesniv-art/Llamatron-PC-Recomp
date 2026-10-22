@@ -10,7 +10,7 @@
 //   left stick       moves the pointer (= the ship): speed from a response curve (settings: grid_stick_*)
 //   d-pad            moves it slowly, for precision (grid_dpad_speed)
 //   RT, A            left button (fire, click)        LT   right button (the nose)
-//   right stick      up / down: nosecone shot direction (up..down)   RB   Control (martyrdom)
+//   right stick      flick up / down: nosecone shot direction one step (up..down)   RB   Control (martyrdom)
 //   Back, Start      pause / resume                   B    pause: quit to the title; title: quit (twice)
 #pragma once
 
