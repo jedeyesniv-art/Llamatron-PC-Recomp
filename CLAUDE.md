@@ -76,6 +76,16 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
 - The log (default userdata\llamatron.log) has pads connected and "title screen" / "left the title
   (twin-stick|one stick)".
 
+## Game patches (src\game.cpp, applied after loading, original bytes checked)
+- No screen flashes (owner 2026-10-22: remove the white flash on enemy kills; "jokes about it giving people
+  epilepsy"). The VBL ($5398) plays a colour list (*$25EA, one entry per frame, 0 ends) into palette 0: $25E6 white
+  1 frame (enemy kill at $1450; also $62A8), $167E white fade, $36E0/$49B4 white, $49E6 white fade strobing with
+  blue, $4AF2 red/dark-blue strobe every frame, $25EE multicolour strobe, $1A86 rainbow. NOPping only the kill
+  flash made the red strobe run longer (a kill used to cut it short), so the patch NOPs the palette write at
+  $53DA instead: lists run with the same timing, the background stays black. A/B over 500 gameplay frames:
+  identical except the 5 white frames. --flashes restores them. Left alone: colour 1 rainbow cycle in the VBL
+  ($5402, smooth), the load indicators at $87B0.. (boot).
+
 ## Emulation notes (src\machine.cpp)
 - Memory: 1 MB RAM, our TOS stubs at $FC0000 (traps = ILLEGAL opcodes handled in C, ACIA interrupt stub in
   hand-assembled 68000 that calls Kbdvbase()->ikbdsys while GPIP bit 4 is low, one ILLEGAL per vector for

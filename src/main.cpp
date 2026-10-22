@@ -27,6 +27,7 @@ struct Options {
   bool trace_tos = false;  // --trace-tos
   bool fullscreen = true;  // --window / --fullscreen
   bool match_refresh = true;  // --refresh=desktop: keep the desktop's refresh rate in fullscreen
+  game::Options game;       // --flashes: keep the original screen flashes
   bool headless = false;   // --headless: no window or audio (tests)
   int frames = 0;          // --frames=N: quit after N frames
   std::string wav;         // --wav=<file>: also write the audio to a WAV file (tests)
@@ -63,6 +64,7 @@ Options ParseArgs(int argc, char** argv) {
     else if (a == "--trace-tos") o.trace_tos = true;
     else if (a == "--fullscreen") o.fullscreen = true;
     else if (a == "--window") o.fullscreen = false;
+    else if (a == "--flashes") o.game.flashes = true;
     else if (Arg(a, "refresh", &v)) o.match_refresh = v != "desktop";
     else if (a == "--headless") o.headless = true;
     else LOG("unknown option %s", a.c_str());
@@ -222,6 +224,7 @@ int main(int argc, char** argv) {
     LOG("load failed: %s", error.c_str());
     return 1;
   }
+  game::ApplyPatches(machine, opt.game);
 
   SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {

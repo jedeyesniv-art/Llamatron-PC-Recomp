@@ -2,6 +2,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 #include "machine.h"
 
@@ -24,5 +25,11 @@ inline bool TwinStickAllowed(st::Machine& m) { return Mode(m) != 1; }
 
 // The game in progress (or starting) is the twin-stick one: $8616, set when the title is left.
 inline bool TwinStick(st::Machine& m) { return m.Ram()[m.TextBase() + 0x8616 + 1] != 0; }
+
+// Changes to the game's code, applied after loading (each checks the original bytes first).
+struct Options {
+  bool flashes = false;  // the background flashes and strobes (white on every kill...); original: on
+};
+void ApplyPatches(st::Machine& m, const Options& o);
 
 }  // namespace game

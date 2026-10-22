@@ -55,6 +55,7 @@ add_executable(llamatron WIN32
   src/ym2149.cpp
   src/disk.cpp
   src/input.cpp
+  src/game.cpp
   src/log.cpp
   src/crash.cpp)
 target_link_libraries(llamatron PRIVATE SDL3::SDL3-static musashi)
