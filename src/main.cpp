@@ -440,7 +440,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
         SDL_MouseButtonFlags mb = opt.headless ? 0 : SDL_GetMouseState(nullptr, nullptr);
         uint8_t buttons = uint8_t((mb & SDL_BUTTON_LMASK ? 2 : 0) | (mb & SDL_BUTTON_RMASK ? 1 : 0));
         // Scripted mouse and pad (tests): mleft, mright, mx<dx>, my<dy> (per frame); pad: gl<degrees>@<deflection>
-        // (left stick), gry<value> (right stick y), glt, grt (triggers), grb.
+        // (left stick), gry<value> (right stick y), glt, grt (triggers), gx, gy, glb, grb (buttons).
         grid::TestPad tp;
         bool test_pad = false;
         for (const auto& p : opt.presses) {
@@ -453,7 +453,10 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
           if (p.what.rfind("gry", 0) == 0) tp.ry = float(std::atof(p.what.c_str() + 3)), test_pad = true;
           if (p.what == "glt") tp.lt = 1, test_pad = true;
           if (p.what == "grt") tp.rt = 1, test_pad = true;
-          if (p.what == "grb") tp.rb = true, test_pad = true;
+          if (p.what == "gx") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_WEST, test_pad = true;
+          if (p.what == "gy") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_NORTH, test_pad = true;
+          if (p.what == "glb") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, test_pad = true;
+          if (p.what == "grb") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, test_pad = true;
           if (p.what == "mleft") buttons |= 2;
           if (p.what == "mright") buttons |= 1;
           if (p.what.rfind("mx", 0) == 0) mouse_x += float(std::atof(p.what.c_str() + 2));

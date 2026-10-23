@@ -89,9 +89,11 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   Control = "voluntary martyrdom" (lose a life, blow up the vulnerable enemies, ghost ship fights on); letters
   a-z = a sound each ($4D870). Built-in manual "game secrets" at $10EC3.
 - Pad (owner 2026-10-22, src\gridrunner.cpp): left stick moves the pointer (= ship) through a response curve
-  (written straight into $54DD0/$54DD2), d-pad slowly; RT/A = left button (fire/click), LT = right button
+  (written straight into $54DD0/$54DD2), d-pad slowly; RT/A = left button (fire/click), LT/X = right button
   (nosecone: held = attached); right stick flicked up/down = one left Shift/Alt tap (one step towards up/down;
-  owner: "like a button", no repeat while held; next flick after it returns below 30%); RB = Control; Back/Start
+  owner: "like a button", no repeat while held; next flick after it returns below 30%); RB/LB = one step up/down
+  per press; Y = Control (2026-10-23; was RB). X/Y/LB/RB only in the game, not on the title (menu shortcuts there)
+  or the shortcut screens; Back/Start
   = pause/resume; B = pause: quit to title (Q), title: quit (twice). Keyboard: every key goes to the ST.
   Tunables in userdata\settings.txt, reread while running (src\settings.cpp): grid_stick_speed (6 px/frame at
   full deflection), grid_stick_curve (2 = quadratic), grid_stick_deadzone (0.15), grid_dpad_speed (1),
@@ -136,8 +138,9 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   sum of bytes 0..$216 ($193AC); a bad checksum = the file is ignored silently (the built-in table $49520 is
   used, which lacks the disk's "jon 55323"). Never hand-edit without fixing the checksum.
 - Test inputs: --press=N:mleft|mright[:frames], mx<dx>, my<dy> (per frame); pad: gl<deg>@<deflection>,
-  gry<value>, glt, grt, grb; pad buttons as for Llamatron (padback, padb...). Flow: mleft at 600 (Llamasoft
+  gry<value>, glt, grt, gx, gy, glb, grb; pad buttons as for Llamatron (padback, padb...). Flow: mleft at 600 (Llamasoft
   core screen), 1500 (title), 2000 (LET'S BLAST), 2400 (intro), then play (left held = fire).
+  --watch takes text offsets here too: runtime address - $10100 (nosecone direction $49130 -> 39030).
 
 ## The program (TRON1MEG.PRG)
 - 263 KB self-extractor: a 38-byte mover, an LZ77 stream (unpacks to basepage+$100, its own text start), a

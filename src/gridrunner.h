@@ -49,10 +49,10 @@ void SetHideEntryLane(bool on);
 // Forgets the state of the last game (before starting another).
 void Reset();
 
-// Tests: a scripted pad for the next Update (sticks -1..1, triggers 0..1, RB).
+// Tests: a scripted pad for the next Update (sticks -1..1, triggers 0..1, buttons: bit = SDL_GamepadButton).
 struct TestPad {
   float lx = 0, ly = 0, ry = 0, lt = 0, rt = 0;
-  bool rb = false;
+  uint32_t buttons = 0;
 };
 void SetTestPad(const TestPad& t);
 

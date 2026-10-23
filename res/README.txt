@@ -70,9 +70,10 @@ SUPER GRIDRUNNER CONTROLS - XBOX PAD
 In the game:
   Left stick      move the ship (the further you push, the faster; d-pad: slowly)
   RT or A         fire
-  LT (hold)       call the nosecone back to the ship
-  Right stick     flick up or down to change the nosecone's shot direction
-  RB              voluntary martyrdom (costs a life)
+  LT or X (hold)  call the nosecone back to the ship
+  RB / LB         turn the nosecone's shot direction one step up / down
+  Right stick     the same: flick up or down
+  Y               voluntary martyrdom (costs a life)
   Back or Start   pause; B on the pause screen quits to the title
 
 Title screen:

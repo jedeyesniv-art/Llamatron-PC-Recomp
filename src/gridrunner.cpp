@@ -63,6 +63,7 @@ std::vector<Tap> g_taps;
 float g_px = 0, g_py = 0;  // pointer movement not applied yet (sub-pixel)
 uint8_t g_held_keys = 0;   // bit 2 Control (held by the pad)
 int g_flick = 0;           // right stick: -1 up, 1 down, 0 back near the centre (ready for the next flick)
+bool g_lb = false, g_rb = false;  // shoulder buttons last frame (one nosecone step per press)
 uint64_t g_quit_armed_ms = 0;
 bool g_quit = false;
 bool g_running = false;  // the game has unpacked itself and reached its title
@@ -342,7 +343,7 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
       return SDL_GetGamepadAxis(pad, a) / 32767.0f;
     };
     auto button = [&](SDL_GamepadButton b) {
-      return test ? b == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER && g_test_pad.rb : SDL_GetGamepadButton(pad, b);
+      return test ? (g_test_pad.buttons >> b & 1) != 0 : SDL_GetGamepadButton(pad, b);
     };
     // The pointer: left stick through the curve, d-pad at a fixed slow speed.
     float vx, vy;
@@ -366,19 +367,29 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     }
     if (axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 0.4f || (button(SDL_GAMEPAD_BUTTON_SOUTH) && !shortcuts))
       buttons |= 2;  // left
-    if (axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 0.4f) buttons |= 1;                                      // right
+    // In the game (not the title, whose X / Y / LB are menu shortcuts, nor the shortcut screens).
+    bool in_game = g_running && GameState(*m) != kTitle && !shortcuts;
+    if (axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 0.4f || (button(SDL_GAMEPAD_BUTTON_WEST) && in_game))
+      buttons |= 1;  // right: the nosecone back to the ship while held
     // Nosecone shot direction: one step per flick of the right stick up or down, like a button (the game would
     // repeat while its key is held: a 2-frame tap is one step); the stick must come back near the centre first.
+    // RB / LB: one step up / down per press.
     float ry = axis(SDL_GAMEPAD_AXIS_RIGHTY);
+    auto step = [&](bool up) { TapKey(m, up != g_tune.fire_mode_swap ? kLShift : kAlt, 2); };
     if (g_flick == 0 && std::fabs(ry) > 0.5f) {
       g_flick = ry < 0 ? -1 : 1;
-      bool towards_up = (g_flick < 0) != g_tune.fire_mode_swap;
-      TapKey(m, towards_up ? kLShift : kAlt, 2);
+      step(g_flick < 0);
     } else if (g_flick != 0 && std::fabs(ry) < 0.3f) {
       g_flick = 0;
     }
-    Hold(m, 2, kCtrl, button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER));
+    bool lb = button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) && in_game;
+    bool rb = button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) && in_game;
+    if (rb && !g_rb) step(true);
+    if (lb && !g_lb) step(false);
+    g_lb = lb, g_rb = rb;
+    Hold(m, 2, kCtrl, button(SDL_GAMEPAD_BUTTON_NORTH) && in_game);  // voluntary martyrdom
   } else {
+    g_lb = g_rb = false;
     Hold(m, 2, kCtrl, false);
   }
   // The front virtual click (after any name entry animation has finished).
@@ -434,6 +445,7 @@ void Reset() {
   g_px = g_py = 0;
   g_held_keys = 0;
   g_flick = 0;
+  g_lb = g_rb = false;
   g_quit_armed_ms = g_title_hint_ms = 0;
   g_quit = g_running = g_hooked = g_test = false;
   g_clicks.clear();
