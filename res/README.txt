@@ -5,14 +5,15 @@ Jeff Minter's Llamatron: 2112 (Atari ST, Llamasoft 1991) and Super Gridrunner, t
 disk, running natively on Windows with modern pad controls. The original game code runs unchanged inside a
 small Atari ST built into this program, plus a few optional improvements listed below.
 
-Llamatron is (c) 1991 Jeff Minter / Llamasoft. It was released as shareware; this program contains no part
-of the games - it plays your own copy of the game disk. The disk image is on Jeff Minter's site.
+Llamatron is (c) 1991 Jeff Minter / Llamasoft. It was released as shareware ("please spread this game
+everywhere"); the original Atari ST disk image, as Jeff Minter distributes it on his site, is included in the
+"game" folder.
 
 
 SETTING UP
 ----------
-Put your Llamatron disk image (the .msa or .st file of the Atari ST disk) into the "game" folder next to
-llamatron.exe, then run llamatron.exe. Nothing to install.
+Unpack the zip anywhere and run llamatron.exe. Nothing to install. (The game is the disk image in the "game"
+folder; any other Llamatron .msa or .st disk image put there works too.)
 
 Settings, high scores (SCORES.YAK, HISCORES.COW) and a log file are kept in the "userdata" folder next to the
 program.

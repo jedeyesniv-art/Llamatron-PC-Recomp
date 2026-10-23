@@ -1,8 +1,8 @@
 # Builds Release and assembles the portable folder dist\Llamatron\:
 #   llamatron.exe (static runtime: no DLLs), README.txt, licenses\, an empty game\ folder (+ the disk image with
 #   -GameData). The PDB goes to dist\symbols\.
-# -Release also writes dist\release\Llamatron-<version>-windows.zip (no game files, no userdata - checked) and
-# Llamatron-<version>-symbols.zip.
+# -Release also writes dist\release\Llamatron-<version>-windows.zip (with the game disk: -GameData, default
+# Private\Llamatron ST.msa; no unpacked game files, userdata or logs - checked) and Llamatron-<version>-symbols.zip.
 #
 # Usage: powershell -ExecutionPolicy Bypass -File Tools\package_portable.ps1 [-GameData <.msa/.st file>] [-SkipBuild] [-Release]
 param(
@@ -49,6 +49,8 @@ Copy-Item (Join-Path $repo "build\llamatron.pdb") $symbols
 Write-Host "portable folder: $dist (version $version)"
 
 if ($Release) {
+    if (-not $GameData) { $GameData = Join-Path $repo "Private\Llamatron ST.msa" }
+    if (-not (Test-Path $GameData)) { throw "game disk $GameData not found" }
     $out = Join-Path $repo "dist\release"
     New-Item -ItemType Directory -Force $out | Out-Null
     $stage = Join-Path $out "stage\Llamatron"
@@ -57,9 +59,9 @@ if ($Release) {
     Copy-Item $exe, (Join-Path $repo "res\README.txt") $stage
     Copy-Item -Recurse (Join-Path $dist "licenses") $stage
     New-Item -ItemType Directory -Force (Join-Path $stage "game") | Out-Null
-    Set-Content -Path (Join-Path $stage "game\PUT YOUR LLAMATRON DISK IMAGE HERE.txt") -Value "Copy your Llamatron disk image (.msa or .st) into this folder. It has both games: Llamatron and Super Gridrunner. You can download it from Jeff Minter's site."
-    # Leak check: no game files, no user data.
-    $bad = Get-ChildItem -Recurse $stage | Where-Object { $_.Extension -in ".msa", ".st", ".prg", ".yak", ".cow", ".bin", ".log" -or $_.FullName -match "\\userdata" }
+    Copy-Item $GameData (Join-Path $stage "game")
+    # Leak check: the disk image only - no unpacked game files, no user data.
+    $bad = Get-ChildItem -Recurse $stage | Where-Object { $_.Extension -in ".prg", ".yak", ".cow", ".bin", ".log" -or $_.FullName -match "\\userdata" }
     if ($bad) { throw "release would contain: $($bad.FullName -join ', ')" }
     $zip = Join-Path $out "Llamatron-$version-windows.zip"
     Compress-Archive -Path $stage -DestinationPath $zip -Force

@@ -84,8 +84,8 @@ struct Disk {
   SDL_FColor band;  // the label's printed stripe
 };
 const Disk kDisks[2] = {
-    {"LLAMATRON", {0.10f, 0.16f, 0.36f, 1}, {0.95f, 0.55f, 0.12f, 1}},
-    {"SUPER GRIDRUNNER", {0.13f, 0.13f, 0.15f, 1}, {0.62f, 0.25f, 0.85f, 1}},
+    {"LLAMATRON", {0.12f, 0.24f, 0.62f, 1}, {0.95f, 0.55f, 0.12f, 1}},
+    {"SUPER GRIDRUNNER", {0.60f, 0.10f, 0.10f, 1}, {0.62f, 0.25f, 0.85f, 1}},
 };
 
 constexpr float kDiskX = 62, kFloorY = -60;
