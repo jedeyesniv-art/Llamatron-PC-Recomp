@@ -1,7 +1,7 @@
-# Llamatron: native PC port
+# Llamatron 2112 and Super Gridrunner: native PC port
 
-Jeff Minter's **Llamatron: 2112** (Atari ST, Llamasoft 1991) and **Super Gridrunner**, the bonus game on the
-same disk, as a native Windows app with modern pad controls: twin-stick play on an Xbox controller, smooth
+Jeff Minter's **Llamatron: 2112** (Atari ST, Llamasoft 1991) and **Super Gridrunner**, as a native Windows 
+app with modern pad controls: twin-stick play on an Xbox controller, smooth
 50 fps, no screen flashes and an optional CRT look. The original 68000 game code runs unchanged on the
 [Musashi](https://github.com/kstenerud/Musashi) interpreter inside a small Atari ST (hardware and TOS emulated
 at a high level), with SDL 3 for video, sound and input. A hobby project, not affiliated with or endorsed by
