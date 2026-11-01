@@ -47,6 +47,7 @@ struct Options {
   int cpu_speed = 8;        // --cpu=N: CPU speed multiple during play (1 = the ST's 8 MHz)
   int cpu_all = 0;          // --cpu-all=N: this CPU speed all the time (tests: is a game timed by its VBL?)
   int cpu_all_from = 0;     // --cpu-all-from=F: ... from frame F only
+  int watch_step = 10;      // --watch-step=N: log the --watch words every N frames
   // --aspect=square (320x200 with square pixels: 16:10) or pal (as on a UK TV: an ST pixel is 8 MHz wide on a
   // line where square pixels are 14.75 MHz, and two TV lines tall -> pixel aspect 0.92, picture ~1.48:1)
   bool pal_aspect = true;
@@ -120,6 +121,7 @@ Options ParseArgs(int argc, char** argv) {
                          uint16_t(std::strtoul(v.c_str() + c2 + 1, nullptr, 16))});
     }
     else if (Arg(a, "cpu-all-from", &v)) o.cpu_all_from = std::atoi(v.c_str());
+    else if (Arg(a, "watch-step", &v)) o.watch_step = std::max(1, std::atoi(v.c_str()));
     else if (Arg(a, "cpu-all", &v)) o.cpu_all = std::atoi(v.c_str());
     else if (Arg(a, "palette-log", &v)) {
       o.palette_from = std::atoi(v.c_str());
@@ -587,7 +589,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         }
         LOG("frame %d palette:%s", frame, line.c_str());
       }
-      if (!opt.watches.empty() && frame % 10 == 0) {
+      if (!opt.watches.empty() && frame % opt.watch_step == 0) {
         std::string line;
         for (uint32_t w : opt.watches) {
           const uint8_t* at = machine.Ram() + machine.TextBase() + w;

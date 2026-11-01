@@ -129,7 +129,12 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   table ($42D10 -> flags $42D91, test $1B7AA): p pause, o resume ($10508 waits), x abort to the menu (play
   only; $41AC0 = 4), cheat keys l / n behind $11114. Joystick 1. Other hooks: $11252 end-of-wave bonus,
   $193F0 high score name (joystick letter grid): both VBL-timed (the name cursor ends on the same letter at x1
-  and x8), boosted too (play_value2 / 3). --cpu-all-from=F: force --cpu-all only from frame F (tests). Logic in the VBL, the main loop draws
+  and x8), boosted too (play_value2 / 3). --cpu-all-from=F: force --cpu-all only from frame F (tests).
+  Smoothness (owner 2026-11-01: "feels like a lot of slowdown"): measured - logic every VBL (scroll $384A8 -1
+  a frame), objects (table $384AC, $80 each: +6 x) move 0.4-0.75 px a frame in sub-pixel steps, 50 distinct
+  frames a second, the owner's own log: 50 drawn / 100 presents a second, gaps <= 12.3 ms; the host runs it
+  25x faster than real time. Scroll speed 1 << $407BC is fixed per level ($118E0 +1 is in the cheat code).
+  So the pace is the game's own. --watch-step=N logs --watch every N frames. Logic in the VBL, the main loop draws
   ($4505C hook, $113FE in play): at 8 MHz 13-19 drawn frames/s in play, x8 -> 50; scroll $384A8 identical
   x1 vs x8 (scores differ: random numbers and per-frame collisions). Pad: stick = joystick 1, A/X/RT/Start
   fire, Back pause, B paused = O then X (menu), B twice = disks; calm background in play.
