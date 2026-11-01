@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -237,8 +238,44 @@ void Launcher::ChangeOption(int dir) {
   games::SetOption(g, o.key, (games::OptionValue(g, o.key) + dir + n) % n);
 }
 
+void Launcher::ShowText(const std::vector<std::string>& lines) {
+  text_ = lines;
+  text_top_ = 0;
+  info_ = false;
+}
+
+void Launcher::ScrollText(int lines) {
+  text_top_ = std::clamp(text_top_ + lines, 0, std::max(0, int(text_.size()) - 20));
+}
+
 Action Launcher::HandleEvent(const SDL_Event& e) {
   if (launching_ >= 0 || Count() == 0) return Action::kNone;
+  if (!text_.empty()) {  // the text viewer: up / down, pages, back
+    if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+      switch (e.gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP: ScrollText(-1); break;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN: ScrollText(1); break;
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: ScrollText(-18); break;
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: ScrollText(18); break;
+        case SDL_GAMEPAD_BUTTON_EAST: case SDL_GAMEPAD_BUTTON_NORTH: case SDL_GAMEPAD_BUTTON_BACK:
+        case SDL_GAMEPAD_BUTTON_WEST: text_.clear(); info_ = true; break;
+        default: break;
+      }
+    } else if (e.type == SDL_EVENT_KEY_DOWN) {
+      switch (e.key.scancode) {
+        case SDL_SCANCODE_UP: ScrollText(-1); break;
+        case SDL_SCANCODE_DOWN: ScrollText(1); break;
+        case SDL_SCANCODE_PAGEUP: ScrollText(-18); break;
+        case SDL_SCANCODE_PAGEDOWN: case SDL_SCANCODE_SPACE: ScrollText(18); break;
+        case SDL_SCANCODE_ESCAPE: case SDL_SCANCODE_BACKSPACE: text_.clear(); info_ = true; break;
+        default: break;
+      }
+    } else if (e.type == SDL_EVENT_MOUSE_WHEEL) {
+      ScrollText(e.wheel.y > 0 ? -3 : 3);
+    }
+    return Action::kNone;
+  }
+  const bool has_docs = size_t(selected_) < docs_.size() && docs_[size_t(selected_)];
   const games::Game& g = (*games_)[size_t(selected_)];
   const bool options = info_ && !g.options.empty();
   auto back = [&]() {
@@ -252,7 +289,19 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
   };
   auto play = [&]() {
     info_ = false;
+    want_docs_ = false;
     launching_ = 0;
+  };
+  // X on the how-to-play page: the docs (a reader runs like a game; text comes back as kDocs at once).
+  auto docs = [&]() {
+    if (!(*games_)[size_t(selected_)].docs_program.empty()) {
+      info_ = false;
+      want_docs_ = true;
+      launching_ = 0;
+      return Action::kNone;
+    }
+    want_docs_ = true;
+    return Action::kDocs;
   };
   auto left_right = [&](int dir) { options ? ChangeOption(dir) : Step(dir); };
   auto up_down = [&](int dir) {
@@ -273,7 +322,10 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
       case SDL_GAMEPAD_BUTTON_SOUTH:
       case SDL_GAMEPAD_BUTTON_START: play(); break;
       case SDL_GAMEPAD_BUTTON_NORTH: toggle_info(); break;
-      case SDL_GAMEPAD_BUTTON_WEST: if (crt::Available()) crt::Toggle(); break;
+      case SDL_GAMEPAD_BUTTON_WEST:
+        if (info_ && has_docs) return docs();
+        if (crt::Available()) crt::Toggle();
+        break;
       case SDL_GAMEPAD_BUTTON_EAST:
       case SDL_GAMEPAD_BUTTON_BACK: return back();
       default: break;
@@ -287,6 +339,7 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
       case SDL_SCANCODE_RETURN: case SDL_SCANCODE_SPACE: play(); break;
       case SDL_SCANCODE_F1: case SDL_SCANCODE_I: case SDL_SCANCODE_H: case SDL_SCANCODE_TAB: toggle_info(); break;
       case SDL_SCANCODE_F9: case SDL_SCANCODE_C: if (crt::Available()) crt::Toggle(); break;
+      case SDL_SCANCODE_X: if (info_ && has_docs) return docs(); break;
       case SDL_SCANCODE_ESCAPE: return back();
       default: break;
     }
@@ -306,7 +359,14 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
 Action Launcher::Update(SDL_Gamepad* pad, double dt) {
   time_ += dt;
   fade_in_ = std::min(1.0, fade_in_ + dt * 2);
-  if (pad && launching_ < 0 && Count()) {
+  if (pad && !text_.empty()) {  // the text viewer: the stick scrolls (repeating)
+    float y = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
+    if (std::fabs(y) > 0.5f) {
+      if (--text_latch_ <= 0) ScrollText(y < 0 ? -1 : 1), text_latch_ = std::fabs(y) > 0.9f ? 2 : 5;
+    } else {
+      text_latch_ = 0;
+    }
+  } else if (pad && launching_ < 0 && Count()) {
     const games::Game& g = (*games_)[size_t(selected_)];
     const bool options = info_ && !g.options.empty();
     float x = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
@@ -332,7 +392,7 @@ Action Launcher::Update(SDL_Gamepad* pad, double dt) {
   }
   if (launching_ >= 0) {
     launching_ += dt;
-    if (launching_ >= 0.75) return Action::kPlay;
+    if (launching_ >= 0.75) return want_docs_ ? Action::kDocs : Action::kPlay;
   }
   return Action::kNone;
 }
@@ -507,6 +567,10 @@ void Launcher::Render() {
       }
       lines.push_back("UP/DOWN pick   LEFT/RIGHT change");
     }
+    if (size_t(selected_) < docs_.size() && docs_[size_t(selected_)]) {
+      lines.push_back("");
+      lines.push_back("X  READ THE DOCS");
+    }
     int n = int(lines.size()), longest = 0;
     for (const std::string& l : lines) longest = std::max(longest, int(l.size()));
     float ts = std::max(1.0f, std::floor(std::min(w * 0.85f / (longest * 8), h * 0.7f / (n * 12))));
@@ -527,6 +591,24 @@ void Launcher::Render() {
                              : SDL_Color{200, 200, 210, 255};
       DrawText(lines[size_t(i)].c_str(), panel.x + 24 * ts / 2, panel.y + 20 * ts / 2 + i * 12 * ts, ts, c, false);
     }
+  }
+
+  if (!text_.empty()) {  // the text viewer
+    float ts = std::max(1.0f, std::floor(std::min(w * 0.9f / (82 * 8), h * 0.85f / (24 * 10))));
+    float pw = 82 * 8 * ts, ph = 24 * 10 * ts;
+    SDL_FRect panel{(w - pw) / 2, (h - ph) / 2, pw, ph};
+    SDL_SetRenderDrawBlendMode(r_, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r_, 0, 0, 0, 240);
+    SDL_RenderFillRect(r_, &panel);
+    SDL_SetRenderDrawColorFloat(r_, picked.band.r, picked.band.g, picked.band.b, 1);
+    SDL_RenderRect(r_, &panel);
+    for (int i = 0; i < 20 && text_top_ + i < int(text_.size()); ++i)
+      DrawText(text_[size_t(text_top_ + i)].c_str(), panel.x + 8 * ts, panel.y + (8 + i * 10) * ts, ts,
+               {210, 210, 220, 255}, false);
+    char foot[96];
+    std::snprintf(foot, sizeof(foot), "LINES %d-%d OF %d     UP/DOWN SCROLL   LB/RB PAGE   B BACK", text_top_ + 1,
+                  std::min(int(text_.size()), text_top_ + 20), int(text_.size()));
+    DrawText(foot, w / 2, panel.y + ph - 14 * ts, ts, {150, 150, 165, 255}, true);
   }
 
   // Fades: in at the start, out into the game.

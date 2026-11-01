@@ -282,7 +282,8 @@ struct Context {
   std::vector<float> wav;
   std::vector<games::Game> games;  // what the launcher offers
   const games::Game* game = nullptr;  // the launcher's game being run (null: --program of an unknown one)
-  std::string type_ahead;  // keys for the program's first console prompts (a crack's trainer questions)
+  std::string type_ahead;
+  std::string docs_keys;  // typed into a docs reader once it runs  // keys for the program's first console prompts (a crack's trainer questions)
 };
 
 constexpr int kRate = 48000;
@@ -355,15 +356,18 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   input::SetMode(mode);
   trip::Reset();
   pad::Reset();
+  stgames::SetProgram(program_name);
   if (mode == input::Mode::kRmc) stgames::Start(stgames::Game::kRmc);
   if (mode == input::Mode::kAndes) stgames::Start(stgames::Game::kAndes);
   if (mode == input::Mode::kDefender2) stgames::Start(stgames::Game::kDefender2);
   if (mode == input::Mode::kHardcore) stgames::Start(stgames::Game::kHardcore);
+  if (mode == input::Mode::kDocs) stgames::StartDocs(c.docs_keys);
   if (!opt.music.empty()) music::StartTestFile(opt.music);
   if (opt.trip_music >= 0) trip::SetMusicMode(opt.trip_music);
   grid::SetHideEntryLane(!opt.entry_lane);
   machine.SetSampleRate(kRate);
   machine.TypeAhead(c.type_ahead);
+  machine.SetSte((c.game && c.game->ste) || program_name == "REVSTE1M.TOS");
   LOG("analog aim %s, cpu speed during play x%d", game::AnalogAim() ? "on" : "off", opt.cpu_speed);
 
   SDL_Window* window = c.window;
@@ -507,7 +511,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           if (test_pad) trip::SetTestPad({tp.lx, tp.ly, tp.rx, tp.ry, tp.lt, tp.rt, tp.buttons});
           trip::Update(&machine, input::FirstPad(), dx, dy, buttons);
         } else if (mode == input::Mode::kRmc || mode == input::Mode::kAndes || mode == input::Mode::kDefender2 ||
-                   mode == input::Mode::kHardcore) {
+                   mode == input::Mode::kHardcore || mode == input::Mode::kDocs) {
           stgames::Update(&machine, dx, dy, buttons);
           int hold;
           float cap, release;
@@ -730,7 +734,7 @@ bool Install(Context& c, const games::Game& g, const std::map<std::string, disk:
 }
 
 // A game from the launcher's list: its disk (or folder), its save folder, installed there first if it needs it.
-GameEnd RunEntry(Context& c, const games::Game& g, bool direct) {
+GameEnd RunEntry(Context& c, const games::Game& g, bool direct, bool docs = false) {
   auto fail = [&](const std::string& msg) {
     LOG("%s", msg.c_str());
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, g.name.c_str(), msg.c_str(), c.window);
@@ -749,9 +753,11 @@ GameEnd RunEntry(Context& c, const games::Game& g, bool direct) {
   if (!g.install.empty() && !fs::exists(c.save_dir / g.program, ec) && !Install(c, g, files)) {
     end = fail(g.name + " couldn't be installed from " + g.source.string());
   } else {
-    c.type_ahead = games::ConsoleAnswers(g);
-    c.game = &g;
-    end = RunGame(c, games::ProgramToRun(g), direct, g.mode);
+    c.type_ahead = docs ? std::string() : games::ConsoleAnswers(g);
+    c.game = docs ? nullptr : &g;  // (no faster CPU for the reader)
+    c.docs_keys = g.docs_keys;
+    end = docs ? RunGame(c, g.docs_program, direct, input::Mode::kDocs)
+               : RunGame(c, games::ProgramToRun(g), direct, g.mode);
     c.type_ahead.clear();
     c.game = nullptr;
   }
@@ -760,14 +766,14 @@ GameEnd RunEntry(Context& c, const games::Game& g, bool direct) {
 }
 
 // The start screen until the player picks a game (kPlay) or quits.
-bool RunLauncher(Context& c, launcher::Launcher& l) {
+launcher::Action RunLauncher(Context& c, launcher::Launcher& l) {
   Options& opt = *c.opt;
   SDL_SetRenderLogicalPresentation(c.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
   uint64_t last = SDL_GetTicksNS();
   for (int frame = 0;; ++frame) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
-      if (e.type == SDL_EVENT_QUIT) return false;
+      if (e.type == SDL_EVENT_QUIT) return launcher::Action::kQuit;
       if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat &&
           (e.key.scancode == SDL_SCANCODE_F11 ||
            (e.key.scancode == SDL_SCANCODE_RETURN && (e.key.mod & SDL_KMOD_ALT)))) {
@@ -775,25 +781,55 @@ bool RunLauncher(Context& c, launcher::Launcher& l) {
         continue;
       }
       input::HandleEvent(e, nullptr);  // pads connecting
-      if (l.HandleEvent(e) == launcher::Action::kQuit) return false;
+      launcher::Action a = l.HandleEvent(e);
+      if (a == launcher::Action::kQuit || a == launcher::Action::kDocs) return a;
     }
     for (const auto& p : opt.lpresses) {  // scripted (tests): pad buttons at launcher frames
       if (p.frame != frame) continue;
       SDL_Event be{};
       be.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
       be.gbutton.button = uint8_t(SDL_GetGamepadButtonFromString(p.what.c_str()));
-      if (l.HandleEvent(be) == launcher::Action::kQuit) return false;
+      launcher::Action a = l.HandleEvent(be);
+      if (a == launcher::Action::kQuit || a == launcher::Action::kDocs) return a;
     }
     uint64_t now = SDL_GetTicksNS();
     double dt = std::min(0.1, double(now - last) / 1e9);
     last = now;
-    if (l.Update(input::FirstPad(), dt) == launcher::Action::kPlay) return true;
+    launcher::Action a = l.Update(input::FirstPad(), dt);
+    if (a == launcher::Action::kPlay || a == launcher::Action::kDocs) return a;
     l.Render();
     auto shot = opt.lshots.find(frame);
     if (shot != opt.lshots.end()) SaveRenderShot(c.renderer, shot->second);
     SDL_RenderPresent(c.renderer);
-    if (opt.lframes && frame >= opt.lframes) return false;
+    if (opt.lframes && frame >= opt.lframes) return launcher::Action::kQuit;
   }
+}
+
+// A text file from an ST (CR LF lines, maybe tabs), as lines for the launcher's viewer (80 columns, wrapped).
+std::vector<std::string> TextLines(const disk::Bytes& b) {
+  std::vector<std::string> lines(1);
+  for (uint8_t ch : b) {
+    if (ch == '\n') {
+      lines.emplace_back();
+    } else if (ch == '\t') {
+      do lines.back() += ' '; while (lines.back().size() % 8);
+    } else if (ch >= 32 && ch < 127) {
+      if (lines.back().size() >= 80) lines.emplace_back();
+      lines.back() += char(ch);
+    }
+  }
+  return lines;
+}
+
+// A game's text docs: in its save folder (an installer wrote it), else on its disk. Empty if none.
+disk::Bytes DocsText(const Context& c, const games::Game& g) {
+  if (g.docs_text.empty()) return {};
+  std::error_code ec;
+  fs::path saved = games::SaveDir(g, c.save_dir) / g.docs_text;
+  if (fs::exists(saved, ec)) return disk::ReadHostFile(saved.string());
+  std::map<std::string, disk::Bytes> files = games::ReadSource(g.source, nullptr);
+  auto it = files.find(g.docs_text);
+  return it == files.end() ? disk::Bytes{} : it->second;
 }
 
 // --program: a game we know runs as from the launcher (its controls and save folder); anything else from --disk
@@ -883,11 +919,28 @@ int main(int argc, char** argv) {
   } else {
     launcher::Launcher l(c.renderer, &c.games);
     l.Enter(0);
-    while (RunLauncher(c, l)) {
+    auto docs_available = [&]() {
+      std::vector<bool> v;
+      for (const games::Game& g : c.games) {
+        std::error_code ec;
+        v.push_back(!g.docs_program.empty() || !DocsText(c, g).empty());
+      }
+      return v;
+    };
+    l.SetDocsAvailable(docs_available());
+    for (;;) {
+      launcher::Action a = RunLauncher(c, l);
+      if (a == launcher::Action::kQuit) break;
       int game = l.Selected();
-      GameEnd end = RunEntry(c, c.games[size_t(game)], false);
+      const games::Game& g = c.games[size_t(game)];
+      if (a == launcher::Action::kDocs && g.docs_program.empty()) {  // a text file: shown by the launcher
+        l.ShowText(TextLines(DocsText(c, g)));
+        continue;
+      }
+      GameEnd end = RunEntry(c, g, false, a == launcher::Action::kDocs);
       if (end == GameEnd::kQuitApp) break;
       l.Enter(game);
+      l.SetDocsAvailable(docs_available());  // (an install may have written a text file)
     }
   }
 

@@ -124,6 +124,18 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   --cpu-all=N forces a speed for a whole run (tests). Machine::TypeAhead = keys in the console buffer before the
   program asks (crack prompts). --palette-log=N:M. Tools: copy Tools\dis.py as d68.py elsewhere and run it on
   a --dump (runtime addresses).
+- RMC 1 MB STE (owner 2026-11-01, Privateevenge_of_the_mutant_camels_1mb_ste_[no_publisher].zip ->
+  Private
+ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, games.cpp). A Pasti
+  .stx (disk.cpp StxToRaw; Tools\stx_to_st.py) with REVSTE1M.TOS + README.TXT (Yak's notes) in a folder
+  (ReadFiles lists files in folders by name now). Needs STE DMA sound ($FF8900-$FF8921: control, frame
+  start / end, counter, mode: rate + mono; mixed in Sync, MixDma) and the Microwire ($FF8922 / 4: the mask
+  reads back; it waits for that), STE colours (4th bit, only for games marked ste in the registry). Same
+  code, other addresses: hook $3DD3E, title $102BC, menus $1084A, play $111DE, pause $1056C, bonus $112A2,
+  name $194A8; keys as the 512K one (check $1AEF4, flags $3DCB7). The camel animates every 1-2 frames at
+  x8 (512K: every 8) - the owner's jerky camel. 15-19 drawn frames/s at x1, x8 -> 50. Docs: README.TXT
+  from the disk in the launcher's viewer. stgames::SetProgram picks the addresses. Unhandled I/O reads and
+  writes are logged once per address now ("I/O read / write of unhandled").
 - RMC (REVENGE.TOS, D-Bug 28): VBL $1B4B6 calls the hook at $42E18: $1118E play (also the attract demo),
   $10526 pause, $10294 title, $107FA menus; colour-0 flash list *$4269C (written at $1B502). Keys via its own
   table ($42D10 -> flags $42D91, test $1B7AA): p pause, o resume ($10508 waits), x abort to the menu (play
@@ -188,6 +200,12 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   frame, curve 2), right stick = the pointer at that spot, A / RT side lasers, Y puck intelligence, Back
   pause, B twice = disks. (Machine::SetCalmBackground has hold / cap / release per game, stgames::CalmStyle;
   Hardcore no longer uses it: its own strobe switch is better.)
+- Docs (2026-11-01): Game::docs_program (a reader on the disk: DOX.TOS for the 512K RMC, READ_ME.PP for
+  Defender 2 - The Alien's displayer, the crack's notes and the mouse controls -, DOC100E.PRG + typed "b"
+  for Hardcore) runs in input mode kDocs (stgames: up / down = cursor keys repeating, LB / RB = Shift +
+  cursor, A Return, Y Help, B = back to the disks); Game::docs_text (Trip's README.DOC in its save folder,
+  the STE RMC's README.TXT on its disk) is shown by the launcher (ShowText: up / down, LB / RB, B). The
+  how-to-play page shows "X READ THE DOCS" (X = the docs there, CRT elsewhere). Andes: no docs on the disk.
 - Console (2026-11-01, plan A3): Machine::ConsoleOut = TOS's VT52 console (Cconws, Cconout, Crawio
   write, Bconout 2 / 5, Cconin echo) drawn into the logical screen, low resolution 40 x 25, glyphs from
   SDL's debug font header (third_party/SDL/src/render/SDL_render_debug_font.h, public domain VGA font; bit 0 =

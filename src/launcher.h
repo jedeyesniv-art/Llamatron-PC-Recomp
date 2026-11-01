@@ -12,7 +12,7 @@
 
 namespace launcher {
 
-enum class Action { kNone, kPlay, kQuit };
+enum class Action { kNone, kPlay, kQuit, kDocs };
 
 class Launcher {
  public:
@@ -27,6 +27,10 @@ class Launcher {
   // Once per displayed frame: the pad's stick, animation. Returns kPlay once the "insert disk" animation is done.
   Action Update(SDL_Gamepad* pad, double dt);
   void Render();
+  // The picked game's text docs (shown over the launcher until B / Y / Esc).
+  void ShowText(const std::vector<std::string>& lines);
+  // Whether the picked game has docs at all (a reader program, or a text file that exists).
+  void SetDocsAvailable(std::vector<bool> available) { docs_ = std::move(available); }
 
  private:
   int Count() const { return int(games_->size()); }
@@ -50,6 +54,12 @@ class Launcher {
   double fade_in_ = 0;      // 0..1 at the start
   double launching_ = -1;   // >= 0: the "insert disk" animation runs (seconds)
   bool info_ = false;       // the how-to-play page is up
+  bool want_docs_ = false;  // the launch is for the docs, not the game
+  std::vector<bool> docs_;
+  std::vector<std::string> text_;  // the text viewer's lines (empty: not shown)
+  int text_top_ = 0;
+  int text_latch_ = 0;
+  void ScrollText(int lines);
   int option_row_ = 0;      // the option picked on it
   uint64_t quit_armed_ms_ = 0;
   int stick_latch_ = 0;     // stick held left / right: one move per push

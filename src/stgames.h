@@ -19,6 +19,7 @@
 #include <SDL3/SDL.h>
 
 #include <cstdint>
+#include <string>
 
 #include "machine.h"
 
@@ -42,7 +43,13 @@ namespace stgames {
 //   left stick = the pointer (relative, through a curve), right stick = the pointer at that spot of the field;
 //   A / RT side lasers (and click on the title), Y puck intelligence, Back pause / resume, B twice = disks.
 //   Strobes off at the start of play (hc_strobes=1 keeps them).
-enum class Game { kRmc, kAndes, kDefender2, kHardcore };
+// Docs: a document reader on a game's disk (D-Bug's displayers, The Alien's DOC displayer): up / down (d-pad
+// or stick, repeating) = cursor keys, LB / RB / LT / RT = Shift + cursor (pages), A Return, Y Help, B = back
+// to the disks at once. Keys given to StartDocs are typed first (a menu choice).
+enum class Game { kRmc, kAndes, kDefender2, kHardcore, kDocs };
+void StartDocs(const std::string& keys);
+// Which build is running (addresses differ: Revenge 512K / 1 MB STE).
+void SetProgram(const std::string& program);
 
 void Start(Game g);
 // Once per frame, after pad::Poll: pad and keyboard joystick -> the ST; the host mouse's movement and buttons

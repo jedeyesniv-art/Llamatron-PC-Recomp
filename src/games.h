@@ -29,7 +29,11 @@ struct Game {
   // game logic is timed by the VBL, so only the drawing speeds up. 0 = never.
   uint32_t play_at = 0, play_value = 0, play_value2 = 0, play_value3 = 0;  // any of these (0 = unused, but the first)
   bool play_word = false;  // play_at is a word, not a long
+  bool ste = false;        // an STE program (STE colours; DMA sound is always there)
   uint32_t play_vbl = 0;   // and the VBL vector ($70) is this (the game is running, not still loading)
+  // Its docs: a reader program on the disk (run like the game, docs controls; docs_keys typed into it first,
+  // e.g. a menu choice), or a plain text file in the save folder that the launcher shows itself.
+  std::string docs_program, docs_keys, docs_text;
   bool user = false;    // a disk the player added (not one we know); its "program" option picks what runs
   // Choices on the how-to-play page (trainers, a user disk's program), saved as settings <id>_<key>.
   struct Option {

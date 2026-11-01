@@ -88,6 +88,7 @@ std::vector<Known> KnownGames() {
             "B TWICE         back to the disks", "",
             "L3 / F12   music off / pulse / full (hears the PC)",
             "Yak's README.DOC is in userdata\\tripatron."};
+  g.docs_text = "README.DOC";  // written by the installer
   add(g, "TRIP1.TOS", true);
 
   // Being worked on (PLAN-ST-GAMES.md): generic controls for now.
@@ -99,6 +100,17 @@ std::vector<Known> KnownGames() {
     w.help.insert(w.help.end(), std::begin(kGenericHelp), std::end(kGenericHelp));
     add(w, program);
   };
+  // Revenge, 1 MB STE version (REVSTE1M.TOS in a folder on a Pasti .stx disk): more sprite data, so a
+  // smoother camel (it animates every 1-2 frames, the 512K one every 8). Needs DMA sound and STE colours.
+  // Same code as the 512K one at other addresses: hook $3DD3E, play $111DE, pause $1056C, bonus $112A2,
+  // name $194A8. Docs: README.TXT on the disk (Yak's notes). Preferred: the first of an id found wins.
+  wip("rmc", "MUTANT CAMELS", "REVSTE1M.TOS", "REVENGE OF THE MUTANT CAMELS  -  JEFF MINTER (1MB STE)",
+      "Giant camels against the forces of evil.", {0.62f, 0.40f, 0.10f, 1}, {0.20f, 0.65f, 0.90f, 1});
+  k.back().game.play_at = 0x3DD3E, k.back().game.play_value = 0x111DE;
+  k.back().game.play_value2 = 0x112A2, k.back().game.play_value3 = 0x194A8;
+  k.back().game.mode = input::Mode::kRmc;
+  k.back().game.docs_text = "README.TXT";
+  k.back().game.ste = true;
   wip("rmc", "MUTANT CAMELS", "REVENGE.TOS", "REVENGE OF THE MUTANT CAMELS  -  JEFF MINTER",
       "Giant camels against the forces of evil.", {0.62f, 0.40f, 0.10f, 1}, {0.20f, 0.65f, 0.90f, 1});
   // VBL $1B4B6 calls the hook at $42E18: $1118E play, $11252 the end-of-wave bonus, $193F0 the high score name
@@ -106,6 +118,12 @@ std::vector<Known> KnownGames() {
   k.back().game.play_at = 0x42E18, k.back().game.play_value = 0x1118E;
   k.back().game.play_value2 = 0x11252, k.back().game.play_value3 = 0x193F0;
   k.back().game.mode = input::Mode::kRmc;
+  k.back().game.docs_program = "DOX.TOS";  // D-Bug's document displayer: Yak's notes
+  {  // the STE build (listed just before): the same page
+    Game& ste = k[k.size() - 2].game;
+    ste.help = k.back().game.help;
+    ste.help[0] = "REVENGE OF THE MUTANT CAMELS  -  1 MB STE";
+  }
   k.back().game.help = {"REVENGE OF THE MUTANT CAMELS  -  JEFF MINTER", "",
                         "Giant camels against the forces of evil.", "",
                         "LEFT STICK / D-PAD   move the camel",
@@ -121,6 +139,7 @@ std::vector<Known> KnownGames() {
   k.back().game.play_at = 0x4B086, k.back().game.play_value = 0, k.back().game.play_word = true;
   k.back().game.play_vbl = 0x4AF1A;
   k.back().game.mode = input::Mode::kDefender2;
+  k.back().game.docs_program = "READ_ME.PP";  // The Alien's DOC displayer: the crack's notes, the controls
   k.back().game.help = {"DEFENDER 2  -  JEFF MINTER, ARCADIA 1990", "",
                         "Defender, Defender II and Stargate.", "",
                         "TITLE: D-PAD + A    pick a game; then A = 1 player",
@@ -159,6 +178,7 @@ std::vector<Known> KnownGames() {
   // VBL $168F2 calls the hook at $338BA: $104EA title, $145D0 level intro, $10C82 play, $11242 paused.
   k.back().game.play_at = 0x338BA, k.back().game.play_value = 0x10C82;
   k.back().game.mode = input::Mode::kHardcore;
+  k.back().game.docs_program = "DOC100E.PRG", k.back().game.docs_keys = "b";  // B = Yak's notes for testers
   k.back().game.help = {"HARDCORE  -  YAK, 1992 (UNFINISHED)", "",
                         "A 5-level evaluation demo, never released.",
                         "Your four guns ride the edges of the field.",
@@ -177,7 +197,7 @@ std::vector<Known> KnownGames() {
 
 bool IsImage(const fs::path& p) {
   std::string ext = Upper(p.extension().string());
-  return ext == ".MSA" || ext == ".ST";
+  return ext == ".MSA" || ext == ".ST" || ext == ".STX";
 }
 
 // The files under a root, a few folders deep (disk images and everything else, for folder games).
@@ -307,9 +327,12 @@ std::vector<Game> Discover(const std::string& disk) {
   }
 
   std::vector<Game> out;
+  std::set<std::string> ids;  // a game found in two versions: the first listed (the better one) wins
   for (size_t i = 0; i < known.size(); ++i) {
-    LOG("%s: %s", known[i].game.name.c_str(), found[i] ? known[i].game.source.string().c_str() : "not found");
-    if (found[i]) out.push_back(std::move(known[i].game));
+    bool use = found[i] && ids.insert(known[i].game.id).second;
+    LOG("%s (%s): %s%s", known[i].game.name.c_str(), known[i].game.program.c_str(),
+        found[i] ? known[i].game.source.string().c_str() : "not found", found[i] && !use ? " (not used)" : "");
+    if (use) out.push_back(std::move(known[i].game));
   }
   for (Game& u : users) {
     LOG("another disk: %s (%zu programs)", u.source.string().c_str(), u.options[0].values.size());

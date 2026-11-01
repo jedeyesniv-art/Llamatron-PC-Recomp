@@ -62,7 +62,7 @@ class Machine {
   double FrameHz() const;
 
   // Audio produced so far (mono float at the rate given); the caller drains it.
-  void SetSampleRate(int rate) { ym_.SetSampleRate(rate); }
+  void SetSampleRate(int rate) { ym_.SetSampleRate(rate), sample_rate_ = rate; }
   std::vector<float>& Audio() { return audio_; }
 
   // Input: joystick states (port 0 = the mouse port, 1 = the joystick port) and ST key scancodes.
@@ -217,6 +217,25 @@ class Machine {
   // Shifter.
   uint8_t vbase_hi_ = 0, vbase_mid_ = 0, res_ = 0, sync_ = 2;
   uint16_t palette_[16] = {};
+  // STE DMA sound ($FF8900-$FF8921) and the Microwire ($FF8922 data, $FF8924 mask: reads back what was
+  // written, i.e. "sent"); the LMC1992 volume / tone it talks to isn't modelled (full volume).
+  uint8_t ste_snd_[0x100] = {};
+  bool dma_on_ = false;
+  double dma_pos_ = 0;  // the address being played (fractional: the rate differs from ours)
+  uint32_t dma_end_ = 0;
+  int sample_rate_ = 48000;
+  void DmaStart();
+  void MixDma(size_t from);  // DMA sound into audio_[from..]
+  // STE colours: 4 bits a channel (the 4th bit is the lowest: 0..7 shifted up, bit 3 added). Used once a
+  // program writes a colour with a bit 3 set; until then the ST's 3 bits (so ST games keep their exact look).
+  bool ste_colours_ = false;
+ public:
+  // An STE program (the registry says so): its colours' 4th bit counts. Off: ST games that write $FFF for white
+  // keep the ST's colours.
+  void SetSte(bool on) { ste_ = on; }
+ private:
+  bool ste_ = false;
+  std::set<uint32_t> io_logged_;  // I/O addresses we don't handle, logged once
   uint32_t vbase_latched_ = 0;
   bool calm_ = false;
   float calm_rgb_[3] = {};      // colour 0 as shown (0..1)

@@ -353,8 +353,41 @@ void Machine::Sync() {
   uint64_t now = Now();
   if (sandbox) audio_synced_ = now;
   if (now <= audio_synced_) return;
+  size_t from = audio_.size();
   ym_.Run(double(now - audio_synced_) * (2000000.0 / kCpuHz), &audio_);
+  if (dma_on_) MixDma(from);
   audio_synced_ = now;
+}
+
+void Machine::DmaStart() {
+  auto addr = [&](int hi) {
+    return (uint32_t(ste_snd_[hi]) << 16 | uint32_t(ste_snd_[hi + 2]) << 8 | (ste_snd_[hi + 4] & 0xFE)) % kRamSize;
+  };
+  dma_pos_ = addr(0x03);
+  dma_end_ = addr(0x0F);
+  dma_on_ = dma_end_ > uint32_t(dma_pos_);
+}
+
+void Machine::MixDma(size_t from) {
+  static const double kRates[4] = {6258, 12517, 25033, 50066};
+  uint8_t mode = ste_snd_[0x21];
+  bool mono = mode & 0x80;
+  double step = kRates[mode & 3] / sample_rate_ * (mono ? 1 : 2);  // bytes per output sample
+  for (size_t i = from; i < audio_.size() && dma_on_; ++i) {
+    uint32_t a = uint32_t(dma_pos_);
+    float s = mono ? float(int8_t(ram_[a])) / 128.0f
+                   : (float(int8_t(ram_[a & ~1u])) + float(int8_t(ram_[(a & ~1u) + 1]))) / 256.0f;
+    audio_[i] += s * 0.5f;
+    dma_pos_ += step;
+    if (dma_pos_ >= dma_end_) {
+      if (ste_snd_[0x01] & 2) {
+        DmaStart();  // repeat: the frame registers again
+      } else {
+        dma_on_ = false;
+        ste_snd_[0x01] &= uint8_t(~1);
+      }
+    }
+  }
 }
 
 void Machine::UpdateIrq() {
@@ -666,8 +699,12 @@ void Machine::RenderLine(int y) {
   uint32_t pal[16];
   for (int i = 0; i < 16; ++i) {
     unsigned c = palette_[i];
-    auto ch = [](unsigned v) { return (v << 5) | (v << 2) | (v >> 1); };  // 3 bits -> 8
-    pal[i] = 0xFF000000u | ch((c >> 8) & 7) << 16 | ch((c >> 4) & 7) << 8 | ch(c & 7);
+    auto ch = [&](unsigned v) {
+      if (ste_colours_) return (((v & 7) << 1) | ((v >> 3) & 1)) * 17;  // STE: 4 bits -> 8
+      v &= 7;
+      return (v << 5) | (v << 2) | (v >> 1);  // ST: 3 bits -> 8
+    };
+    pal[i] = 0xFF000000u | ch((c >> 8) & 15) << 16 | ch((c >> 4) & 15) << 8 | ch(c & 15);
   }
   if (y == 0) frame_res_ = res_ == 1 ? 1 : 0, frame_w_ = frame_res_ ? kMaxFrameW : kScreenW;
   if (frame_res_ == 1) {  // medium: 2 planes, 640 pixels, colours 0-3
@@ -794,6 +831,17 @@ uint32_t Machine::Read8(uint32_t a) {
     uint16_t c = palette_[(a - 0xFF8240) / 2];
     return (a & 1) ? (c & 0xFF) : (c >> 8);
   }
+  if ((a & 0xFFFF00) == 0xFF8900) {
+    Sync();
+    uint32_t pos = uint32_t(dma_pos_);
+    switch (a & 0xFF) {  // the frame address counter: where it's playing
+      case 0x09: return dma_on_ ? uint8_t(pos >> 16) : ste_snd_[0x03];
+      case 0x0B: return dma_on_ ? uint8_t(pos >> 8) : ste_snd_[0x05];
+      case 0x0D: return dma_on_ ? uint8_t(pos) : ste_snd_[0x07];
+      default: return ste_snd_[a & 0xFF];
+    }
+  }
+  if (io_logged_.insert(a).second) LOG("I/O read of unhandled $%06X (pc $%06X)", a, cpu::Get(cpu::PC));
   return 0xFF;
 }
 
@@ -823,10 +871,21 @@ void Machine::Write8(uint32_t a, uint8_t v) {
     if (a & 1) MfpWrite(int(a - 0xFFFA01) / 2, v);
     return;
   }
+  if ((a & 0xFFFF00) == 0xFF8900) {
+    Sync();
+    ste_snd_[a & 0xFF] = v;
+    if (a == 0xFF8901) {
+      if ((v & 1) && !dma_on_) DmaStart();
+      if (!(v & 1)) dma_on_ = false;
+    }
+    if (io_logged_.insert(a | 0x1000000).second) LOG("STE sound register $%06X = $%02X", a, v);
+    return;
+  }
   if (a >= 0xFF8240 && a < 0xFF8260) {
     uint16_t& c = palette_[(a - 0xFF8240) / 2];
     c = (a & 1) ? uint16_t((c & 0xFF00) | v) : uint16_t((c & 0xFF) | v << 8);
-    c &= 0x777;
+    c &= 0xFFF;
+    if ((c & 0x888) && ste_) ste_colours_ = true;
     return;
   }
   switch (a) {
@@ -836,7 +895,10 @@ void Machine::Write8(uint32_t a, uint8_t v) {
     case 0xFF8260: res_ = v & 3; break;
     case 0xFFFC00: acia_ctrl_ = v; break;
     case 0xFFFC02: IkbdCommand(v); break;
-    default: break;
+    default:
+      if (io_logged_.insert(a | 0x2000000).second)
+        LOG("I/O write of unhandled $%06X = $%02X (pc $%06X)", a, v, cpu::Get(cpu::PC));
+      break;
   }
 }
 
@@ -1613,14 +1675,17 @@ bool Machine::Xbios(uint32_t args, uint32_t* d0) {
     }
     case 6: {  // Setpalette(ptr)
       uint32_t a = Get32(p + 2) & 0xFFFFFF;
-      for (int i = 0; i < 16; ++i) palette_[i] = Get16(&ram_[a + i * 2]) & 0x777;
+      for (int i = 0; i < 16; ++i) {
+        palette_[i] = Get16(&ram_[a + i * 2]) & 0xFFF;
+        if ((palette_[i] & 0x888) && ste_) ste_colours_ = true;
+      }
       return true;
     }
     case 7: {  // Setcolor(n, c)
       int n = Get16(p + 2) & 15;
       *d0 = palette_[n];
       int16_t c = int16_t(Get16(p + 4));
-      if (c >= 0) palette_[n] = uint16_t(c) & 0x777;
+      if (c >= 0) palette_[n] = uint16_t(c) & 0xFFF, ste_colours_ |= ste_ && (c & 0x888) != 0;
       return true;
     }
     case 17:  // Random: 24 bits

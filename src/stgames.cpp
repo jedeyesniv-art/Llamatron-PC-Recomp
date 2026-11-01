@@ -45,7 +45,10 @@ void RunTaps(st::Machine* m) {
     m->KeyEvent(g_taps[i].code, false);
     g_taps.erase(g_taps.begin() + long(i));
   }
-  if (g_delay > 0 && --g_delay == 0) TapKey(m, uint8_t(g_delayed_key));
+  if (g_delay > 0 && --g_delay == 0) {
+    if (g_delayed_key < 0) m->KeyEvent(0x2A, false);  // Left Shift (held for a page key) up
+    else TapKey(m, uint8_t(g_delayed_key));
+  }
 }
 
 // B twice (within 3 s): leave the game.
@@ -56,7 +59,8 @@ void ArmQuit() {
 
 // ---- Revenge of the Mutant Camels ----
 
-constexpr uint32_t kRmcHook = 0x42E18, kRmcPlay = 0x1118E, kRmcPause = 0x10526;
+// The 512K build's addresses; the 1 MB STE build (REVSTE1M.TOS) has the same code elsewhere.
+uint32_t kRmcHook = 0x42E18, kRmcPlay = 0x1118E, kRmcPause = 0x10526;
 constexpr uint8_t kKeyP = 0x19, kKeyO = 0x18, kKeyX = 0x2D, kKeySpace = 0x39, kKeyLShift = 0x2A, kKeyRShift = 0x36,
                   kKeyLCtrl = 0x1D;
 
@@ -382,7 +386,56 @@ void HardcoreUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   m->MouseInput(mdx, mdy, buttons);
 }
 
+// ---- Docs ----
+
+std::string g_docs_keys;
+int g_docs_frame = 0, g_docs_repeat = 0;
+constexpr uint8_t kKeyUp = 0x48, kKeyDown = 0x50, kKeyReturn = 0x1C, kKeyHelp = 0x62;
+const uint8_t kAscii[26] = {0x1E, 0x30, 0x2E, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17, 0x24, 0x25, 0x26, 0x32,
+                            0x31, 0x18, 0x19, 0x10, 0x13, 0x1F, 0x14, 0x16, 0x2F, 0x11, 0x2D, 0x15, 0x2C};
+
+void DocsUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
+  const pad::State& p = pad::Now();
+  ++g_docs_frame;
+  // The keys to type: one every 20 frames from frame 150 (the reader has started by then).
+  if (g_docs_frame >= 150 && (g_docs_frame - 150) % 20 == 0 && !g_docs_keys.empty()) {
+    char ch = char(std::tolower(uint8_t(g_docs_keys[0])));
+    g_docs_keys.erase(0, 1);
+    if (ch >= 'a' && ch <= 'z') TapKey(m, kAscii[ch - 'a']);
+  }
+  int dir = p.Held(SDL_GAMEPAD_BUTTON_DPAD_UP) || p.ly < -0.5f ? -1
+            : p.Held(SDL_GAMEPAD_BUTTON_DPAD_DOWN) || p.ly > 0.5f ? 1 : 0;
+  if (dir == 0) {
+    g_docs_repeat = 0;
+  } else if (--g_docs_repeat <= 0) {
+    TapKey(m, dir < 0 ? kKeyUp : kKeyDown, 2);
+    g_docs_repeat = g_docs_repeat < 0 ? 18 : 4;  // a pause, then quicker
+    if (std::fabs(p.ly) > 0.9f) g_docs_repeat = 2;
+  }
+  int page = pad::Pressed(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) || pad::LtPressed() ? -1
+             : pad::Pressed(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) || pad::RtPressed() ? 1 : 0;
+  if (page) {
+    m->KeyEvent(kKeyLShift, true);
+    TapKey(m, page < 0 ? kKeyUp : kKeyDown, 2);
+    g_delayed_key = -1, g_delay = 3;  // Shift up again after the cursor key
+  }
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH)) TapKey(m, kKeyReturn);
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) TapKey(m, kKeyHelp);
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST) || pad::Pressed(SDL_GAMEPAD_BUTTON_BACK)) g_quit = true;
+  m->MouseInput(mdx, mdy, mbuttons);
+}
+
 }  // namespace
+
+void SetProgram(const std::string& program) {
+  if (program == "REVSTE1M.TOS") kRmcHook = 0x3DD3E, kRmcPlay = 0x111DE, kRmcPause = 0x1056C;
+  else kRmcHook = 0x42E18, kRmcPlay = 0x1118E, kRmcPause = 0x10526;
+}
+
+void StartDocs(const std::string& keys) {
+  Start(Game::kDocs);
+  g_docs_keys = keys;
+}
 
 void Start(Game g) {
   g_game = g;
@@ -399,6 +452,8 @@ void Start(Game g) {
   g_d2_pwm = 0;
   g_letter = 0, g_letter_repeat = 0;
   g_hc_x = g_hc_y = -1;
+  g_docs_frame = g_docs_repeat = 0;
+  g_docs_keys.clear();
   g_hc_strobes = settings::Get("hc_strobes", 0) != 0, g_hc_strobes_done = false;
   g_d2_50fps = settings::Get("d2_50fps", 1) != 0;
   g_fire_held = false;
@@ -410,6 +465,7 @@ void Update(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_buttons) {
   if (g_game == Game::kRmc) RmcUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
   else if (g_game == Game::kAndes) AndesUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
   else if (g_game == Game::kHardcore) HardcoreUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
+  else if (g_game == Game::kDocs) DocsUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
   else Defender2Update(m, mouse_dx, mouse_dy, mouse_buttons);
 }
 
@@ -438,6 +494,8 @@ const char* Hint(st::Machine* m, bool have_pad) {
   if (SDL_GetTicks() < g_quit_armed_ms)
     return have_pad ? "Press B again to leave the game" : "Press Esc again to leave the game";
   if (g_host_paused) return have_pad ? "PAUSED   Back: resume   B twice: leave" : "PAUSED";
+  if (g_game == Game::kDocs && have_pad && g_docs_frame < 400)
+    return "Up/Down: scroll   LB/RB: page   B: back to the disks";
   if (g_game == Game::kDefender2 && have_pad && Get16(*m, kD2State) == kD2Screen && Get32(*m, kD2Sub) == kD2SubName)
     return "Left/Right: letter   A: fix it   X: delete";
   if (g_game == Game::kHardcore && Get32(*m, kHcHook) == kHcPaused)
