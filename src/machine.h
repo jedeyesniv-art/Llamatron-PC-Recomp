@@ -130,6 +130,14 @@ class Machine {
   void LineA(int fn);
   int GetPixel(int x, int y);  // logical screen, low resolution
   void SetPixel(int x, int y, int colour);
+  // TOS's VT52 console: Cconws / Cconout / Crawio / Bconout(2) text drawn into the logical screen (low
+  // resolution, 40 x 25 cells of 8 x 8; the font is SDL's debug font, the public domain IBM VGA one).
+  void ConsoleOut(uint8_t c);
+  void ConsoleCell(int col, int row, uint8_t c);
+  void ConsoleClear(int col0, int row0, int col1, int row1);  // cells, inclusive
+  void ConsoleScroll(int top, int dir);                        // from row `top` down: up (1) or down (-1)
+  int con_x_ = 0, con_y_ = 0, con_esc_ = 0, con_row_ = 0, con_fg_ = 15, con_bg_ = 0, con_sx_ = 0, con_sy_ = 0;
+  bool con_rev_ = false, con_wrap_ = true;
   void PlotMode(int x, int y, bool on, int colour, int mode);
   uint32_t logbase_ = 0;  // where TOS (Line-A) draws: Setscreen's logical screen
   std::set<int> gem_seen_;  // GEM calls logged once

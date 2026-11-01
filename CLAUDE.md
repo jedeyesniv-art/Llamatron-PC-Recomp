@@ -186,6 +186,13 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   frame, curve 2), right stick = the pointer at that spot, A / RT fire, Back pause, B twice = disks. Calm
   background in play with a short hold (4 frames), cap 0.25, release 0.2 (its flashes are single frames;
   Machine::SetCalmBackground hold / cap / release, stgames::CalmStyle).
+- Console (2026-11-01, plan A3): Machine::ConsoleOut = TOS's VT52 console (Cconws, Cconout, Crawio
+  write, Bconout 2 / 5, Cconin echo) drawn into the logical screen, low resolution 40 x 25, glyphs from
+  SDL's debug font header (third_party/SDL/src/render/SDL_render_debug_font.h, public domain VGA font; bit 0 =
+  left; c - 33 for 33..126; ST codes >= 128 blank). ESC A B C D E H I J K L M Y b c d j k l o p q v w.
+  Boot palette = TOS's low res one (777 ... 000; text colour 15). Shown now: Defender 2's crack prompt,
+  Trip-A-Tron's installer, D-Bug 100's doc menu (DOC100E.PRG). Not: D-Bug 28's DOX.TOS draws its own text
+  in medium resolution (garbled: we only show low), Andes' crack screen (its own drawing, stays white).
 - TOS added for them (machine.cpp): Pexec 0/3/4/5/6 + Pterm back to the parent, Malloc/Mfree/Mshrink,
   Fsfirst/Fsnext, Fsetdta/Fgetdta, Fdelete, Dfree, Cconin/Bconin wait for a key (trap re-run), GEM trap #2,
   Line-A, a ROM VBL routine (frclock, colorptr, screenpt, vblqueue at $1C00).

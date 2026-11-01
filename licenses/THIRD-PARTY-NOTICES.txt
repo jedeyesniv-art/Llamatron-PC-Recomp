@@ -2,7 +2,8 @@ Llamatron PC - third-party notices
 
 This program contains code from the following projects. Their licences follow.
 
-1. SDL 3 (Simple DirectMedia Layer) - https://libsdl.org - zlib licence
+1. SDL 3 (Simple DirectMedia Layer) - https://libsdl.org - zlib licence (its 8x8 debug font, the public
+   domain IBM VGA font by Marcel Sondaar, also draws the emulated ST's console text)
 2. Musashi 68000 emulator by Karl Stenerud - https://github.com/kstenerud/Musashi - MIT-style licence
 3. SoftFloat Release 2b by John R. Hauser (part of Musashi) - licence notice below
 4. The YM2149 volume table from ayumi by Peter Sovietov - https://github.com/true-grue/ayumi - MIT licence

@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <SDL3/SDL_stdinc.h>  // Uint8, for SDL's font
+
 #include "cpu.h"
 #include "log.h"
 
@@ -174,7 +176,10 @@ bool Machine::Load(const disk::Program& program, std::map<std::string, disk::Byt
   vbase_hi_ = uint8_t(kScreen >> 16);
   vbase_mid_ = uint8_t(kScreen >> 8);
   vbase_latched_ = kScreen;
-  palette_[0] = 0x777;
+  // TOS's low resolution palette: white, the colours, black last (the console's text colour).
+  static const uint16_t kTosPalette[16] = {0x777, 0x700, 0x070, 0x770, 0x007, 0x707, 0x077, 0x555,
+                                           0x333, 0x733, 0x373, 0x773, 0x337, 0x737, 0x377, 0x000};
+  std::memcpy(palette_, kTosPalette, sizeof(palette_));
   ym_.Reset();
 
   cpu::Init(this);
@@ -983,15 +988,23 @@ bool Machine::Gemdos(uint32_t args, uint32_t* d0) {
       if ((Get16(p + 2) & 0xFF) == 0xFF) {
         if (!console_keys_.empty()) *d0 = console_keys_.front(), console_keys_.pop_front();
         else *d0 = 0;
+      } else {
+        ConsoleOut(uint8_t(Get16(p + 2)));
       }
       return true;
     case 0x01:  // Cconin
     case 0x07:  // Crawcin
     case 0x08:  // Cnecin: these wait for a key
-      if (!console_keys_.empty()) *d0 = console_keys_.front(), console_keys_.pop_front();
-      else trap_wait_ = true;
+      if (!console_keys_.empty()) {
+        *d0 = console_keys_.front(), console_keys_.pop_front();
+        if (fn == 0x01) ConsoleOut(uint8_t(*d0));  // Cconin echoes it
+      } else {
+        trap_wait_ = true;
+      }
       return true;
-    case 0x02:  // Cconout
+    case 0x02:  // Cconout(c)
+      ConsoleOut(uint8_t(Get16(p + 2)));
+      return true;
     case 0x03:  // Cauxin
     case 0x04:  // Cauxout
     case 0x05:  // Cprnout
@@ -1097,10 +1110,13 @@ bool Machine::Gemdos(uint32_t args, uint32_t* d0) {
     case 0x0B:  // Cconis
       *d0 = console_keys_.empty() ? 0 : uint32_t(-1);
       return true;
-    case 0x09:  // Cconws(string)
-      LOG("gemdos Cconws: %s", ReadString(Get32(p + 2)).c_str());
+    case 0x09: {  // Cconws(string)
+      std::string s = ReadString(Get32(p + 2));
+      if (trace_tos) LOG("gemdos Cconws: %s", s.c_str());
+      for (char ch : s) ConsoleOut(uint8_t(ch));
       *d0 = 0;
       return true;
+    }
     case 0x0E: *d0 = 1; return true;  // Dsetdrv: drive bitmap (A:)
     case 0x19: *d0 = 0; return true;  // Dgetdrv
     case 0x4A: {  // Mshrink(0, block, size): the running program gives back the end of its memory
@@ -1240,6 +1256,105 @@ void Machine::Gem(uint32_t d0, uint32_t pb) {
     return;
   }
   if (first(0x20000 + int(d0 & 0xFFFF))) LOG("GEM trap with d0 = $%X", d0);
+}
+
+// ---- VT52 console ----
+
+namespace {
+#include "../third_party/SDL/src/render/SDL_render_debug_font.h"
+
+// The glyph of a character (Atari ST codes above 127 have no match: blank), rows top to bottom, bit 0 = left.
+const uint8_t* Glyph(uint8_t c) {
+  if (c > 32 && c < 127) return SDL_RenderDebugTextFontData + (c - 33) * 8;
+  return nullptr;
+}
+}  // namespace
+
+void Machine::ConsoleCell(int col, int row, uint8_t c) {
+  const uint8_t* g = Glyph(c);
+  int fg = con_rev_ ? con_bg_ : con_fg_, bg = con_rev_ ? con_fg_ : con_bg_;
+  for (int y = 0; y < 8; ++y)
+    for (int x = 0; x < 8; ++x) SetPixel(col * 8 + x, row * 8 + y, g && (g[y] >> x & 1) ? fg : bg);
+}
+
+void Machine::ConsoleClear(int col0, int row0, int col1, int row1) {
+  for (int r = std::max(0, row0); r <= std::min(24, row1); ++r)
+    for (int y = r * 8; y < r * 8 + 8; ++y)
+      for (int x = std::max(0, col0) * 8; x < (std::min(39, col1) + 1) * 8; ++x) SetPixel(x, y, con_bg_);
+}
+
+void Machine::ConsoleScroll(int top, int dir) {
+  uint32_t base = logbase_ % kRamSize;
+  auto line = [&](int r) { return &ram_[(base + uint32_t(r) * 8 * 160) % kRamSize]; };
+  if (dir > 0) {  // rows top+1.. move up, the last row clears
+    for (int r = top; r < 24; ++r) std::memmove(line(r), line(r + 1), 8 * 160);
+    ConsoleClear(0, 24, 39, 24);
+  } else {
+    for (int r = 24; r > top; --r) std::memmove(line(r), line(r - 1), 8 * 160);
+    ConsoleClear(0, top, 39, top);
+  }
+}
+
+void Machine::ConsoleOut(uint8_t c) {
+  auto down = [&]() {
+    if (con_y_ < 24) ++con_y_;
+    else ConsoleScroll(0, 1);
+  };
+  switch (con_esc_) {
+    case 1:  // after ESC
+      con_esc_ = 0;
+      switch (c) {
+        case 'A': con_y_ = std::max(0, con_y_ - 1); break;
+        case 'B': con_y_ = std::min(24, con_y_ + 1); break;
+        case 'C': con_x_ = std::min(39, con_x_ + 1); break;
+        case 'D': con_x_ = std::max(0, con_x_ - 1); break;
+        case 'E': ConsoleClear(0, 0, 39, 24); con_x_ = con_y_ = 0; break;
+        case 'H': con_x_ = con_y_ = 0; break;
+        case 'I': if (con_y_ > 0) --con_y_; else ConsoleScroll(0, -1); break;
+        case 'J': ConsoleClear(con_x_, con_y_, 39, con_y_), ConsoleClear(0, con_y_ + 1, 39, 24); break;
+        case 'K': ConsoleClear(con_x_, con_y_, 39, con_y_); break;
+        case 'L': ConsoleScroll(con_y_, -1), con_x_ = 0; break;
+        case 'M': ConsoleScroll(con_y_, 1), con_x_ = 0; break;
+        case 'Y': con_esc_ = 2; break;
+        case 'b': con_esc_ = 4; break;
+        case 'c': con_esc_ = 5; break;
+        case 'd': ConsoleClear(0, 0, 39, con_y_ - 1), ConsoleClear(0, con_y_, con_x_, con_y_); break;
+        case 'j': con_sx_ = con_x_, con_sy_ = con_y_; break;
+        case 'k': con_x_ = con_sx_, con_y_ = con_sy_; break;
+        case 'l': ConsoleClear(0, con_y_, 39, con_y_), con_x_ = 0; break;
+        case 'o': ConsoleClear(0, con_y_, con_x_, con_y_); break;
+        case 'p': con_rev_ = true; break;
+        case 'q': con_rev_ = false; break;
+        case 'v': con_wrap_ = true; break;
+        case 'w': con_wrap_ = false; break;
+        default: break;  // e, f (cursor on / off) and others: nothing to draw
+      }
+      return;
+    case 2: con_row_ = c - 32, con_esc_ = 3; return;
+    case 3:
+      con_y_ = std::clamp(con_row_, 0, 24), con_x_ = std::clamp(c - 32, 0, 39);
+      con_esc_ = 0;
+      return;
+    case 4: con_fg_ = c & 15, con_esc_ = 0; return;
+    case 5: con_bg_ = c & 15, con_esc_ = 0; return;
+    default: break;
+  }
+  switch (c) {
+    case 27: con_esc_ = 1; return;
+    case 7: return;  // bell
+    case 8: con_x_ = std::max(0, con_x_ - 1); return;
+    case 9: con_x_ = std::min(39, (con_x_ / 8 + 1) * 8); return;
+    case 10: case 11: case 12: down(); return;
+    case 13: con_x_ = 0; return;
+    default: break;
+  }
+  if (c < 32) return;
+  if (con_x_ > 39) {
+    if (!con_wrap_) return;
+    con_x_ = 0, down();
+  }
+  ConsoleCell(con_x_, con_y_, c);
+  ++con_x_;
 }
 
 // ---- Line-A (low resolution, 4 planes, drawing into the logical screen) ----
@@ -1385,6 +1500,7 @@ bool Machine::Bios(uint32_t args, uint32_t* d0) {
       return true;
     case 3:                                  // Bconout(dev, c)
       if (Get16(p + 2) == 4) IkbdCommand(uint8_t(Get16(p + 4)));
+      if (Get16(p + 2) == 2 || Get16(p + 2) == 5) ConsoleOut(uint8_t(Get16(p + 4)));  // console (5: raw)
       *d0 = 1;
       return true;
     case 5: {  // Setexc(vector, address)
