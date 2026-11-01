@@ -126,6 +126,7 @@ std::vector<Known> KnownGames() {
                         "X / LT              reverse / thrust",
                         "LB                  inviso (Stargate)",
                         "BACK                pause",
+                        "INITIALS            d-pad letter, A fix, X delete",
                         "B TWICE             back to the disks", "",
                         "Keyboard: Ctrl up, LShift down, Return thrust,",
                         "Alt reverse, # fire, RShift smart bomb."};
@@ -144,6 +145,7 @@ std::vector<Known> KnownGames() {
                         "Y                    smart bomb",
                         "X / LT               reverse / thrust",
                         "BACK                 pause",
+                        "HIGH SCORE NAME      up/down letter, A enter it",
                         "B TWICE              back to the disks", "",
                         "Mouse: up/down, left thrust, right reverse;",
                         "Left Shift fire, Control smart bomb."};

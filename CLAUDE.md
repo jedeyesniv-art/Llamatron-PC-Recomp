@@ -139,7 +139,9 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   Mouse = Thrust, Right Mouse = Reverse, Left SHIFT = FIRE". Crack screen (right button = trainer, $1041A)
   ends by itself; clicks at frame 100 changed nothing - trainer not offered yet. 13-19 drawn frames/s in play,
   x8 -> 50 (thrust / altitude identical x1 vs x8). Its sky is a timer B raster: no calm background (it
-  changes colour 0 per line). Pad: see stgames.h.
+  changes colour 0 per line). Pad: see stgames.h. States after play: 4 game over, 5 high score table; a name
+  is typed there (Crawio $1A38C: letters, Space = "_", 3 of them, count $1BC96, cursor $1BC92 >= 0 while
+  entering), then back to the title. Pad: up / down picks a letter (shown on the hint line), A types it.
 - Defender 2: boots from the launcher (the crack's "T for trainer" prompt answered by TypeAhead from the
   options INVINCIBLE / FRIENDLY SPRITES: "" or "t" + y/n + y/n). VBL $4AF1A dispatches on $4B086 (table
   $212A2): 0 play, 2 title, 8 player select. Pointer x/y $62456/$62458 (writable; $294FC a drawn copy).
@@ -158,6 +160,9 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   frames later), player select d-pad + A (figures (75,60) / (190,60)); play: the keyboard scheme is forced,
   stick up / down pulsed for analog altitude, left / right thrust (reverse first), A fire, Y bomb, X reverse,
   LT thrust, LB inviso, RB Tab; Back pauses the emulation (stgames::HostPaused); B twice = disks.
+  State 8 is several screens, told apart by the sub-handler $1F200: $1157E player select, $1134C high score
+  initials (letter = pointer x / 8; left button fixes, right deletes; then table (6), title). Pad there:
+  d-pad steps the pointer 8 px (a letter), A fixes, X deletes. With no high score: game over -> 6 -> 2 alone.
 - TOS added for them (machine.cpp): Pexec 0/3/4/5/6 + Pterm back to the parent, Malloc/Mfree/Mshrink,
   Fsfirst/Fsnext, Fsetdta/Fgetdta, Fdelete, Dfree, Cconin/Bconin wait for a key (trap re-run), GEM trap #2,
   Line-A, a ROM VBL routine (frclock, colorptr, screenpt, vblqueue at $1C00).

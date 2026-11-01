@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 #include "log.h"
@@ -104,10 +105,46 @@ int g_stick_dir = 0;     // left stick pushed left (-1) / right (1): one reverse
 int g_reverse_frames = 0;  // the right button held for a few frames (a reverse)
 bool g_fire_held = false;
 
+// The high score name: typed (Crawio, $1A38C: letters, Space = "_"), 3 of them ($1BC96 counts; the cursor
+// $1BC92 is negative when no name is being entered).
+constexpr uint32_t kAndesNameCursor = 0x1BC92;
+constexpr int kAndesScores = 5;
+const char kLetters[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ";
+const uint8_t kLetterCodes[27] = {0x1E, 0x30, 0x2E, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17, 0x24, 0x25, 0x26, 0x32, 0x31,
+                                  0x18, 0x19, 0x10, 0x13, 0x1F, 0x14, 0x16, 0x2F, 0x11, 0x2D, 0x15, 0x2C, 0x39};
+int g_letter = 0;
+int g_letter_repeat = 0;  // up / down held: frames to the next letter
+bool g_letter_held = false;
+
+bool AndesNameEntry(const st::Machine& m) {
+  return Get16(m, kAndesState) == kAndesScores && Get16(m, kAndesNameCursor) >= 0;
+}
+
+// Up / down (d-pad or stick, repeating) choose a letter, A types it.
+void NameEntryPad(st::Machine* m, const pad::State& p) {
+  int dir = p.Held(SDL_GAMEPAD_BUTTON_DPAD_UP) || p.ly < -0.5f ? -1
+            : p.Held(SDL_GAMEPAD_BUTTON_DPAD_DOWN) || p.ly > 0.5f ? 1 : 0;
+  if (dir == 0) {
+    g_letter_repeat = 0;
+  } else if (g_letter_repeat == 0 || --g_letter_repeat == 0) {
+    bool first = !g_letter_held;
+    g_letter = (g_letter + dir + 27) % 27;
+    g_letter_repeat = first ? 18 : 6;  // held: a pause, then quicker
+  }
+  g_letter_held = dir != 0;
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START)) TapKey(m, kLetterCodes[g_letter]);
+}
+
 void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   const pad::State& p = pad::Now();
   int state = Get16(*m, kAndesState);
   bool play = state == kAndesPlay;
+  if (AndesNameEntry(*m)) {
+    NameEntryPad(m, p);
+    if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) ArmQuit();
+    m->MouseInput(mdx, mdy, mbuttons);
+    return;
+  }
   uint8_t buttons = mbuttons;
   // Altitude: the stick's up / down moves the mouse (down = lower), through a curve: 4 px a frame at full.
   float y = std::fabs(p.ly) > 0.15f ? p.ly : 0;
@@ -152,7 +189,10 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
 
 constexpr uint32_t kD2State = 0x4B086, kD2PtrX = 0x62456, kD2PtrY = 0x62458, kD2Scheme = 0x1BCC4,
                    kD2Facing = 0x1B4B8;
-constexpr int kD2Play = 0, kD2Title = 2, kD2Players = 8;
+constexpr int kD2Play = 0, kD2Title = 2, kD2Screen = 8;
+// State 8's screens, by its sub-handler ($1F200): player select, high score initials (the letter is the
+// pointer's x / 8; left button fixes it, right deletes), others (game over...).
+constexpr uint32_t kD2Sub = 0x1F200, kD2SubPlayers = 0x1157E, kD2SubName = 0x1134C;
 constexpr uint8_t kD2Up = 0x1D, kD2Down = 0x2A, kD2Thrust = 0x1C, kD2Reverse = 0x38, kD2Fire = 0x2B,
                   kD2Bomb = 0x36, kD2Inviso = 0x3A, kD2Tab = 0x0F;
 struct Point {
@@ -250,7 +290,7 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
         TapKey(m, kKeySpace);  // "press Space" first, then the box can be clicked
         D2Click(kD2Boxes[g_d2_sel], 50);
       }
-    } else if (state == kD2Players) {
+    } else if (state == kD2Screen && Get32(*m, kD2Sub) == kD2SubPlayers) {
       int sel = g_d2_players;
       if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) sel ^= 1;
       if (sel != g_d2_players) {
@@ -259,9 +299,15 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
       }
       if (pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START))
         D2Click(kD2PlayerBoxes[g_d2_players], 1);
-    } else {  // other screens: the pointer
+    } else {  // other screens (the initials, options...): the pointer; the d-pad steps it 8 px (one letter)
       if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;
       if (p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.lt > 0.5f) buttons |= 1;
+      int sx = pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ? 8 : pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? -8 : 0;
+      int sy = pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_DOWN) ? 8 : pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_UP) ? -8 : 0;
+      if (sx || sy) {
+        Put16(m, kD2PtrX, std::clamp(Get16(*m, kD2PtrX) / 8 * 8 + 4 + sx, 4, 316));
+        Put16(m, kD2PtrY, std::clamp(Get16(*m, kD2PtrY) + sy, 0, 199));
+      }
       float x = std::fabs(p.lx) > 0.15f ? p.lx : 0, y = std::fabs(p.ly) > 0.15f ? p.ly : 0;
       g_mouse_x += x * std::fabs(x) * 5, g_mouse_y += y * std::fabs(y) * 5;
     }
@@ -286,6 +332,7 @@ void Start(Game g) {
   g_host_paused = false;
   std::fill(std::begin(g_d2_held), std::end(g_d2_held), uint8_t(0));
   g_d2_pwm = 0;
+  g_letter = 0, g_letter_repeat = 0;
   g_fire_held = false;
   std::fill(std::begin(g_keys), std::end(g_keys), false);
 }
@@ -322,8 +369,15 @@ const char* Hint(st::Machine* m, bool have_pad) {
   if (SDL_GetTicks() < g_quit_armed_ms)
     return have_pad ? "Press B again to leave the game" : "Press Esc again to leave the game";
   if (g_host_paused) return have_pad ? "PAUSED   Back: resume   B twice: leave" : "PAUSED";
+  if (g_game == Game::kDefender2 && have_pad && Get16(*m, kD2State) == kD2Screen && Get32(*m, kD2Sub) == kD2SubName)
+    return "Left/Right: letter   A: fix it   X: delete";
   if (g_game == Game::kRmc && RmcPaused(*m))
     return have_pad ? "Back: resume   B: back to the menu" : "O: resume   Esc: back to the menu";
+  if (g_game == Game::kAndes && AndesNameEntry(*m) && have_pad) {
+    static char buf[64];
+    std::snprintf(buf, sizeof(buf), "YOUR NAME:  [%c]   Up/Down: letter   A: enter it", kLetters[g_letter]);
+    return buf;
+  }
   if (g_game == Game::kAndes && Get16(*m, kAndesState) == kAndesPaused)
     return have_pad ? "Back: resume   B twice: leave the game" : "Space: resume";
   return nullptr;
