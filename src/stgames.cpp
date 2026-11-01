@@ -117,7 +117,7 @@ constexpr uint32_t kAndesAlt = 0x2B682, kAndesSpeed = 0x14BC4;
 float g_alt = -1;
 float g_andes_speed = 3, g_andes_curve = 1.5f;
 float g_andes_ease = 0.5f, g_thrust_frac = 0;  // speed steps a frame (direct thrust)
-bool g_andes_direct = true;
+bool g_andes_direct = false;
 bool g_shield_held = false;
 constexpr uint8_t kKeyAlt = 0x38;
 
@@ -575,7 +575,8 @@ void Start(Game g) {
   g_andes_speed = float(settings::Get("andes_stick_speed", 3));
   g_andes_ease = std::clamp(float(settings::Get("andes_thrust_ease", 0.5)), 0.05f, 19.0f), g_thrust_frac = 0;
   g_andes_curve = float(settings::Get("andes_stick_curve", 1.5));
-  g_andes_direct = settings::Get("andes_direct_thrust", 1) != 0;
+  // Off by default (owner: "left and right feel wrong" with it): the game's own thrust and glide.
+  g_andes_direct = settings::Get("andes_direct_thrust", 0) != 0;
   g_shield_held = false;
   std::fill(std::begin(g_keys), std::end(g_keys), false);
 }

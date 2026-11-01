@@ -128,8 +128,7 @@ Keyboard: cursor keys + Space, P pause, O resume. Yak's notes are on the how-to-
 
 ANDES ATTACK - XBOX PAD
 -----------------------
-  Left stick up / down   altitude                 Left stick left / right   speed that way (turns round first;
-                                                  the further you push, the faster - andes_direct_thrust)
+  Left stick up / down   altitude                 Left stick left / right   thrust that way (turns round first)
   A or RT                fire                     Y                         smart bomb
   X / LT                 reverse / thrust         Back                      pause
   LB or RB (hold)        shield (its energy drains while it's up)
@@ -207,10 +206,10 @@ Written on the first run with every setting and its default. Edit it while the g
   d2_50fps                1 = Defender 2 at 50 (60) frames a second (0 = the original 25 / 30)
   defender2_60hz          1 = Defender 2 in its 60 Hz mode, as the arcade (its speeds adjusted); 0 = 50 Hz
   hc_strobes              1 = keep Hardcore's strobes on
-  andes_direct_thrust     1 = Andes Attack's speed follows the stick (snappy); 0 = the original slow
-                          build-up and glide
+  andes_direct_thrust     1 = Andes Attack's speed follows how far the stick is pushed (experimental);
+                          0 = the original build-up and glide (the default)
   andes_stick_speed, andes_stick_curve   Andes Attack's climb / dive speed (3 px a frame at full) and curve
-  andes_thrust_ease       how quickly Andes Attack's speed follows the stick (0.5 = full in ~0.8 s)
+  andes_thrust_ease       with andes_direct_thrust: how quickly the speed follows (0.5 = full in ~0.8 s)
   photonstorm_50fps       1 = Photon Storm at 50 frames a second (0 = the original 25)
   trip_calm_background    0 = Trip-A-Tron's palettes flash as originally
   trip_music              Trip-A-Tron's music mode (0 off, 1 pulse, 2 full; also L3 / F12)

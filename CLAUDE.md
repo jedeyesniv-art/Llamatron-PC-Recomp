@@ -184,7 +184,8 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   ((|y| - 0.15) / 0.85) ^ andes_stick_curve (1.5) px a frame. Left / right inertia is the game's: the speed
   index $14BC4 (0..19) climbs a step every few frames while thrusting and sinks over ~10 s. andes_direct_thrust
   (1): the index follows how far the stick is pushed (19 x push), andes_thrust_ease steps a frame (0.5: 0 -> full ~40 frames), the
-  thrust button held while moving (exhaust); direction from 0.2 deflection. 0 = the original. Text $2B494 "CONTROLS: Mouse = Altitude, Left
+  thrust button held while moving (exhaust); direction from 0.2 deflection. Owner tried it: "left and right
+  feel wrong" -> default 0 (the original thrust); the vertical change kept. Text $2B494 "CONTROLS: Mouse = Altitude, Left
   Mouse = Thrust, Right Mouse = Reverse, Left SHIFT = FIRE". Crack screen (right button = trainer, $1041A)
   ends by itself; clicks at frame 100 changed nothing - trainer not offered yet. 13-19 drawn frames/s in play,
   x8 -> 50 (thrust / altitude identical x1 vs x8). Its sky is a timer B raster: no calm background (it
