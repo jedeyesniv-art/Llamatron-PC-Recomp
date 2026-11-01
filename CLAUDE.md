@@ -76,6 +76,11 @@ starts a twin-stick game. Screenshots -> PNG with pillow to view them.
 Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --obj=build\llamatron.exe
 0x140000000+offset.
 
+## Cover (2026-11-01): res/cover.png, Tools/make_cover.py <folder of screenshots>
+A 320 x 200 ST screen x4 in ST colours (3 bits a channel): 8 game tiles (80 x 56 crops of --shot screenshots,
+CROPS in the script; the screenshots aren't in git), make_icon.py's llama on a badge, the title in SDL's 8 x 8
+font doubled with a raster gradient. In README.md.
+
 ## Release 1.3.0 (2026-11-01, branch more-st-games, not pushed yet: owner "we'll push it later")
 - Tools\package_portable.ps1 [-Release]: game\ = Llamatron ST.msa, Trip-A-Tron\ (TRIP_A_T.RON's files), the
   Revenge 1 MB STE .stx (copied with -LiteralPath: the download's [brackets] are a wildcard to -Path) and
