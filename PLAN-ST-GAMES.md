@@ -46,7 +46,10 @@ Shared groundwork first (A), then games from closest to furthest: RMC, Defender 
   frames/s) + pad module; Andes: faster CPU in play + pad module (smart bomb found, shields not). Defender 2:
   25 frames/s by design, state / pointer / key codes found. Hardcore: not looked at yet.
 - 2026-11-01 (later still): Defender 2 pad done (keyboard scheme forced, menus on the d-pad, Back = our pause).
-  Open: its smart bomb's white strobe (patch the game), a 50 fps mode, hyperspace; Hardcore. Flashes: RMC calmed in play; Andes' smart bomb flash not handled (raster sky).
+  Open: its smart bomb's white strobe (patch the game), hyperspace.
+- Then: Defender 2 50 fps (divisor), RMC bonus / name screens boosted, Andes / Defender 2 high score names on
+  the pad, Hardcore: pad (pointer on the sticks), 50 fps, flashes calmed. Every game boots and plays on the
+  pad. Left: A3 console text, A5 smoke test, A6 packaging, Andes trainer / shields, Defender 2 bomb flash. Flashes: RMC calmed in play; Andes' smart bomb flash not handled (raster sky).
 
 ### A. Shared groundwork (do once, before the games)
 A1. Game registry instead of hard-coded games (main.cpp RunGame / RunTrip, launcher kDisks / kInfo / labels):

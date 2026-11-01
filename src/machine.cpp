@@ -626,7 +626,10 @@ namespace {
 float Luma(uint16_t c) { return (0.30f * float((c >> 8) & 7) + 0.59f * float((c >> 4) & 7) + 0.11f * float(c & 7)) / 7; }
 }  // namespace
 
-void Machine::SetCalmBackground(bool on) {
+void Machine::SetCalmBackground(bool on, int hold, float cap, float release) {
+  calm_release_ = release;
+  calm_hold_ = std::clamp(hold, 1, 16);
+  calm_cap_ = cap;
   if (on && !calm_) {
     for (uint16_t& h : calm_hist_) h = palette_[0];
     for (int k = 0; k < 3; ++k) calm_rgb_[k] = float((palette_[0] >> (8 - 4 * k)) & 7) / 7;
@@ -636,19 +639,21 @@ void Machine::SetCalmBackground(bool on) {
 
 void Machine::CalmFrame() {
   calm_hist_[calm_at_++ % 16] = palette_[0];
-  uint16_t peak = calm_hist_[0];
-  for (uint16_t h : calm_hist_)
+  uint16_t peak = palette_[0];
+  for (int i = 0; i < calm_hold_; ++i) {
+    uint16_t h = calm_hist_[(calm_at_ - 1 - i + 32) % 16];
     if (Luma(h) > Luma(peak)) peak = h;
+  }
   float target[3], shown_luma = 0.30f * calm_rgb_[0] + 0.59f * calm_rgb_[1] + 0.11f * calm_rgb_[2];
   for (int k = 0; k < 3; ++k) target[k] = float((peak >> (8 - 4 * k)) & 7) / 7;
   float target_luma = Luma(peak);
   // A white flash becomes a dim grey glow, a red one dim red (saturated red flashes are the worst kind).
-  const float kMaxChannel = 0.4f;
+  const float kMaxChannel = calm_cap_;
   float top = std::max({target[0], target[1], target[2]});
   if (top > kMaxChannel)
     for (float& t : target) t *= kMaxChannel / top;
   target_luma = 0.30f * target[0] + 0.59f * target[1] + 0.11f * target[2];
-  float rate = target_luma > shown_luma ? 0.12f : 0.05f;  // up in ~1/4 s, down in ~1/2 s
+  float rate = target_luma > shown_luma ? 0.12f : calm_release_;  // up in ~1/4 s, down in ~1/2 s (strobes)
   for (int k = 0; k < 3; ++k) calm_rgb_[k] += (target[k] - calm_rgb_[k]) * rate;
 }
 

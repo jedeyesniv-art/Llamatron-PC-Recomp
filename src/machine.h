@@ -40,7 +40,9 @@ class Machine {
   // Calm background (anti-flash): colour 0 is shown through a peak hold over the last 16 frames, then smoothed and
   // capped, so a strobing background becomes a steady glow and a flash a soft pulse. Per frame: only for programs
   // that don't change colour 0 mid-frame (Trip-A-Tron while performing).
-  void SetCalmBackground(bool on);
+  // hold = frames of peak hold (strobes: 16), cap = the brightest a channel may get (0..1).
+  // release = how fast it fades (per frame).
+  void SetCalmBackground(bool on, int hold = 16, float cap = 0.4f, float release = 0.05f);
   bool CalmBackground() const { return calm_; }
   const float* CalmColour() const { return calm_rgb_; }  // colour 0 as shown while calm (0..1)
   // Screen swaps (the game showing a new frame) since the last call.
@@ -207,6 +209,8 @@ class Machine {
   float calm_rgb_[3] = {};      // colour 0 as shown (0..1)
   uint16_t calm_hist_[16] = {};  // colour 0 in the last frames
   int calm_at_ = 0;
+  int calm_hold_ = 16;
+  float calm_cap_ = 0.4f, calm_release_ = 0.05f;
   void CalmFrame();
 
   // YM2149.

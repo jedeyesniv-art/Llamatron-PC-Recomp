@@ -357,6 +357,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   if (mode == input::Mode::kRmc) stgames::Start(stgames::Game::kRmc);
   if (mode == input::Mode::kAndes) stgames::Start(stgames::Game::kAndes);
   if (mode == input::Mode::kDefender2) stgames::Start(stgames::Game::kDefender2);
+  if (mode == input::Mode::kHardcore) stgames::Start(stgames::Game::kHardcore);
   if (!opt.music.empty()) music::StartTestFile(opt.music);
   if (opt.trip_music >= 0) trip::SetMusicMode(opt.trip_music);
   grid::SetHideEntryLane(!opt.entry_lane);
@@ -504,9 +505,13 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         } else if (tripatron) {
           if (test_pad) trip::SetTestPad({tp.lx, tp.ly, tp.rx, tp.ry, tp.lt, tp.rt, tp.buttons});
           trip::Update(&machine, input::FirstPad(), dx, dy, buttons);
-        } else if (mode == input::Mode::kRmc || mode == input::Mode::kAndes || mode == input::Mode::kDefender2) {
+        } else if (mode == input::Mode::kRmc || mode == input::Mode::kAndes || mode == input::Mode::kDefender2 ||
+                   mode == input::Mode::kHardcore) {
           stgames::Update(&machine, dx, dy, buttons);
-          machine.SetCalmBackground(stgames::Calm(machine));
+          int hold;
+          float cap, release;
+          stgames::CalmStyle(&hold, &cap, &release);
+          machine.SetCalmBackground(stgames::Calm(machine), hold, cap, release);
         } else {
           input::UpdateGeneric(&machine, dx, dy, buttons);
         }

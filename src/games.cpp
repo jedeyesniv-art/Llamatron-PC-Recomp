@@ -156,6 +156,18 @@ std::vector<Known> KnownGames() {
                         "Left Shift fire, Control smart bomb."};
   wip("hardcore", "HARDCORE", "HARDCORE.PRG", "HARDCORE  -  YAK, 1992 (UNFINISHED)",
       "Never released: Yak's unfinished blaster.", {0.30f, 0.06f, 0.06f, 1}, {0.85f, 0.85f, 0.85f, 1});
+  // VBL $168F2 calls the hook at $338BA: $104EA title, $145D0 level intro, $10C82 play, $11242 paused.
+  k.back().game.play_at = 0x338BA, k.back().game.play_value = 0x10C82;
+  k.back().game.mode = input::Mode::kHardcore;
+  k.back().game.help = {"HARDCORE  -  YAK, 1992 (UNFINISHED)", "",
+                        "A 5-level evaluation demo, never released.",
+                        "Your blasters ride the four edges of the field.", "",
+                        "LEFT STICK           move the blasters",
+                        "RIGHT STICK          put them at that spot",
+                        "A OR RT              fire",
+                        "BACK                 pause",
+                        "B TWICE              back to the disks", "",
+                        "Mouse: move, left button fire; P pause, O resume."};
   return k;
 }
 

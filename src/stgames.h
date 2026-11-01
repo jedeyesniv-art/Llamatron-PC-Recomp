@@ -33,7 +33,13 @@ namespace stgames {
 //   player select: d-pad left / right, A; other screens: left stick = pointer, A / RT left, X / LT right.
 //   play: left stick up / down = climb / dive (pulsed: analog), left / right = thrust that way (turns round
 //   first), A / RT fire, Y smart bomb, X reverse, LT thrust, LB inviso, RB Tab; Back pause; B twice = disks.
-enum class Game { kRmc, kAndes, kDefender2 };
+// Hardcore (HARDCORE.PRG, Yak 1992, an unfinished "5-level evaluation demo"): VBL $168F2 calls the hook at
+// $338BA ($104EA title, $145D0 level intro, $10C82 play, $11242 paused). The mouse pointer $338C2 (x, 21..257)
+// / $338C4 (y, 22..178, mouse up = bigger) places the blasters on the four edges; the left button fires. Keys
+// (table $337B2 -> flags $33833, test $16ECE): p pause, o resume, h 50/60 Hz, s and i toggles, n (a cheat?).
+//   left stick = the pointer (relative, through a curve), right stick = the pointer at that spot of the field;
+//   A / RT fire (and click on the title), Back pause / resume, B twice = back to the disks.
+enum class Game { kRmc, kAndes, kDefender2, kHardcore };
 
 void Start(Game g);
 // Once per frame, after pad::Poll: pad and keyboard joystick -> the ST; the host mouse's movement and buttons
@@ -45,6 +51,8 @@ const char* Hint(st::Machine* m, bool have_pad);
 bool QuitRequested();
 // The background's flashes toned down (Machine::SetCalmBackground) right now.
 bool Calm(const st::Machine& m);
+// How: peak hold (frames) and brightness cap for Machine::SetCalmBackground.
+void CalmStyle(int* hold, float* cap, float* release);
 // The emulation is paused (Defender 2's Back): don't run frames.
 bool HostPaused();
 

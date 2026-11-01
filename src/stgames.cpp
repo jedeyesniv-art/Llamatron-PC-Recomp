@@ -327,6 +327,51 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   m->MouseInput(mdx + dx, mdy + dy, buttons);
 }
 
+// ---- Hardcore ----
+
+constexpr uint32_t kHcHook = 0x338BA, kHcPlay = 0x10C82, kHcPaused = 0x11242, kHcX = 0x338C2, kHcY = 0x338C4;
+constexpr int kHcMinX = 0x15, kHcMaxX = 0x101, kHcMinY = 0x16, kHcMaxY = 0xB2;
+float g_hc_x = -1, g_hc_y = -1;  // the pointer as we move it (sub-pixel)
+
+void HardcoreUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
+  const pad::State& p = pad::Now();
+  uint32_t hook = Get32(*m, kHcHook);
+  uint8_t buttons = mbuttons;
+  if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_BACK)) {
+    if (hook == kHcPlay) TapKey(m, kKeyP);
+    else if (hook == kHcPaused) TapKey(m, kKeyO);
+  }
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) ArmQuit();
+  if (hook == kHcPlay && p.connected) {
+    // Where the pointer is now (the PC mouse may have moved it too).
+    float cx = float(Get16(*m, kHcX)), cy = float(Get16(*m, kHcY));
+    if (g_hc_x < 0 || std::fabs(g_hc_x - cx) >= 1) g_hc_x = cx;
+    if (g_hc_y < 0 || std::fabs(g_hc_y - cy) >= 1) g_hc_y = cy;
+    auto curve = [](float v) {
+      float a = std::fabs(v);
+      if (a < 0.15f) return 0.0f;
+      float k = (a - 0.15f) / 0.85f;
+      return (v < 0 ? -1 : 1) * 6.0f * k * k;  // 6 px a frame at full deflection
+    };
+    float dx = curve(p.lx), dy = curve(p.ly);
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) dx -= 1;
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) dx += 1;
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_UP)) dy -= 1;
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) dy += 1;
+    g_hc_x += dx, g_hc_y -= dy;  // y: up is bigger
+    // The right stick: the pointer at that spot (centre = the middle of the field).
+    if (p.rx * p.rx + p.ry * p.ry > 0.2f * 0.2f) {
+      g_hc_x = (kHcMinX + kHcMaxX) / 2.0f + p.rx * (kHcMaxX - kHcMinX) / 2.0f;
+      g_hc_y = (kHcMinY + kHcMaxY) / 2.0f - p.ry * (kHcMaxY - kHcMinY) / 2.0f;
+    }
+    g_hc_x = std::clamp(g_hc_x, float(kHcMinX), float(kHcMaxX));
+    g_hc_y = std::clamp(g_hc_y, float(kHcMinY), float(kHcMaxY));
+    Put16(m, kHcX, int(g_hc_x)), Put16(m, kHcY, int(g_hc_y));
+  }
+  m->MouseInput(mdx, mdy, buttons);
+}
+
 }  // namespace
 
 void Start(Game g) {
@@ -343,6 +388,7 @@ void Start(Game g) {
   std::fill(std::begin(g_d2_held), std::end(g_d2_held), uint8_t(0));
   g_d2_pwm = 0;
   g_letter = 0, g_letter_repeat = 0;
+  g_hc_x = g_hc_y = -1;
   g_d2_50fps = settings::Get("d2_50fps", 1) != 0;
   g_fire_held = false;
   std::fill(std::begin(g_keys), std::end(g_keys), false);
@@ -352,6 +398,7 @@ void Update(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_buttons) {
   RunTaps(m);
   if (g_game == Game::kRmc) RmcUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
   else if (g_game == Game::kAndes) AndesUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
+  else if (g_game == Game::kHardcore) HardcoreUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
   else Defender2Update(m, mouse_dx, mouse_dy, mouse_buttons);
 }
 
@@ -382,6 +429,8 @@ const char* Hint(st::Machine* m, bool have_pad) {
   if (g_host_paused) return have_pad ? "PAUSED   Back: resume   B twice: leave" : "PAUSED";
   if (g_game == Game::kDefender2 && have_pad && Get16(*m, kD2State) == kD2Screen && Get32(*m, kD2Sub) == kD2SubName)
     return "Left/Right: letter   A: fix it   X: delete";
+  if (g_game == Game::kHardcore && Get32(*m, kHcHook) == kHcPaused)
+    return have_pad ? "PAUSED   Back: resume   B twice: leave" : "PAUSED   O: resume";
   if (g_game == Game::kRmc && RmcPaused(*m))
     return have_pad ? "Back: resume   B: back to the menu" : "O: resume   Esc: back to the menu";
   if (g_game == Game::kAndes && AndesNameEntry(*m) && have_pad) {
@@ -398,8 +447,16 @@ bool QuitRequested() { return g_quit; }
 
 bool HostPaused() { return g_host_paused; }
 
+void CalmStyle(int* hold, float* cap, float* release) {
+  // Hardcore's are single white frames now and then: a short hold and a low cap (a faint, short pulse), not
+  // the long glow that suits a strobe.
+  if (g_game == Game::kHardcore) *hold = 4, *cap = 0.25f, *release = 0.2f;
+  else *hold = 16, *cap = 0.4f, *release = 0.05f;
+}
+
 bool Calm(const st::Machine& m) {
   if (g_game == Game::kRmc) return RmcPlaying(m);
+  if (g_game == Game::kHardcore) return Get32(m, kHcHook) == kHcPlay;  // its colour 0 flash list ($33136)
   // Not Defender 2: its rasters change colour 0 between lines (the smart bomb's white strobe needs a patch).
   return false;
 }
