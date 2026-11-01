@@ -870,8 +870,8 @@ const char* Hint(st::Machine* m, bool have_pad) {
   if (g_game == Game::kHardcore && Get32(*m, kHcHook) == kHcPaused)
     return have_pad ? "PAUSED   Back: resume   B twice: leave" : "PAUSED   O: resume";
   if (g_game == Game::kPhotonStorm && Get16(*m, kPsState) == kPsTitle && have_pad)
-    return g_ps_analog ? "A: 1 player   X: 2 players   Y: controls < 360 TWIN STICK >"
-                       : "A: 1 player   X: 2 players   Y: controls < ORIGINAL 16 DIRECTIONS >";
+    return g_ps_analog ? "A: 1 player   X: 2 players\nY: controls < 360 TWIN STICK >"
+                       : "A: 1 player   X: 2 players\nY: controls < ORIGINAL 16 DIRECTIONS >";
   if (g_game == Game::kPhotonStorm && Get16(*m, kPsState) == kPsPaused)
     return have_pad ? "PAUSED   Back: resume   B: quit to the title" : nullptr;
   if (g_game == Game::kRmc && RmcPaused(*m))
