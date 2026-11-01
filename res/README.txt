@@ -155,10 +155,12 @@ its 60 Hz mode (as the arcade did; the game adjusts its speeds), on a 60 / 120 H
 
 PHOTON STORM - XBOX PAD
 -----------------------
-  Left stick       point the ship (push far: fly)  A or RT         fire
-  X or LT          thrust                          Back            pause
-  B (paused)       quit to the title               B, B            back to the disks
-  Title: A = one player, X = two players.
+  Left stick       steer the ship (push far: fly)  Right stick     fire in any direction
+  A or RT          fire where the ship points      X or LT         thrust
+  Back             pause                           B (paused)      quit to the title
+  B, B             back to the disks
+  Title: A = one player, X = two players, Y = controls: 360 twin stick (the default: aim, flight and shots
+  at any angle; the ship's picture still has its 16 steps) or the original 16 directions (one stick).
 Mouse as the original: where it points from the middle is the direction; left button fire, right thrust.
 Right Shift pauses (Space resumes, Q quits).
 
@@ -220,6 +222,7 @@ Written on the first run with every setting and its default. Edit it while the g
   andes_stick_speed, andes_stick_curve   Andes Attack's climb / dive speed (3 px a frame at full) and curve
   andes_thrust_ease       with andes_direct_thrust: how quickly the speed follows (0.5 = full in ~0.8 s)
   photonstorm_50fps       1 = Photon Storm at 50 frames a second (0 = the original 25)
+  ps_analog               1 = Photon Storm's 360 twin stick controls (0 = the original 16 directions; Y at its title)
   trip_calm_background    0 = Trip-A-Tron's palettes flash as originally
   trip_music              Trip-A-Tron's music mode (0 off, 1 pulse, 2 full; also L3 / F12)
   trip_stick_speed, trip_stick_curve, trip_stick_deadzone, trip_spiro_size   Trip-A-Tron's sticks

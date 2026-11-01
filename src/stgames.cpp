@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
+#include "cpu.h"
 #include "log.h"
 #include "pad.h"
 #include "settings.h"
@@ -493,17 +495,228 @@ constexpr uint32_t kPsState = 0x44846, kPsX = 0x4F1C0, kPsY = 0x4F1C2;
 // original, frame for frame). photonstorm_50fps (1): 1 in play, with the faster CPU.
 constexpr uint32_t kPsDivisor = 0x466BE;
 bool g_ps_50fps = true;
-constexpr int kPsPlay = 1, kPsPaused = 10;
+constexpr int kPsPlay = 1, kPsPaused = 10, kPsTitle = 7;
 constexpr uint8_t kKeyQ = 0x10;
 float g_ps_mx = 0, g_ps_my = 0;
 
+// ---- Photon Storm: 360-degree analog (setting ps_analog, default 1) ----
+// The ship sits in the middle; everything about its direction goes through 16 directions, index d: 0 left,
+// 4 down, 8 right, 12 up (screen angle 180 - 22.5 d degrees, y down):
+//   $27956 aim (from the pointer's 5x5 cell, -1 = middle), $27942 heading (the ship's sprite, 16 pre-rotated
+//   frames at $2D53E: the ST can't rotate it, so it stays the nearest of 16), $27944 speed (0..$28).
+//   $17D02: while thrusting (right button, bit 0 of $17BBA) the heading turns one step a VBL towards the aim.
+//   $17DEC: the drift d6/d7 (px this VBL; the world moves the other way) from the speed table $27760: per
+//     speed / 8 a step and a period, 4 sub-directions a quadrant (0, 26.6, 45, 63.4 degrees).
+//   $18494: a shot in slot a0 ($27974, 16 bytes: x, y, dx, dy, sprite d & 7) flies along the aim (or the
+//     heading if none): velocities from $27860 (12 a frame on the long axis); $18288 fires d-1, d, d+1.
+//   $181DA: the shots move (dx/dy added each VBL; off the screen = freed); $15C30: the aim marker drawn at
+//     160 + ($27A78[d]) / 120 + ($27A78[d + 16]) (14 on the long axis).
+// Hooks give all of these the stick's exact angle: speeds stay the original's along the 16 directions
+// (length / max(|cos|, |sin|), the game's square "circle"); the heading turns 22.5 degrees a VBL at most.
+constexpr uint32_t kPsAim = 0x27956, kPsHeading = 0x27942, kPsSpeed = 0x27944, kPsButtons = 0x17BBA;
+constexpr uint32_t kPsShots = 0x27974, kPsShotCount = 0x2D53A, kPsSpeedTable = 0x27760, kPsCellTable = 0x27958;
+constexpr uint32_t kPsTurn = 0x17D02, kPsTurnTest = 0x17D0E, kPsTurnDone = 0x17D72, kPsTurnBlock = 0x27E56;
+constexpr uint32_t kPsMove = 0x17DEC, kPsMoveDone = 0x17ECE;
+constexpr uint32_t kPsShotNew = 0x18494, kPsShotNewNext = 0x184A4;
+constexpr uint32_t kPsShotsMove = 0x181DA, kPsShotsMoveNext = 0x181E0;
+constexpr uint32_t kPsMarker = 0x15C30, kPsMarkerDraw = 0x15C54, kPsMarkerNone = 0x15C60, kPsMarkerTable = 0x15C3A;
+constexpr double kPi = 3.14159265358979;
+constexpr int kPsMaxShots = 32;
+bool g_ps_analog = true;
+bool g_ps_pad = false;        // the pad drives the ship this frame (turns are ours)
+bool g_ps_aim_on = false;     // the sticks give an exact aim this frame (the right stick's, else the left's)
+double g_ps_aim = 0;          // its angle (radians, screen: 0 right, y down)
+int g_ps_aim_cell = -1;       // the direction the game makes of the pointer we wrote
+bool g_ps_steer_on = false;   // twin stick: the left stick's angle, where the ship turns to
+double g_ps_steer = 0;
+bool g_ps_heading_on = false;  // g_ps_heading is in step with $27942
+double g_ps_heading = 0, g_ps_fx = 0, g_ps_fy = 0;
+struct PsShot {
+  bool on = false;
+  double fx, fy, vx, vy;
+  int x, y;
+} g_ps_shots[kPsMaxShots];
+
+double PsAngle(int d) { return (180.0 - 22.5 * d) * kPi / 180; }
+int PsIndex(double a) { return int(std::lround(8 - a * 8 / kPi)) & 15; }
+double PsWrap(double a) { return std::remainder(a, 2 * kPi); }
+// The game's square: (cos, sin) / max(|cos|, |sin|).
+void PsBox(double a, double* x, double* y) {
+  double c = std::cos(a), s = std::sin(a), k = 1 / std::max(std::fabs(c), std::fabs(s));
+  *x = c * k, *y = s * k;
+}
+void SetWord(cpu::Reg r, int v) { cpu::Set(r, (cpu::Get(r) & 0xFFFF0000u) | uint16_t(v)); }
+
+// The heading's exact angle, re-synced whenever the game set $27942 itself (a new ship...).
+double PsHeading(st::Machine& m) {
+  int h = Get16(m, kPsHeading) & 15;
+  if (!g_ps_heading_on || PsIndex(g_ps_heading) != h) g_ps_heading = PsAngle(h), g_ps_heading_on = true;
+  return g_ps_heading;
+}
+
+// The angle a new shot or the marker takes: the exact aim, plus the game's own offset from it (the triple
+// shot's d - 1 / d + 1); no aim: the heading.
+double PsShotAngle(st::Machine& m) {
+  int d = Get16(m, kPsAim);
+  if (d >= 0 && g_ps_aim_on && g_ps_aim_cell >= 0) {
+    int off = ((d - g_ps_aim_cell + 8) & 15) - 8;
+    return g_ps_aim + off * -22.5 * kPi / 180;
+  }
+  if (d >= 0) return PsAngle(d & 15);
+  return PsHeading(m);
+}
+
+// $17D02 "btst #0,$17BBA": the turn towards the aim - with the pad, towards the left stick (the aim may be
+// the right stick's).
+void PsOnTurn(st::Machine& m) {
+  bool thrust = m.Ram()[kPsButtons] & 1;
+  if (!g_ps_analog || !g_ps_pad) {
+    if (g_ps_analog) PsHeading(m);
+    cpu::Set(cpu::PC, thrust ? kPsTurnTest : kPsTurnDone);  // as the original's beq
+    return;
+  }
+  double h = PsHeading(m);
+  if (g_ps_steer_on && thrust && !Get16(m, kPsTurnBlock)) {
+    double diff = PsWrap(g_ps_steer - h), step = 22.5 * kPi / 180;
+    int before = Get16(m, kPsHeading) & 15;
+    h = std::fabs(diff) <= step ? g_ps_steer : h + (diff > 0 ? step : -step);
+    g_ps_heading = PsWrap(h);
+    int after = PsIndex(g_ps_heading);
+    Put16(&m, kPsHeading, after);
+    if (after != before && Get16(m, kPsSpeed) >= 0x30) Put16(&m, kPsSpeed, Get16(m, kPsSpeed) - 4);
+  }
+  cpu::Set(cpu::PC, kPsTurnDone);
+}
+
+// $17DEC "move.w $27944,d0": the drift this VBL -> d6 / d7.
+void PsOnMove(st::Machine& m) {
+  if (!g_ps_analog) {  // the original
+    SetWord(cpu::D0, Get16(m, kPsSpeed));
+    cpu::Set(cpu::PC, kPsMove + 6);
+    return;
+  }
+  int idx = (Get16(m, kPsSpeed) >> 3) & 7;
+  double step = Get16(m, kPsSpeedTable + 0x20 + idx * 2), period = Get16(m, kPsSpeedTable + 0x30 + idx * 2) + 1;
+  double rate = step / period, x, y;
+  PsBox(PsHeading(m), &x, &y);
+  g_ps_fx += x * rate, g_ps_fy += y * rate;
+  int dx = int(std::lround(g_ps_fx)), dy = int(std::lround(g_ps_fy));
+  g_ps_fx -= dx, g_ps_fy -= dy;
+  SetWord(cpu::Reg(cpu::D0 + 6), dx);
+  SetWord(cpu::Reg(cpu::D0 + 7), dy);
+  cpu::Set(cpu::PC, kPsMoveDone);
+}
+
+// $18494 "move.w $27956,d0": a new shot in slot a0; the game sets it up from the nearest direction (its sprite),
+// we keep the exact velocity.
+void PsOnShotNew(st::Machine& m) {
+  if (!g_ps_analog) {  // the original: the aim, or the heading with none
+    int d = Get16(m, kPsAim);
+    SetWord(cpu::D0, d >= 0 ? d : Get16(m, kPsHeading));
+    cpu::Set(cpu::PC, kPsShotNewNext);
+    return;
+  }
+  double a = PsShotAngle(m);
+  SetWord(cpu::D0, PsIndex(a));
+  cpu::Set(cpu::PC, kPsShotNewNext);
+  uint32_t a0 = cpu::Get(cpu::A0) & 0xFFFFFF;
+  uint32_t slot = (a0 - kPsShots) / 16;
+  if (a0 < kPsShots || slot >= kPsMaxShots) return;
+  PsShot& s = g_ps_shots[slot];
+  PsBox(a, &s.vx, &s.vy);
+  s.vx *= 12, s.vy *= 12;
+  s.fx = 160, s.fy = 120, s.x = 160, s.y = 120;  // where $184D6 puts it
+  s.on = true;
+}
+
+// $181DA "move.w $2D53A,d5": the shots move; set each one's step for this VBL.
+void PsOnShotsMove(st::Machine& m) {
+  int count = Get16(m, kPsShotCount) + 1;
+  SetWord(cpu::Reg(cpu::D0 + 5), count - 1);
+  cpu::Set(cpu::PC, kPsShotsMoveNext);
+  for (int i = 0; i < std::min(count, kPsMaxShots); ++i) {
+    PsShot& s = g_ps_shots[i];
+    if (!s.on) continue;
+    uint32_t a = kPsShots + uint32_t(i) * 16;
+    int x = Get16(m, a), y = Get16(m, a + 2);
+    if (x < 0 || x != s.x || y != s.y) {  // freed (a hit), reused or moved by something else
+      s.on = false;
+      continue;
+    }
+    s.fx += s.vx, s.fy += s.vy;
+    int nx = int(std::lround(s.fx)), ny = int(std::lround(s.fy));
+    Put16(&m, a + 4, nx - x), Put16(&m, a + 6, ny - y);
+    s.x = nx, s.y = ny;
+  }
+}
+
+// $15C30 "move.w $27956,d0": the aim marker.
+void PsOnMarker(st::Machine& m) {
+  int d = Get16(m, kPsAim);
+  if (d < 0) {
+    cpu::Set(cpu::PC, kPsMarkerNone);
+    return;
+  }
+  if (!g_ps_analog || !g_ps_aim_on) {
+    SetWord(cpu::D0, d);
+    cpu::Set(cpu::PC, kPsMarkerTable);
+    return;
+  }
+  double x, y;
+  PsBox(g_ps_aim, &x, &y);
+  SetWord(cpu::D0, 160 + int(std::lround(14 * x)));
+  SetWord(cpu::Reg(cpu::D0 + 1), 120 + int(std::lround(14 * y)));
+  cpu::Set(cpu::PC, kPsMarkerDraw);
+}
+
+// Installs the hooks once the program has unpacked itself (the instructions are where they should be).
+void PsInstallHooks(st::Machine* m) {
+  struct H {
+    uint32_t at;
+    uint8_t code[6];
+    void (*fn)(st::Machine&);
+  };
+  static const H kHooks[] = {
+      {kPsTurn, {0x08, 0x39, 0x00, 0x00, 0x00, 0x01}, PsOnTurn},       // btst #0,$17BBA
+      {kPsMove, {0x30, 0x39, 0x00, 0x02, 0x79, 0x44}, PsOnMove},       // move.w $27944,d0
+      {kPsShotNew, {0x30, 0x39, 0x00, 0x02, 0x79, 0x56}, PsOnShotNew},  // move.w $27956,d0
+      {kPsShotsMove, {0x3A, 0x39, 0x00, 0x02, 0xD5, 0x3A}, PsOnShotsMove},  // move.w $2D53A,d5
+      {kPsMarker, {0x30, 0x39, 0x00, 0x02, 0x79, 0x56}, PsOnMarker},   // move.w $27956,d0
+  };
+  // Only from play on: the unpacker copies from what it has already unpacked (an ILLEGAL put in early was
+  // copied into other code).
+  if (Get16(*m, kPsTurn) == 0x4AFC || Get16(*m, kPsState) != kPsPlay) return;
+  for (const H& h : kHooks)
+    if (std::memcmp(m->Ram() + h.at, h.code, 6) != 0) return;  // not unpacked yet
+  for (const H& h : kHooks) {
+    Put16(m, h.at, 0x4AFC);
+    m->AddHook(h.at, [fn = h.fn](st::Machine& running) { fn(running); });
+  }
+  for (PsShot& s : g_ps_shots) s.on = false;
+  g_ps_heading_on = false;
+  LOG("photon storm: analog hooks installed (%s)", g_ps_analog ? "on" : "off");
+}
+
+// The direction the game makes of the pointer (x, y) (its routine $17BCA: 5 x 5 cells of 16, table $27958).
+int PsCell(const st::Machine& m, int x, int y) {
+  return int8_t(m.Ram()[kPsCellTable + (x >> 4) + (y >> 4) * 5]);
+}
+
 void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   const pad::State& p = pad::Now();
+  PsInstallHooks(m);
+  g_ps_analog = settings::Get("ps_analog", 1) != 0;
   int state = Get16(*m, kPsState);
   uint8_t buttons = mbuttons;
   if (g_ps_50fps && Get16(*m, kPsDivisor) > 0) {
     int want = state == kPsPlay ? 1 : 2;
     if (Get16(*m, kPsDivisor) != want) Put16(m, kPsDivisor, want);
+  }
+  if (state == kPsTitle && pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) {  // Y at the title: 360 twin stick / original
+    g_ps_analog = !g_ps_analog;
+    settings::Set("ps_analog", g_ps_analog ? 1 : 0);
+    settings::Save();
+    LOG("photon storm: %s controls", g_ps_analog ? "360 twin stick" : "original 16-direction");
   }
   if (pad::Pressed(SDL_GAMEPAD_BUTTON_BACK)) {
     if (state == kPsPlay) TapKey(m, kKeyRShift);
@@ -514,7 +727,9 @@ void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     else ArmQuit();
   }
   int dx = 0, dy = 0;
+  g_ps_aim_on = g_ps_steer_on = g_ps_pad = false;
   if (state == kPsPlay && p.connected) {
+    g_ps_pad = true;
     // The pointer's place from the middle (40, 40) of its 0..79 square is the ship's direction (16 of them,
     // $17BCA via the table $27958): the stick sets it directly; pushed far, the ship also flies (thrust).
     float x = p.lx, y = p.ly;
@@ -525,10 +740,26 @@ void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     float mag = std::sqrt(x * x + y * y);
     if (mag > 1) x /= mag, y /= mag, mag = 1;
     if (mag < 0.25f) x = y = 0;
-    Put16(m, kPsX, std::clamp(int(40 + x * 39.5f), 0, 79));
-    Put16(m, kPsY, std::clamp(int(40 + y * 39.5f), 0, 79));
-    if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;                    // fire
-    if (mag > 0.7f || p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.lt > 0.5f) buttons |= 1;      // thrust
+    float steer_mag = mag;
+    if (mag >= 0.25f) g_ps_steer_on = true, g_ps_steer = std::atan2(double(y), double(x));
+    // Twin stick (ps_analog): the right stick pushed = the aim, and fire. Its own hysteresis: on from 0.4,
+    // off below 0.3.
+    static bool right_on = false;
+    float rmag = std::sqrt(p.rx * p.rx + p.ry * p.ry);
+    right_on = g_ps_analog && rmag >= (right_on ? 0.3f : 0.4f);
+    if (right_on) x = p.rx, y = p.ry, mag = rmag;
+    int px = std::clamp(int(40 + x * 39.5f), 0, 79), py = std::clamp(int(40 + y * 39.5f), 0, 79);
+    if (mag >= 0.25f) {
+      // Exact angle; the pointer goes to the outer ring so the game's own direction is never "middle".
+      g_ps_aim_on = true, g_ps_aim = std::atan2(double(y), double(x));
+      px = std::clamp(int(std::lround(40 + x / mag * 39.5f)), 0, 79);
+      py = std::clamp(int(std::lround(40 + y / mag * 39.5f)), 0, 79);
+      g_ps_aim_cell = PsCell(*m, px, py);
+    }
+    Put16(m, kPsX, px);
+    Put16(m, kPsY, py);
+    if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f || right_on) buttons |= 2;      // fire
+    if (steer_mag > 0.7f || p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.lt > 0.5f) buttons |= 1;      // thrust
   } else {
     // Menus and the initials: the stick is the mouse, A / RT the left button, X / LT the right one.
     if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;
@@ -638,6 +869,9 @@ const char* Hint(st::Machine* m, bool have_pad) {
     return "Left/Right: letter   A: fix it   X: delete";
   if (g_game == Game::kHardcore && Get32(*m, kHcHook) == kHcPaused)
     return have_pad ? "PAUSED   Back: resume   B twice: leave" : "PAUSED   O: resume";
+  if (g_game == Game::kPhotonStorm && Get16(*m, kPsState) == kPsTitle && have_pad)
+    return g_ps_analog ? "A: 1 player   X: 2 players   Y: controls < 360 TWIN STICK >"
+                       : "A: 1 player   X: 2 players   Y: controls < ORIGINAL 16 DIRECTIONS >";
   if (g_game == Game::kPhotonStorm && Get16(*m, kPsState) == kPsPaused)
     return have_pad ? "PAUSED   Back: resume   B: quit to the title" : nullptr;
   if (g_game == Game::kRmc && RmcPaused(*m))

@@ -21,6 +21,8 @@ only the Llamasoft games' own files are kept.
 - Super Gridrunner with the stick moving the ship, triggers firing, the nosecone on the shoulder buttons, and
   pad-driven menus and name entry. The mouse still works the original way. The level select unlocks the
   level you died on.
+- Photon Storm made natively twin-stick: the left stick steers and flies, the right stick fires in any
+  direction, everything at any angle instead of the original 16 (Y on the title switches back).
 - Smooth: the ST's processor runs faster during play, so the screen updates 50 times a second instead of
   16-25. The game logic runs at exactly its original speed.
 - Borderless fullscreen (Alt+Enter / F11 for a window); `fullscreen_exclusive=1` switches to a refresh rate

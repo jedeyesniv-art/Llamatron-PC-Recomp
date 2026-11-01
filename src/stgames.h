@@ -52,6 +52,8 @@ namespace stgames {
 // $27958); left button fire, right button thrust; Right Shift pause, Space resume, Q quit.
 //   left stick = the direction (written to the pointer), pushed far = thrust too; A / RT fire, X / LT thrust;
 //   Back pause / resume, B paused = quit to the title, B twice = disks; elsewhere the stick is the mouse.
+//   ps_analog (1): aim, turn, drift, shots and the aim marker follow the stick's exact angle (the sprite: 16);
+//   the right stick pushed = aim + fire in any direction while the left stick steers.
 enum class Game { kRmc, kAndes, kDefender2, kHardcore, kDocs, kPhotonStorm };
 void StartDocs(const std::string& keys);
 // Which build is running (addresses differ: Revenge 512K / 1 MB STE).
