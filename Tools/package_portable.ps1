@@ -49,9 +49,14 @@ function Copy-Games([string]$to) {
     Copy-Item (Join-Path $trip "*") (Join-Path $to "Trip-A-Tron")
     # -LiteralPath: the download's name has [brackets], which -Path takes as a wildcard (and copies nothing).
     Copy-Item -LiteralPath $rmc.FullName -Destination (Join-Path $to "Revenge of the Mutant Camels (1MB STE).stx")
+    # The TT Megamix (owner 2026-11-01: include it, "a great historic artefact"): its disk holds only Revenge.
+    $rmctt = Join-Path $repo "Private\Revenge_of_the_Mutant_Camels_demo-playable_1991_Llamasoft_TT_Megamix.st"
+    if (-not (Test-Path -LiteralPath $rmctt)) { throw "$rmctt not found" }
+    Copy-Item -LiteralPath $rmctt -Destination (Join-Path $to "Revenge of the Mutant Camels (TT Megamix).st")
     python -P (Join-Path $repo "Tools\make_release_disks.py") $to
     if ($LASTEXITCODE) { throw "make_release_disks.py failed" }
     foreach ($f in "Llamatron ST.msa", "Trip-A-Tron\TRIP1.TOS", "Revenge of the Mutant Camels (1MB STE).stx",
+                   "Revenge of the Mutant Camels (TT Megamix).st",
                    "Andes Attack.st", "Defender 2.st", "Hardcore.st", "Photon Storm.st") {
         if (-not (Test-Path -LiteralPath (Join-Path $to $f))) { throw "game\$f missing" }
     }

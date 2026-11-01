@@ -65,6 +65,10 @@ void ArmQuit() {
 
 // The 512K build's addresses; the 1 MB STE build (REVSTE1M.TOS) has the same code elsewhere.
 uint32_t kRmcHook = 0x42E18, kRmcPlay = 0x1118E, kRmcPause = 0x10526;
+bool g_rmc_tt = false;  // REVTT.TOS
+// The TT Megamix's shareware screen ignores fire until its frame counter reaches 2000 (40 s): "cmpi.w #$7D0,
+// $3D94E; ble" at $102A0. The ble becomes a nop (owner 2026-11-01: keep the screen, fire skips it).
+constexpr uint32_t kTtNagWait = 0x102A0;
 constexpr uint8_t kKeyP = 0x19, kKeyO = 0x18, kKeyX = 0x2D, kKeySpace = 0x39, kKeyLShift = 0x2A, kKeyRShift = 0x36,
                   kKeyLCtrl = 0x1D;
 
@@ -86,6 +90,9 @@ void RmcB(st::Machine* m) {
 }
 
 void RmcUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
+  if (g_rmc_tt && Get16(*m, kTtNagWait) == 0x0C79 && Get16(*m, kTtNagWait + 2) == 0x07D0 &&
+      Get32(*m, kTtNagWait + 4) == 0x0003D94E && Get16(*m, kTtNagWait + 8) == 0x6FF6)
+    Put16(m, kTtNagWait + 8, 0x4E71);
   const pad::State& p = pad::Now();
   uint8_t j1 = pad::JoyBits(p);
   if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.Held(SDL_GAMEPAD_BUTTON_START) ||
@@ -539,7 +546,9 @@ void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
 void Reset() { Start(g_game); }
 
 void SetProgram(const std::string& program) {
+  g_rmc_tt = program == "REVTT.TOS";
   if (program == "REVSTE1M.TOS") kRmcHook = 0x3DD3E, kRmcPlay = 0x111DE, kRmcPause = 0x1056C;
+  else if (program == "REVTT.TOS") kRmcHook = 0x3E0CE, kRmcPlay = 0x11206, kRmcPause = 0x10580;
   else kRmcHook = 0x42E18, kRmcPlay = 0x1118E, kRmcPause = 0x10526;
 }
 

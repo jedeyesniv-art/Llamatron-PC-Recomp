@@ -142,6 +142,17 @@ font doubled with a raster gradient. In README.md.
   --cpu-all=N forces a speed for a whole run (tests). Machine::TypeAhead = keys in the console buffer before the
   program asks (crack prompts). --palette-log=N:M. Tools: copy Tools\dis.py as d68.py elsewhere and run it on
   a --dump (runtime addresses).
+- RMC TT Megamix (owner 2026-11-01, Private\Revenge_of_the_Mutant_Camels_demo-playable_1991_Llamasoft_TT_Megamix.st;
+  id rmctt, its own disk "Camels TT Megamix"): REVTT.TOS + README.TXT in a folder "REVENGE TT". The .st has 10
+  sectors a track (82 tracks) while its boot sector says 9: disk.cpp Logical() picks TOS's logical sectors out;
+  its root starts with an empty sector (ReadFiles skips all-zero entries now). Jeff's notes: 32 bullets instead
+  of 8, twice the objects, the STE extras. Same code as the STE build: hook $3E0CE, play $11206, pause $10580,
+  bonus $112CA, name $194E0, title $102C4, menus $1085E, keys $1AF32 (flags $3E047), joystick $3E0C8/9 (own
+  IKBD handler $1AEE2), frame counter $3D94E. Shareware screen: fire only counted after 2000 VBLs (40 s; loop
+  $102A0, same code in the STE build, which doesn't show it) - owner: keep the screen, fire skips it, so
+  stgames.cpp NOPs the ble at $102A8. Listed after the STE Camels (owner); in the release zip as
+  "Revenge of the Mutant Camels (TT Megamix).st" (owner: long past on sale, a historic artefact); smoke rmctt. 8 MHz: ~9 drawn frames/s in play; x8: 50 (scored
+  ~3x the STE build in the same scripted 50 s). Pad / pause / DMA sound verified.
 - RMC 1 MB STE (owner 2026-11-01, Privateevenge_of_the_mutant_camels_1mb_ste_[no_publisher].zip ->
   Private
 ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, games.cpp). A Pasti

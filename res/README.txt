@@ -4,7 +4,8 @@ LLAMASOFT ON THE ST
 Jeff Minter's Atari ST games running natively on Windows with modern pad controls:
   Llamatron: 2112 (1991) and Super Gridrunner, the bonus game on the same disk
   Trip-A-Tron (1992), the light synthesiser
-  Revenge of the Mutant Camels (1992, the 1 MB STE version)
+  Revenge of the Mutant Camels (1992, the 1 MB STE version) and its TT Megamix (1991: written for the
+    Atari TT - 32 bullets instead of 8, twice the objects)
   Andes Attack (1988)
   Defender 2 (Arcadia 1990: Defender, Defender II and Stargate)
   Hardcore (1992), Yak's unfinished 5-level evaluation demo
@@ -125,6 +126,8 @@ REVENGE OF THE MUTANT CAMELS - XBOX PAD
   Back                 pause                      B (paused)      back to the menu
   B, B                 back to the disks
 Keyboard: cursor keys + Space, P pause, O resume. Yak's notes are on the how-to-play page.
+The TT Megamix plays the same way. It was the shareware release: its shareware screen comes first (fire
+goes on).
 
 
 ANDES ATTACK - XBOX PAD

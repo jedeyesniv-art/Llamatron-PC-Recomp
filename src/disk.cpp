@@ -1,5 +1,6 @@
 #include "disk.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <functional>
@@ -114,8 +115,35 @@ Bytes LoadImage(const std::string& path, std::string* error) {
   return out;
 }
 
-std::map<std::string, Bytes> ReadFiles(const Bytes& d) {
+// An image with more sectors on a track than its boot sector says (the RMC TT Megamix .st: 10 a track, 82
+// tracks, the boot sector 9): TOS reads logical sectors by the boot sector's geometry, so they are picked out
+// of the image's tracks the same way. Other images come back as they are.
+Bytes Logical(const Bytes& d) {
+  if (d.size() < 512) return d;
+  unsigned spt = Le16(&d[24]), sides = Le16(&d[26]);
+  if (spt < 1 || spt > 20 || sides < 1 || sides > 2) return d;
+  size_t per_side_track = size_t(spt) * 512;
+  if (d.size() % (per_side_track * sides) == 0) {
+    size_t tracks = d.size() / (per_side_track * sides);
+    if (tracks >= 40 && tracks <= 86) return d;  // fits the boot sector's geometry
+  }
+  for (unsigned img_spt = spt + 1; img_spt <= 12; ++img_spt) {
+    size_t track_bytes = size_t(img_spt) * 512 * sides;
+    if (d.size() % track_bytes) continue;
+    size_t tracks = d.size() / track_bytes;
+    if (tracks < 78 || tracks > 86) continue;
+    Bytes out;
+    out.reserve(tracks * sides * per_side_track);
+    for (size_t t = 0; t < tracks * sides; ++t)
+      out.insert(out.end(), d.begin() + t * img_spt * 512, d.begin() + t * img_spt * 512 + per_side_track);
+    return out;
+  }
+  return d;
+}
+
+std::map<std::string, Bytes> ReadFiles(const Bytes& image) {
   std::map<std::string, Bytes> files;
+  const Bytes d = Logical(image);
   if (d.size() < 512) return files;
   unsigned bps = Le16(&d[11]), spc = d[13], res = Le16(&d[14]), nfats = d[16], ndir = Le16(&d[17]);
   unsigned spf = Le16(&d[22]);
@@ -142,7 +170,11 @@ std::map<std::string, Bytes> ReadFiles(const Bytes& d) {
                                                                      bool is_root) {
     for (size_t i = 0; i < n; ++i) {
       const uint8_t* e = dir + i * 32;
-      if (e[0] == 0) break;
+      if (e[0] == 0) {
+        // The end - but TOS reads on: the RMC TT Megamix disk's root has an empty first sector, then its folder.
+        if (std::all_of(e, e + 32, [](uint8_t b) { return b == 0; })) continue;
+        break;
+      }
       if (e[0] == 0xE5 || e[0] == '.' || (e[11] & 0x08)) continue;  // deleted, . / .., volume label
       std::string name(reinterpret_cast<const char*>(e), 8), ext(reinterpret_cast<const char*>(e + 8), 3);
       name.erase(name.find_last_not_of(' ') + 1);

@@ -110,6 +110,7 @@ const BuiltIn kBuiltIn[] = {
     {"andes", kLabel_andes, sizeof(kLabel_andes)},
     {"hardcore", kLabel_hardcore, sizeof(kLabel_hardcore)},
     {"photonstorm", kLabel_photonstorm, sizeof(kLabel_photonstorm)},
+    {"rmctt", kLabel_rmctt, sizeof(kLabel_rmctt)},
 };
 
 }  // namespace

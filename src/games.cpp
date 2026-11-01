@@ -132,6 +132,20 @@ std::vector<Known> KnownGames() {
                         "B ON THE PAUSE SCREEN  back to the menu",
                         "B TWICE ELSEWHERE    back to the disks", "",
                         "Keyboard: cursor keys + Space, P pause, O resume"};
+  // Revenge, TT Megamix (REVTT.TOS in a folder; the .st has 10 sectors a track, its boot sector says 9): 32
+  // bullets instead of 8, twice the objects, the STE extras (DMA sound, colours).
+  wip("rmctt", "CAMELS TT", "REVTT.TOS", "REVENGE OF THE MUTANT CAMELS  -  TT MEGAMIX",
+      "Giant camels against the forces of evil.", {0.62f, 0.40f, 0.10f, 1}, {0.85f, 0.25f, 0.55f, 1});
+  // Same code as the STE build again: hook $3E0CE, play $11206, pause $10580, bonus $112CA, name $194E0,
+  // title $102C4, menus $1085E, keys $1AF32 (flags $3E047), joystick $3E0C8 / 9, frame counter $3D94E.
+  k.back().game.play_at = 0x3E0CE, k.back().game.play_value = 0x11206;
+  k.back().game.play_value2 = 0x112CA, k.back().game.play_value3 = 0x194E0;
+  k.back().game.mode = input::Mode::kRmc;
+  k.back().game.docs_text = "README.TXT";
+  k.back().game.ste = true;
+  k.back().game.help = k[k.size() - 2].game.help;  // the Revenge page (listed just before: the STE build first)
+  k.back().game.help[0] = "REVENGE OF THE MUTANT CAMELS  -  TT MEGAMIX";
+  k.back().game.help[2] = "32 bullets, twice the camels' foes: the TT version.";
   wip("defender2", "DEFENDER 2", "DEFENDR2.PRG", "DEFENDER 2  -  JEFF MINTER, ARCADIA 1990",
       "Defender, Stargate and Defender II.", {0.16f, 0.16f, 0.18f, 1}, {0.30f, 0.85f, 0.30f, 1});
   // The VBL ($4AF1A) dispatches on $4B086 through the table at $212A2: 0 play, 2 title, 8 player select (and

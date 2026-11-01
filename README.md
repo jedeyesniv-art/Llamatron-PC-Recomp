@@ -3,7 +3,7 @@
 ![Llamasoft on the ST](res/cover.png)
 
 Jeff Minter's Atari ST games - **Llamatron: 2112** and **Super Gridrunner**, **Trip-A-Tron**, **Revenge of
-the Mutant Camels**, **Andes Attack**, **Defender 2**, **Photon Storm** and the unfinished **Hardcore** - as a native Windows app
+the Mutant Camels** (STE and the TT Megamix), **Andes Attack**, **Defender 2**, **Photon Storm** and the unfinished **Hardcore** - as a native Windows app
 with modern pad controls: twin-stick play on an Xbox controller, smooth 50 fps, flashes removed or toned down
 and an optional CRT look. The original 68000 game code runs unchanged on the
 [Musashi](https://github.com/kstenerud/Musashi) interpreter inside a small Atari ST (hardware and TOS emulated
