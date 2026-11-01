@@ -233,6 +233,8 @@ class Machine {
   // An STE program (the registry says so): its colours' 4th bit counts. Off: ST games that write $FFF for white
   // keep the ST's colours.
   void SetSte(bool on) { ste_ = on; }
+  // Start at 60 Hz, as an ST with US TOS does (programs that read $FF820A at boot pick their 60 Hz mode).
+  void SetBoot60Hz(bool on) { sync_ = on ? 0 : 2; }
  private:
   bool ste_ = false;
   std::set<uint32_t> io_logged_;  // I/O addresses we don't handle, logged once

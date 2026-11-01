@@ -30,6 +30,9 @@ struct Game {
   uint32_t play_at = 0, play_value = 0, play_value2 = 0, play_value3 = 0;  // any of these (0 = unused, but the first)
   bool play_word = false;  // play_at is a word, not a long
   bool ste = false;        // an STE program (STE colours; DMA sound is always there)
+  // Boot the ST at 60 Hz when the setting <id>_60hz is 1 (its default): for games that read the sync register
+  // at boot and adjust their speeds for 60 Hz (more frames, the same game speed).
+  bool boot_60hz = false;
   uint32_t play_vbl = 0;   // and the VBL vector ($70) is this (the game is running, not still loading)
   // Its docs: a reader program on the disk (run like the game, docs controls; docs_keys typed into it first,
   // e.g. a menu choice), or a plain text file in the save folder that the launcher shows itself.

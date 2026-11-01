@@ -174,6 +174,14 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   changes colour 0 per line). Pad: see stgames.h. States after play: 4 game over, 5 high score table; a name
   is typed there (Crawio $1A38C: letters, Space = "_", 3 of them, count $1BC96, cursor $1BC92 >= 0 while
   entering), then back to the title. Pad: up / down picks a letter (shown on the hint line), A types it.
+- Defender 2 at 60 Hz (owner 2026-11-01: default; the smart bomb flash stays - "very quick"): it reads
+  $FF820A at boot ($1EC04): bit 1 clear = 60 Hz -> "60 hz game speeds adjusted" ($2043F = 1; Options can
+  switch it, $1F33E). Registry boot_60hz + setting defender2_60hz (1) -> Machine::SetBoot60Hz (sync_ 0).
+  Fullscreen re-picks the display mode when the game's rate changes (Context::mode_hz: 120 Hz on a 120 Hz
+  screen at 60, 100 Hz at 50). The title comes at frame ~1500 (1400 at 50 Hz). Play draws 60 a second.
+  Revenge (bchg $FF820A at $10852 / $10802) and Hardcore (h) only flip the register: 20% faster - not used.
+  Title on the pad: the first d-pad press sends Space (the pointer only shows after it); the hint line
+  names the choice.
 - Defender 2: boots from the launcher (the crack's "T for trainer" prompt answered by TypeAhead from the
   options INVINCIBLE / FRIENDLY SPRITES: "" or "t" + y/n + y/n). VBL $4AF1A dispatches on $4B086 (table
   $212A2): 0 play, 2 title, 8 player select. Pointer x/y $62456/$62458 (writable; $294FC a drawn copy).

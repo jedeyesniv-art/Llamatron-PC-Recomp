@@ -279,6 +279,7 @@ struct Context {
   SDL_Texture* texture_wide = nullptr;  // medium resolution, 640 x 200
   SDL_AudioStream* audio = nullptr;
   int view_h = st::kScreenH;
+  double mode_hz = 50;  // the game rate the fullscreen display mode was picked for
   std::vector<float> wav;
   std::vector<games::Game> games;  // what the launcher offers
   const games::Game* game = nullptr;  // the launcher's game being run (null: --program of an unknown one)
@@ -369,6 +370,10 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   machine.SetSampleRate(kRate);
   machine.TypeAhead(c.type_ahead);
   machine.SetSte((c.game && c.game->ste) || program_name == "REVSTE1M.TOS");
+  if (c.game && c.game->boot_60hz && settings::Get(c.game->id + "_60hz", 1) != 0) {
+    machine.SetBoot60Hz(true);
+    LOG("booting at 60 Hz (%s_60hz=1)", c.game->id.c_str());
+  }
   LOG("analog aim %s, cpu speed during play x%d", game::AnalogAim() ? "on" : "off", opt.cpu_speed);
 
   SDL_Window* window = c.window;
@@ -435,7 +440,13 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
     // few at once after a stall), shown on the next refresh.
     int run = 1;
     if (!opt.headless) {
-      double hz = machine.FrameHz(), refresh = DisplayRefresh(window);
+      double hz = machine.FrameHz();
+      // A game at 60 Hz (or back at 50): a display mode that's a multiple of its rate, if there is one.
+      if (opt.match_refresh && window && std::fabs(hz - c.mode_hz) > 1) {
+        ChooseFullscreenMode(window, hz);
+        c.mode_hz = hz;
+      }
+      double refresh = DisplayRefresh(window);
       int k = refresh > 0 ? int(std::lround(refresh / hz)) : 0;
       if (k < 1 || std::fabs(refresh / k - hz) > hz * 0.005) k = 0;
       double t = double(SDL_GetTicksNS() - start) / 1e9;
@@ -620,8 +631,10 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         swaps_second = vbls_second = 0;
         playing_second = true;
         if (frame % 500 == 0 && swaps_seconds) {
+          // (counted per 50 frames: at 60 Hz that's 5/6 of a second)
+          const double per_s = machine.FrameHz() / 50.0;
           LOG("frame %d: drawn %.1f frames/s while playing, worst second %d (%d s), VBLs missed %d", frame,
-              double(swaps_total) / swaps_seconds, swaps_worst, swaps_seconds, vbls_missed);
+              double(swaps_total) / swaps_seconds * per_s, int(swaps_worst * per_s + 0.5), swaps_seconds, vbls_missed);
           swaps_total = swaps_seconds = vbls_missed = 0, swaps_worst = 1 << 30;
         }
       }

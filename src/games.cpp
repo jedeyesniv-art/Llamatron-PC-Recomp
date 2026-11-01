@@ -139,6 +139,9 @@ std::vector<Known> KnownGames() {
   k.back().game.play_at = 0x4B086, k.back().game.play_value = 0, k.back().game.play_word = true;
   k.back().game.play_vbl = 0x4AF1A;
   k.back().game.mode = input::Mode::kDefender2;
+  // At boot it reads $FF820A ($1EC04): 60 Hz -> "60 hz game speeds adjusted" ($2043F = 1). The arcade ran at
+  // 60; owner 2026-11-01: 60 Hz by default (setting defender2_60hz).
+  k.back().game.boot_60hz = true;
   k.back().game.docs_program = "READ_ME.PP";  // The Alien's DOC displayer: the crack's notes, the controls
   k.back().game.help = {"DEFENDER 2  -  JEFF MINTER, ARCADIA 1990", "",
                         "Defender, Defender II and Stargate.", "",
@@ -152,6 +155,7 @@ std::vector<Known> KnownGames() {
                         "BACK                pause",
                         "INITIALS            d-pad letter, A fix, X delete",
                         "B TWICE             back to the disks", "",
+                        "60 Hz, as the arcade (defender2_60hz=0: 50).",
                         "Keyboard: Ctrl up, LShift down, Return thrust,",
                         "Alt reverse, # fire, RShift smart bomb."};
   // The crack's trainer (The Alien): "T for trainer", then two Y/N questions.

@@ -19,7 +19,7 @@ $tests = @(
     @("tripatron", "TRIP.PRG", "--press=1500:mleft:5 --press=1700:Escape --press=1800:grt:600 --press=1800:gl0@0.5:600", 2500, "runs"),
     @("rmc", "REVSTE1M.TOS", "--press=300:ga:5 --press=600:ga:5 --press=900:ga:5 --press=1200:ga:5 --press=1500:ga:5 --press=1800:ga:5 --press=2100:gl0@1:1000 --press=2100:grt:1000", 3200, "play"),
     @("andes", "ANDES.BOY", "--press=300:ga:5 --press=600:ga:1500 --press=600:gl0@1:1500", 2600, "play"),
-    @("defender2", "DEFENDR2.PRG", "--press=1500:ga:3 --press=1800:ga:3 --press=1850:grt:600", 2600, "play"),
+    @("defender2", "DEFENDR2.PRG", "--press=1600:ga:3 --press=1900:ga:3 --press=1950:grt:600", 2700, "play"),
     @("hardcore", "HARDCORE.PRG", "--press=600:ga:5 --press=1500:ga:800 --press=1500:gl0@0.3:800", 2600, "play"),
     @("docs-rmc512", "DOX.TOS", "--press=300:gdown:40", 500, "runs"),
     @("docs-defender2", "READ_ME.PP", "--press=300:gdown:40", 500, "runs"),

@@ -143,7 +143,8 @@ DEFENDER 2 - XBOX PAD
   X / LT                 reverse / thrust         LB                        inviso (Stargate)
   Back                   pause                    B, B                      back to the disks
   Initials (a high score): the d-pad picks the letter, A fixes it, X deletes.
-The crack's trainer (invincibility, friendly sprites) is on the how-to-play page, and its notes.
+The crack's trainer (invincibility, friendly sprites) is on the how-to-play page, and its notes. It runs in
+its 60 Hz mode (as the arcade did; the game adjusts its speeds), on a 60 / 120 Hz display mode in fullscreen.
 
 
 HARDCORE - XBOX PAD
@@ -190,7 +191,8 @@ Written on the first run with every setting and its default. Edit it while the g
   grid_stick_speed, grid_stick_curve, grid_stick_deadzone, grid_dpad_speed   Gridrunner's ship movement
   grid_fire_mode_swap     1 = flip which way a right-stick flick turns the nosecone shot
   grid_50fps              1 = Gridrunner at 50 frames a second (0 = the original)
-  d2_50fps                1 = Defender 2 at 50 frames a second (0 = the original 25)
+  d2_50fps                1 = Defender 2 at 50 (60) frames a second (0 = the original 25 / 30)
+  defender2_60hz          1 = Defender 2 in its 60 Hz mode, as the arcade (its speeds adjusted); 0 = 50 Hz
   hc_strobes              1 = keep Hardcore's strobes on
   trip_calm_background    0 = Trip-A-Tron's palettes flash as originally
   trip_music              Trip-A-Tron's music mode (0 off, 1 pulse, 2 full; also L3 / F12)
