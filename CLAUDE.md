@@ -179,10 +179,11 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   the ship), bit 2 smart bomb (count $12BB4). Pad: LB / RB held. Warp: not found.
   Feel (owner 2026-11-01: "a lot of inertia", up / down tricky): measured - the altitude $2B682 follows the
   mouse within 1-3 frames and the ship the next frame, no easing: the lag was our stick -> mouse mapping (4 px
-  a frame max, quadratic). Now in play the altitude is written directly: andes_stick_speed (6) x
+  a frame max, quadratic). Now in play the altitude is written directly (owner: 6 px and 1 step a frame were
+  "a bit too sensitive" -> halved: 3 px, andes_thrust_ease 0.5 step a frame): andes_stick_speed (3) x
   ((|y| - 0.15) / 0.85) ^ andes_stick_curve (1.5) px a frame. Left / right inertia is the game's: the speed
   index $14BC4 (0..19) climbs a step every few frames while thrusting and sinks over ~10 s. andes_direct_thrust
-  (1): the index follows how far the stick is pushed (19 x push), one step a frame (0 -> full ~20 frames), the
+  (1): the index follows how far the stick is pushed (19 x push), andes_thrust_ease steps a frame (0.5: 0 -> full ~40 frames), the
   thrust button held while moving (exhaust); direction from 0.2 deflection. 0 = the original. Text $2B494 "CONTROLS: Mouse = Altitude, Left
   Mouse = Thrust, Right Mouse = Reverse, Left SHIFT = FIRE". Crack screen (right button = trainer, $1041A)
   ends by itself; clicks at frame 100 changed nothing - trainer not offered yet. 13-19 drawn frames/s in play,

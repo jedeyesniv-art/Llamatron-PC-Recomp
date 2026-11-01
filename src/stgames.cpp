@@ -115,7 +115,8 @@ int g_reverse_frames = 0;  // the right button held for a few frames (a reverse)
 bool g_fire_held = false;
 constexpr uint32_t kAndesAlt = 0x2B682, kAndesSpeed = 0x14BC4;
 float g_alt = -1;
-float g_andes_speed = 6, g_andes_curve = 1.5f;
+float g_andes_speed = 3, g_andes_curve = 1.5f;
+float g_andes_ease = 0.5f, g_thrust_frac = 0;  // speed steps a frame (direct thrust)
 bool g_andes_direct = true;
 bool g_shield_held = false;
 constexpr uint8_t kKeyAlt = 0x38;
@@ -165,7 +166,7 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   if (play && p.connected) {
     // Altitude: the game takes it straight from the mouse ($2B682 = y - mouse dy, 0x20..0xBE; the ship follows
     // the next frame, no easing), so it's written directly: the stick is its speed, through a gentle curve
-    // (andes_stick_speed px a frame at full, andes_stick_curve; the old mapping was 4 px, quadratic: slow).
+    // (andes_stick_speed px a frame at full - 3, owner: 6 too sensitive - and andes_stick_curve).
     float cur = float(Get16(*m, kAndesAlt));
     if (g_alt < 0 || std::fabs(g_alt - cur) >= 1) g_alt = cur;  // (the PC mouse may have moved it)
     float y = std::fabs(p.ly) > 0.15f ? p.ly : 0;
@@ -208,8 +209,11 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
       if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || p.Held(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || p.lt > 0.5f) push = 1;
       int target = (dir != 0 && dir == facing) || p.lt > 0.5f ? int(std::lround(std::min(push, 1.0f) * 19)) : 0;
       int speed = Get16(*m, kAndesSpeed);
-      if (speed < target) ++speed;
-      else if (speed > target) --speed;
+      g_thrust_frac += g_andes_ease;  // (owner: 1 a frame was too twitchy; 0.5 = 0 -> full in ~0.8 s)
+      for (; g_thrust_frac >= 1; g_thrust_frac -= 1) {
+        if (speed < target) ++speed;
+        else if (speed > target) --speed;
+      }
       Put16(m, kAndesSpeed, speed);
       if (target > 0) buttons |= 2;
     } else if ((dir != 0 && dir == facing) || p.lt > 0.5f) {
@@ -568,7 +572,8 @@ void Start(Game g) {
   g_d2_50fps = settings::Get("d2_50fps", 1) != 0;
   g_fire_held = false;
   g_alt = -1;
-  g_andes_speed = float(settings::Get("andes_stick_speed", 6));
+  g_andes_speed = float(settings::Get("andes_stick_speed", 3));
+  g_andes_ease = std::clamp(float(settings::Get("andes_thrust_ease", 0.5)), 0.05f, 19.0f), g_thrust_frac = 0;
   g_andes_curve = float(settings::Get("andes_stick_curve", 1.5));
   g_andes_direct = settings::Get("andes_direct_thrust", 1) != 0;
   g_shield_held = false;

@@ -209,7 +209,8 @@ Written on the first run with every setting and its default. Edit it while the g
   hc_strobes              1 = keep Hardcore's strobes on
   andes_direct_thrust     1 = Andes Attack's speed follows the stick (snappy); 0 = the original slow
                           build-up and glide
-  andes_stick_speed, andes_stick_curve   Andes Attack's climb / dive speed (6 px a frame at full) and curve
+  andes_stick_speed, andes_stick_curve   Andes Attack's climb / dive speed (3 px a frame at full) and curve
+  andes_thrust_ease       how quickly Andes Attack's speed follows the stick (0.5 = full in ~0.8 s)
   photonstorm_50fps       1 = Photon Storm at 50 frames a second (0 = the original 25)
   trip_calm_background    0 = Trip-A-Tron's palettes flash as originally
   trip_music              Trip-A-Tron's music mode (0 off, 1 pulse, 2 full; also L3 / F12)
