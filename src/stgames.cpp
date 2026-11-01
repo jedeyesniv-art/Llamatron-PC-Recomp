@@ -30,6 +30,10 @@ uint32_t Get32(const st::Machine& m, uint32_t a) {
   return uint32_t(p[0]) << 24 | uint32_t(p[1]) << 16 | uint32_t(p[2]) << 8 | p[3];
 }
 int Get16(const st::Machine& m, uint32_t a) { return int16_t(m.Ram()[a] << 8 | m.Ram()[a + 1]); }
+void Put16(st::Machine* m, uint32_t a, int v) {
+  m->Ram()[a] = uint8_t(v >> 8);
+  m->Ram()[a + 1] = uint8_t(v);
+}
 
 void TapKey(st::Machine* m, uint8_t code, int frames = 3) {
   m->KeyEvent(code, true);
@@ -109,6 +113,10 @@ float g_mouse_x = 0, g_mouse_y = 0;
 int g_stick_dir = 0;     // left stick pushed left (-1) / right (1): one reverse per push
 int g_reverse_frames = 0;  // the right button held for a few frames (a reverse)
 bool g_fire_held = false;
+constexpr uint32_t kAndesAlt = 0x2B682, kAndesSpeed = 0x14BC4;
+float g_alt = -1;
+float g_andes_speed = 6, g_andes_curve = 1.5f;
+bool g_andes_direct = true;
 bool g_shield_held = false;
 constexpr uint8_t kKeyAlt = 0x38;
 
@@ -153,27 +161,60 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     return;
   }
   uint8_t buttons = mbuttons;
-  // Altitude: the stick's up / down moves the mouse (down = lower), through a curve: 4 px a frame at full.
-  float y = std::fabs(p.ly) > 0.15f ? p.ly : 0;
-  if (y != 0) {
-    float k = (std::fabs(y) - 0.15f) / 0.85f;
-    g_mouse_y += (y < 0 ? -1 : 1) * 4.0f * k * k;
+  int dy = 0;
+  if (play && p.connected) {
+    // Altitude: the game takes it straight from the mouse ($2B682 = y - mouse dy, 0x20..0xBE; the ship follows
+    // the next frame, no easing), so it's written directly: the stick is its speed, through a gentle curve
+    // (andes_stick_speed px a frame at full, andes_stick_curve; the old mapping was 4 px, quadratic: slow).
+    float cur = float(Get16(*m, kAndesAlt));
+    if (g_alt < 0 || std::fabs(g_alt - cur) >= 1) g_alt = cur;  // (the PC mouse may have moved it)
+    float y = std::fabs(p.ly) > 0.15f ? p.ly : 0;
+    if (y != 0) {
+      float k = (std::fabs(y) - 0.15f) / 0.85f;
+      g_alt += (y < 0 ? -1 : 1) * g_andes_speed * std::pow(k, g_andes_curve);
+    }
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_UP)) g_alt -= 3;
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) g_alt += 3;
+    g_alt = std::clamp(g_alt, 32.0f, 190.0f);
+    Put16(m, kAndesAlt, int(g_alt));
+  } else {
+    float y = std::fabs(p.ly) > 0.15f ? p.ly : 0;  // other screens: the mouse, as before
+    if (y != 0) {
+      float k = (std::fabs(y) - 0.15f) / 0.85f;
+      g_mouse_y += (y < 0 ? -1 : 1) * 4.0f * k * k;
+    }
+    dy = int(g_mouse_y);
+    g_mouse_y -= float(dy);
+    g_alt = -1;
   }
-  if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_UP)) g_mouse_y -= 2;
-  if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) g_mouse_y += 2;
-  int dy = int(g_mouse_y);
-  g_mouse_y -= float(dy);
   if (play) {
     // Left / right: thrust that way; against the facing, reverse first (the right button, once per push).
-    int dir = p.lx > 0.5f || p.Held(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ? 1
-              : p.lx < -0.5f || p.Held(SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? -1
-              : std::fabs(p.lx) < 0.3f ? 0 : g_stick_dir;
+    // (Direct thrust is proportional, so a small push counts: 0.2 / release 0.12; else half way / 0.3.)
+    const float on = g_andes_direct ? 0.2f : 0.5f, off = g_andes_direct ? 0.12f : 0.3f;
+    int dir = p.lx > on || p.Held(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ? 1
+              : p.lx < -on || p.Held(SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? -1
+              : std::fabs(p.lx) < off ? 0 : g_stick_dir;
     int facing = Get16(*m, kAndesFacing) ? -1 : 1;
     if (dir != 0 && dir != g_stick_dir && dir != facing) g_reverse_frames = 3;
     g_stick_dir = dir;
     if (pad::Pressed(SDL_GAMEPAD_BUTTON_WEST)) g_reverse_frames = 3;
-    if (g_reverse_frames > 0) --g_reverse_frames, buttons |= 1;
-    else if ((dir != 0 && dir == facing) || p.lt > 0.5f) buttons |= 2;
+    if (g_reverse_frames > 0) {
+      --g_reverse_frames, buttons |= 1;
+    } else if (g_andes_direct) {
+      // Direct thrust (andes_direct_thrust): the game's speed index ($14BC4, 0..19; it normally climbs one step
+      // every few frames while thrusting and sinks as slowly) follows how far the stick is pushed, one step a
+      // frame - about 0.4 s from still to full. The thrust button stays held while moving (the exhaust).
+      float push = std::max(0.0f, (std::fabs(p.lx) - 0.15f) / 0.75f);
+      if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || p.Held(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || p.lt > 0.5f) push = 1;
+      int target = (dir != 0 && dir == facing) || p.lt > 0.5f ? int(std::lround(std::min(push, 1.0f) * 19)) : 0;
+      int speed = Get16(*m, kAndesSpeed);
+      if (speed < target) ++speed;
+      else if (speed > target) --speed;
+      Put16(m, kAndesSpeed, speed);
+      if (target > 0) buttons |= 2;
+    } else if ((dir != 0 && dir == facing) || p.lt > 0.5f) {
+      buttons |= 2;
+    }
     // Fire: Left Shift held.
     bool fire = p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f;
     if (fire != g_fire_held) m->KeyEvent(kKeyLShift, fire), g_fire_held = fire;
@@ -225,11 +266,6 @@ Point g_d2_click_at{0, 0};
 bool g_host_paused = false;
 uint8_t g_d2_held[128] = {};  // keys we hold down on the ST
 float g_d2_pwm = 0;           // climb / dive pulses (analog altitude)
-
-void Put16(st::Machine* m, uint32_t a, int v) {
-  m->Ram()[a] = uint8_t(v >> 8);
-  m->Ram()[a + 1] = uint8_t(v);
-}
 
 void Hold(st::Machine* m, uint8_t code, bool down) {
   if (bool(g_d2_held[code]) == down) return;
@@ -531,6 +567,10 @@ void Start(Game g) {
   g_hc_strobes = settings::Get("hc_strobes", 0) != 0, g_hc_strobes_done = false;
   g_d2_50fps = settings::Get("d2_50fps", 1) != 0;
   g_fire_held = false;
+  g_alt = -1;
+  g_andes_speed = float(settings::Get("andes_stick_speed", 6));
+  g_andes_curve = float(settings::Get("andes_stick_curve", 1.5));
+  g_andes_direct = settings::Get("andes_direct_thrust", 1) != 0;
   g_shield_held = false;
   std::fill(std::begin(g_keys), std::end(g_keys), false);
 }

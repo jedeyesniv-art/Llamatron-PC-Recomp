@@ -168,7 +168,7 @@ std::vector<Known> KnownGames() {
   k.back().game.help = {"ANDES ATTACK  -  JEFF MINTER, 1988", "",
                         "Save the llamas from the Zzyaxian landers.", "",
                         "LEFT STICK UP/DOWN   altitude",
-                        "LEFT STICK L/R       thrust (turns round first)",
+                        "LEFT STICK L/R       speed: how far you push",
                         "A OR RT              fire",
                         "Y                    smart bomb",
                         "LB OR RB (HOLD)      shield (it drains)",
