@@ -1,14 +1,16 @@
 # Llamatron: native PC port
 
-Jeff Minter's **Llamatron: 2112** (Atari ST, Llamasoft 1991) and **Super Gridrunner**, the bonus game on the
-same disk, as a native Windows app with modern pad controls: twin-stick play on an Xbox controller, smooth
-50 fps, no screen flashes and an optional CRT look. The original 68000 game code runs unchanged on the
+Jeff Minter's Atari ST games - **Llamatron: 2112** and **Super Gridrunner**, **Trip-A-Tron**, **Revenge of
+the Mutant Camels**, **Andes Attack**, **Defender 2** and the unfinished **Hardcore** - as a native Windows app
+with modern pad controls: twin-stick play on an Xbox controller, smooth 50 fps, flashes removed or toned down
+and an optional CRT look. The original 68000 game code runs unchanged on the
 [Musashi](https://github.com/kstenerud/Musashi) interpreter inside a small Atari ST (hardware and TOS emulated
 at a high level), with SDL 3 for video, sound and input. A hobby project, not affiliated with or endorsed by
 Jeff Minter or Llamasoft.
 
-Llamatron is shareware ("please spread this game everywhere"), so the release zip includes the game: the
-original disk image as Jeff Minter distributes it on his site.
+The release zip includes the games, from the disks Jeff Minter distributes on his site (Llamatron, Trip-A-Tron
+and Revenge were shareware: "please spread this game everywhere"). Where they came on crack compilation disks,
+only the Llamasoft games' own files are kept.
 
 ## Features
 
@@ -20,7 +22,11 @@ original disk image as Jeff Minter distributes it on his site.
   16-25. The game logic runs at exactly its original speed.
 - Fullscreen at a refresh rate that is a multiple of 50 Hz, so every frame is shown evenly; VRR screens too.
 - No screen flashes (the kill flash and strobes are removed; `--flashes` keeps them).
-- A start screen to pick either game, and a CRT shader (F9).
+- Pad controls for every game (Trip-A-Tron's light synth on the sticks, with a music-reactive mode; the mouse
+  games Andes Attack, Defender 2 and Hardcore on the sticks; menus and high score names on the d-pad).
+- A start screen with the disks on a carousel, each game's how-to-play page and its docs; drop any other ST
+  disk image (.msa, .st, .stx) into `game\` and it appears too.
+- A CRT shader (F9). TOS console text, medium resolution, STE DMA sound and colours, Pasti .stx disks.
 
 ## Playing
 
@@ -44,5 +50,5 @@ the nearest `Private\` folder up the tree. `Tools\package_portable.ps1 -Release`
 ## Licence
 
 This project's code: MIT No Attribution (see `LICENSE`). Third-party code: SDL (zlib), Musashi (MIT-style),
-SoftFloat 2b, ayumi levels (MIT) - see `licenses\THIRD-PARTY-NOTICES.txt`. Llamatron and Super Gridrunner are
-(c) Jeff Minter / Llamasoft.
+SoftFloat 2b, ayumi levels (MIT), miniaudio (public domain / MIT-0) - see `licenses\THIRD-PARTY-NOTICES.txt`.
+The games are (c) Jeff Minter / Llamasoft.

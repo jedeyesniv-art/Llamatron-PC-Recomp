@@ -1,33 +1,47 @@
 LLAMATRON - PC
 ==============
 
-Jeff Minter's Llamatron: 2112 (Atari ST, Llamasoft 1991) and Super Gridrunner, the bonus game on the same
-disk, running natively on Windows with modern pad controls. The original game code runs unchanged inside a
-small Atari ST built into this program, plus a few optional improvements listed below.
+Jeff Minter's Atari ST games running natively on Windows with modern pad controls:
+  Llamatron: 2112 (1991) and Super Gridrunner, the bonus game on the same disk
+  Trip-A-Tron (1992), the light synthesiser
+  Revenge of the Mutant Camels (1992, the 1 MB STE version)
+  Andes Attack (1988)
+  Defender 2 (Arcadia 1990: Defender, Defender II and Stargate)
+  Hardcore (1992), Yak's unfinished 5-level evaluation demo
+The original game code runs unchanged inside a small Atari ST built into this program, plus a few optional
+improvements listed below.
 
-Llamatron is (c) 1991 Jeff Minter / Llamasoft. It was released as shareware ("please spread this game
-everywhere"); the original Atari ST disk image, as Jeff Minter distributes it on his site, is included in the
-"game" folder.
+The games are (c) Jeff Minter / Llamasoft. Llamatron, Trip-A-Tron and Revenge were shareware ("please spread
+this game everywhere"); the disks in the "game" folder come from Jeff Minter's own site. Some arrived on
+crack compilation disks: only the Llamasoft games' own files were kept (the cracks' trainers are offered as
+options instead).
 
 
 SETTING UP
 ----------
-Unpack the zip anywhere and run llamatron.exe. Nothing to install. (The game is the disk image in the "game"
-folder; any other Llamatron .msa or .st disk image put there works too.)
+Unpack the zip anywhere and run llamatron.exe. Nothing to install. The games are the disk images (and
+Trip-A-Tron's folder) in the "game" folder.
 
-Settings, high scores (SCORES.YAK, HISCORES.COW) and a log file are kept in the "userdata" folder next to the
-program.
+Settings, high scores and a log file are kept in the "userdata" folder next to the program (each game other
+than Llamatron and Gridrunner in a folder of its own there).
+
+More disks: put any Atari ST disk image (.msa, .st or .stx) in the "game" folder and it appears as a disk of
+its own on the start screen, named after the file, with simple pad controls (left stick and A = the
+joystick, right stick = the mouse, RT / LT = its buttons, Start = Space, Back = Esc, B twice = leave). If it
+has several programs on it, pick one on its how-to-play page. A picture named like the image (.png) next to
+it becomes its label.
 
 
 THE START SCREEN
 ----------------
-Two floppy disks: pick a game.
-  Left / right    choose Llamatron or Super Gridrunner
-  A or Start      play it
-  Y               how to play
-  X               CRT look on / off (also F9, here and in the games)
+The disks on a carousel: pick a game.
+  Left / right    turn the carousel (LB / RB and the mouse wheel too)
+  A or Start      play the disk in the middle
+  Y               how to play (and its options: trainers, which program)
+  X               on that page: read the game's docs (where the disk has them); elsewhere: CRT look on / off
+                  (also F9, here and in the games)
   B, B            quit
-From either game, press B twice on its title screen to come back to the disks.
+From any game, press B twice to come back to the disks (Llamatron and Gridrunner: on their title screen).
 Keyboard: cursor keys, Enter, H = how to play, C = CRT, Esc twice = quit.
 
 
@@ -90,6 +104,57 @@ works too.
 The mouse plays it the original way: move the ship with the mouse, the buttons fire.
 
 
+TRIP-A-TRON - XBOX PAD
+----------------------
+  Left stick      move the light source           Right stick     spirograph: the stick is the position
+  RT (hold)       make patterns                   LT              latch pattern making on / off
+  D-pad L / R     previous / next effect          D-pad U / D     symmetry
+  LB / RB         palette                         A               surprise me (effect, symmetry, palette)
+  X               stop all patterns               Y               the Control Panel
+  Start           starfields                      Back            waveforms
+  L3 (or F12)     music: off / pulse / full - it listens to whatever your PC is playing
+On the Control Panel the sticks are the mouse, A / X its buttons. Keyboard and mouse work as on the ST. The
+first time it installs itself into userdata\tripatron (a few seconds). Its README is on the how-to-play page.
+
+
+REVENGE OF THE MUTANT CAMELS - XBOX PAD
+---------------------------------------
+  Left stick / d-pad   move the camel             A, X, RT        fire
+  Back                 pause                      B (paused)      back to the menu
+  B, B                 back to the disks
+Keyboard: cursor keys + Space, P pause, O resume. Yak's notes are on the how-to-play page.
+
+
+ANDES ATTACK - XBOX PAD
+-----------------------
+  Left stick up / down   altitude                 Left stick left / right   thrust that way (turns round first)
+  A or RT                fire                     Y                         smart bomb
+  X / LT                 reverse / thrust         Back                      pause
+  High score name: up / down picks a letter, A enters it.     B, B: back to the disks
+Mouse and keyboard as the original: mouse up / down, left button thrust, right reverse, Left Shift fire,
+Control smart bomb, Right Shift pause, Space resume.
+
+
+DEFENDER 2 - XBOX PAD
+---------------------
+  Title: the d-pad picks Defender, Defender II or Stargate, A starts it; then A = one player.
+  Left stick up / down   climb / dive             Left stick left / right   thrust that way (turns round first)
+  A or RT                fire                     Y                         smart bomb
+  X / LT                 reverse / thrust         LB                        inviso (Stargate)
+  Back                   pause                    B, B                      back to the disks
+  Initials (a high score): the d-pad picks the letter, A fixes it, X deletes.
+The crack's trainer (invincibility, friendly sprites) is on the how-to-play page, and its notes.
+
+
+HARDCORE - XBOX PAD
+-------------------
+The guns ride the four edges of the field and fire by themselves; the puck ricochets around.
+  Left stick       move the guns                  Right stick     put them at that spot
+  A or RT          side lasers                    Y               puck intelligence on / off
+  Back             pause                          B, B            back to the disks
+Keyboard: P pause, O resume, S strobes, N next level. Yak's notes for its testers are on the how-to-play page.
+
+
 IMPROVEMENTS OVER THE ORIGINAL
 ------------------------------
 - Smooth: during play the ST's processor runs faster, so the screen updates 50 times a second instead of
@@ -101,6 +166,9 @@ IMPROVEMENTS OVER THE ORIGINAL
   be uncomfortable or a risk for photosensitive players). Gameplay is unchanged.
 - The picture has the shape it had on a UK TV in 1991.
 - Optional analog aim (RB on the title screen).
+- The other games: 50 frames a second in play too (they drew 13-25), at their original speed.
+- Flashes toned down: Trip-A-Tron's flashing palettes (4, 5, 6) pulse gently instead; Revenge's flashes are
+  softened; Hardcore starts with its own strobes switched off.
 - Super Gridrunner: smooth 50 frames a second; snakes waiting in the entry lane at the top show up 1.5
   seconds before they come down, instead of appearing out of nowhere (--entry-lane keeps the original).
 - CRT look (on by default; X on the start screen or F9 to switch): scanlines, a phosphor mask and a faint
@@ -122,6 +190,11 @@ Written on the first run with every setting and its default. Edit it while the g
   grid_stick_speed, grid_stick_curve, grid_stick_deadzone, grid_dpad_speed   Gridrunner's ship movement
   grid_fire_mode_swap     1 = flip which way a right-stick flick turns the nosecone shot
   grid_50fps              1 = Gridrunner at 50 frames a second (0 = the original)
+  d2_50fps                1 = Defender 2 at 50 frames a second (0 = the original 25)
+  hc_strobes              1 = keep Hardcore's strobes on
+  trip_calm_background    0 = Trip-A-Tron's palettes flash as originally
+  trip_music              Trip-A-Tron's music mode (0 off, 1 pulse, 2 full; also L3 / F12)
+  trip_stick_speed, trip_stick_curve, trip_stick_deadzone, trip_spiro_size   Trip-A-Tron's sticks
 The CRT look needs a Direct3D 12 graphics card (any from the last ten years); without one the picture is
 shown plain.
 
@@ -135,12 +208,14 @@ COMMAND LINE OPTIONS
   --cpu=1               the original processor speed during play (the original stutter)
   --aim=8 / --aim=analog   aiming for this run only
   --disk=<file>         use this disk image
-  --program=GRIDRUNR.PRG   start Super Gridrunner directly (TRON1MEG.PRG: Llamatron), no start screen
+  --program=GRIDRUNR.PRG   start Super Gridrunner directly, no start screen (also TRON1MEG.PRG, TRIP.PRG,
+                        REVSTE1M.TOS, ANDES.BOY, DEFENDR2.PRG, HARDCORE.PRG)
   --entry-lane          Super Gridrunner: the original entry lane (snakes hidden until they come down)
 
 
 CREDITS
 -------
-Llamatron: Jeff Minter (yak) / Llamasoft, 1991.
+Llamatron, Super Gridrunner, Trip-A-Tron, Revenge of the Mutant Camels, Andes Attack, Hardcore: Jeff Minter
+(yak) / Llamasoft. Defender 2: Jeff Minter for Arcadia, 1990.
 This PC version uses SDL 3, the Musashi 68000 emulator and SoftFloat (see licenses\THIRD-PARTY-NOTICES.txt).
 The CRT shader is this project's own. The disk labels on the start screen were hand-written by the author.

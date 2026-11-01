@@ -1,12 +1,15 @@
 # Builds Release and assembles the portable folder dist\Llamatron\:
-#   llamatron.exe (static runtime: no DLLs), README.txt, licenses\, an empty game\ folder (+ the disk image with
-#   -GameData). The PDB goes to dist\symbols\.
-# -Release also writes dist\release\Llamatron-<version>-windows.zip (with the game disk: -GameData, default
-# Private\Llamatron ST.msa; no unpacked game files, userdata or logs - checked) and Llamatron-<version>-symbols.zip.
+#   llamatron.exe (static runtime: no DLLs), README.txt, licenses\, game\ with every game (see below). The PDB
+#   goes to dist\symbols\.
+# -Release also writes dist\release\Llamatron-<version>-windows.zip (with game\; no unpacked game files besides
+# Trip-A-Tron's folder, no userdata or logs - checked) and Llamatron-<version>-symbols.zip.
 #
-# Usage: powershell -ExecutionPolicy Bypass -File Tools\package_portable.ps1 [-GameData <.msa/.st file>] [-SkipBuild] [-Release]
+# The games (owner 2026-11-01: Llamasoft only - the compilation disks' other games don't ship):
+#   Llamatron ST.msa (Llamatron + Super Gridrunner), Trip-A-Tron\ (TRIP_A_T.RON's files), the Revenge 1 MB STE
+#   .stx, and Andes Attack / Defender 2 / Hardcore .st built by Tools\make_release_disks.py from the downloads.
+#
+# Usage: powershell -ExecutionPolicy Bypass -File Tools\package_portable.ps1 [-SkipBuild] [-Release]
 param(
-    [string]$GameData = "",
     [switch]$SkipBuild,
     [switch]$Release
 )
@@ -31,26 +34,40 @@ $exe = Join-Path $repo "build\llamatron.exe"
 if (-not (Test-Path $exe)) { throw "$exe not found - build first" }
 $version = (Select-String -Path (Join-Path $repo "CMakeLists.txt") -Pattern 'project\(Llamatron VERSION ([0-9.]+)').Matches[0].Groups[1].Value
 
-# Fresh folder, but keep game\ and userdata\ if they are already there.
+# The game folder's contents, assembled once.
+function Copy-Games([string]$to) {
+    New-Item -ItemType Directory -Force $to | Out-Null
+    $llamatron = Join-Path $repo "Private\Llamatron ST.msa"
+    $trip = Join-Path $repo "Private\new\trip_a_t\TRIP_A_T.RON"
+    $rmc = Get-ChildItem (Join-Path $repo "Private\new\rmc1mb") -Filter *.stx | Select-Object -First 1
+    foreach ($p in $llamatron, $trip) { if (-not (Test-Path $p)) { throw "$p not found" } }
+    if (-not $rmc) { throw "the Revenge 1 MB STE .stx (Private\new\rmc1mb) not found" }
+    Copy-Item $llamatron $to
+    New-Item -ItemType Directory -Force (Join-Path $to "Trip-A-Tron") | Out-Null
+    Copy-Item (Join-Path $trip "*") (Join-Path $to "Trip-A-Tron")
+    # -LiteralPath: the download's name has [brackets], which -Path takes as a wildcard (and copies nothing).
+    Copy-Item -LiteralPath $rmc.FullName -Destination (Join-Path $to "Revenge of the Mutant Camels (1MB STE).stx")
+    python -P (Join-Path $repo "Tools\make_release_disks.py") $to
+    if ($LASTEXITCODE) { throw "make_release_disks.py failed" }
+    foreach ($f in "Llamatron ST.msa", "Trip-A-Tron\TRIP1.TOS", "Revenge of the Mutant Camels (1MB STE).stx",
+                   "Andes Attack.st", "Defender 2.st", "Hardcore.st") {
+        if (-not (Test-Path -LiteralPath (Join-Path $to $f))) { throw "game\$f missing" }
+    }
+}
+
+# Fresh folder, but keep userdata\ if it's already there (the owner's scores and settings).
 New-Item -ItemType Directory -Force $dist | Out-Null
-Get-ChildItem $dist | Where-Object { $_.Name -notin "game", "userdata" } | Remove-Item -Recurse -Force
+Get-ChildItem $dist | Where-Object { $_.Name -ne "userdata" } | Remove-Item -Recurse -Force
 Copy-Item $exe $dist
 Copy-Item (Join-Path $repo "res\README.txt") $dist
 New-Item -ItemType Directory -Force (Join-Path $dist "licenses") | Out-Null
 Copy-Item (Join-Path $repo "licenses\THIRD-PARTY-NOTICES.txt") (Join-Path $dist "licenses")
-$game = Join-Path $dist "game"
-New-Item -ItemType Directory -Force $game | Out-Null
-if ($GameData) {
-    Copy-Item $GameData $game
-    Write-Host "game data copied: $GameData"
-}
+Copy-Games (Join-Path $dist "game")
 New-Item -ItemType Directory -Force $symbols | Out-Null
 Copy-Item (Join-Path $repo "build\llamatron.pdb") $symbols
 Write-Host "portable folder: $dist (version $version)"
 
 if ($Release) {
-    if (-not $GameData) { $GameData = Join-Path $repo "Private\Llamatron ST.msa" }
-    if (-not (Test-Path $GameData)) { throw "game disk $GameData not found" }
     $out = Join-Path $repo "dist\release"
     New-Item -ItemType Directory -Force $out | Out-Null
     $stage = Join-Path $out "stage\Llamatron"
@@ -58,10 +75,12 @@ if ($Release) {
     New-Item -ItemType Directory -Force $stage | Out-Null
     Copy-Item $exe, (Join-Path $repo "res\README.txt") $stage
     Copy-Item -Recurse (Join-Path $dist "licenses") $stage
-    New-Item -ItemType Directory -Force (Join-Path $stage "game") | Out-Null
-    Copy-Item $GameData (Join-Path $stage "game")
-    # Leak check: the disk image only - no unpacked game files, no user data.
-    $bad = Get-ChildItem -Recurse $stage | Where-Object { $_.Extension -in ".prg", ".yak", ".cow", ".bin", ".log" -or $_.FullName -match "\\userdata" }
+    Copy-Games (Join-Path $stage "game")
+    # Leak check: disk images only (plus Trip-A-Tron's own folder, which is how it ships); no unpacked game
+    # files from the other disks, no user data, no logs.
+    $bad = Get-ChildItem -Recurse $stage | Where-Object {
+        ($_.Extension -in ".prg", ".tos", ".yak", ".cow", ".bin", ".log", ".boy" -and $_.FullName -notmatch "\\Trip-A-Tron\\") -or
+        $_.FullName -match "\\userdata" }
     if ($bad) { throw "release would contain: $($bad.FullName -join ', ')" }
     $zip = Join-Path $out "Llamatron-$version-windows.zip"
     Compress-Archive -Path $stage -DestinationPath $zip -Force

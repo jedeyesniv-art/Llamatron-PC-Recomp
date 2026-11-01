@@ -50,6 +50,7 @@ Shared groundwork first (A), then games from closest to furthest: RMC, Defender 
 - Then: Defender 2 50 fps (divisor), RMC bonus / name screens boosted, Andes / Defender 2 high score names on
   the pad, Hardcore: pad (pointer on the sticks), 50 fps, flashes calmed. Every game boots and plays on the
   pad. Left: A5 smoke test, A6 packaging, Andes trainer / shields, Defender 2 bomb flash.
+- A6 packaging done: 1.3.0 zip with all the games (Llamasoft-only trimmed disks), smoke-tested unpacked.
 - A5 smoke test done: Tools\smoke_all.ps1 (every game headless from a fresh save folder to play at 50
   frames/s, the docs readers; logs and screenshots in logs\smoke\).
 - A3 console text done (VT52), medium resolution too (the D-Bug doc readers work: idea - offer them from the

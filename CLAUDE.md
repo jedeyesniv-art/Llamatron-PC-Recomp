@@ -74,6 +74,17 @@ starts a twin-stick game. Screenshots -> PNG with pillow to view them.
 Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --obj=build\llamatron.exe
 0x140000000+offset.
 
+## Release 1.3.0 (2026-11-01, branch more-st-games, not pushed yet: owner "we'll push it later")
+- Tools\package_portable.ps1 [-Release]: game\ = Llamatron ST.msa, Trip-A-Tron\ (TRIP_A_T.RON's files), the
+  Revenge 1 MB STE .stx (copied with -LiteralPath: the download's [brackets] are a wildcard to -Path) and
+  Andes Attack / Defender 2 / Hardcore .st built by Tools\make_release_disks.py (owner: Llamasoft-only - the
+  compilation disks' Batman, Hot Wheels, MJ etc. don't ship; files kept = what the games open, traced:
+  Andes ANDES.BOY HISCROES.YAK; Defender 2 DEFENDR2.PRG/.EXE SAFESNG2.EXE (Pexec 3: title tune)
+  DEFENDER.SET TITLE.4V READ_ME.PP; Hardcore HARDCORE.PRG DOC100E.PRG EXPLAN.TXT). The script checks every
+  game arrived; the leak check allows loose files only in Trip-A-Tron\.
+- Tools\smoke_all.ps1 [-Exe <exe>]: run it on the unpacked zip (outside the repo: only its game\ is found).
+  1.3.0 zip: all 10 pass. res\README.txt and README.md cover all the games.
+
 ## More Llamasoft ST games (2026-10-31; owner downloaded them from Llamasoft's site into Private\)
 - NEXT (owner 2026-11-01): the other ST disks, all booting from the launcher with pad controls. The plan, order
   and the owner's open decisions: PLAN-ST-GAMES.md - start there.

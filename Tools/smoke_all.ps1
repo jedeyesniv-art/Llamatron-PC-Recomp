@@ -1,10 +1,12 @@
 # Smoke test: every game headless with scripted pad input, from a fresh save folder each (Trip-A-Tron installs
 # itself), to its play state; passes if play drew 50 frames a second and nothing crashed. The docs readers are
 # started too. Screenshots and logs go to logs\smoke\. Run after changes to machine.cpp, the games' controls or
-# the registry: powershell -ExecutionPolicy Bypass -File Tools\smoke_all.ps1
+# the registry: powershell -ExecutionPolicy Bypass -File Tools\smoke_all.ps1 [-Exe <llamatron.exe>]
+# (-Exe: e.g. the release zip unpacked somewhere else - then only its own game\ folder is found.)
+param([string]$Exe = "")
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
-$exe = Join-Path $repo "build\llamatron.exe"
+$exe = if ($Exe) { $Exe } else { Join-Path $repo "build\llamatron.exe" }
 $out = Join-Path $repo "logs\smoke"
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 New-Item -ItemType Directory -Force $out | Out-Null
