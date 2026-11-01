@@ -37,6 +37,12 @@ class Machine {
   // faster CPU only means the game's work is done sooner. Can change between frames.
   void SetCpuSpeed(int k) { speed_ = std::max(1, k); }
   int CpuSpeed() const { return speed_; }
+  // Calm background (anti-flash): colour 0 is shown through a peak hold over the last 16 frames, then smoothed and
+  // capped, so a strobing background becomes a steady glow and a flash a soft pulse. Per frame: only for programs
+  // that don't change colour 0 mid-frame (Trip-A-Tron while performing).
+  void SetCalmBackground(bool on);
+  bool CalmBackground() const { return calm_; }
+  const float* CalmColour() const { return calm_rgb_; }  // colour 0 as shown while calm (0..1)
   // Screen swaps (the game showing a new frame) since the last call.
   int TakeSwaps() { int n = swaps_; swaps_ = 0; return n; }
   // VBL interrupts the CPU took since the last call (fewer than frames: the program missed some).
@@ -47,6 +53,7 @@ class Machine {
 
   // The last finished frame, 320x200 ARGB.
   const uint32_t* Frame() const { return frame_.data(); }
+  const uint16_t* Palette() const { return palette_; }  // the shifter's colour registers now
   bool Is60Hz() const { return !(sync_ & 2); }
   double FrameHz() const;
 
@@ -57,6 +64,8 @@ class Machine {
   // Input: joystick states (port 0 = the mouse port, 1 = the joystick port) and ST key scancodes.
   void SetJoystick(int port, uint8_t state);
   void KeyEvent(uint8_t scancode, bool down);
+  // Keys waiting in TOS's console buffer before the program asks (answers to a crack's prompts): ASCII.
+  void TypeAhead(const std::string& text);
   // Mouse movement (ST mouse units, y down) and buttons (bit 0 right, bit 1 left, as the IKBD reports them).
   void MouseInput(int dx, int dy, uint8_t buttons);
 
@@ -66,6 +75,7 @@ class Machine {
   void Write8(uint32_t a, uint8_t v);
   void Write16(uint32_t a, uint16_t v);
   uint8_t* Ram() { return ram_.data(); }
+  const uint8_t* Ram() const { return ram_.data(); }
 
   // CPU callbacks.
   int InterruptAck(int level);
@@ -193,6 +203,11 @@ class Machine {
   uint8_t vbase_hi_ = 0, vbase_mid_ = 0, res_ = 0, sync_ = 2;
   uint16_t palette_[16] = {};
   uint32_t vbase_latched_ = 0;
+  bool calm_ = false;
+  float calm_rgb_[3] = {};      // colour 0 as shown (0..1)
+  uint16_t calm_hist_[16] = {};  // colour 0 in the last frames
+  int calm_at_ = 0;
+  void CalmFrame();
 
   // YM2149.
   Ym2149 ym_;

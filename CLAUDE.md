@@ -34,15 +34,23 @@ elease\Llamatron-<ver>-windows.zip (no game
                         crash.cpp (unhandled exception -> stack in the log), musashi\m68kconf.h (our Musashi config,
                         copied over the submodule's at build time).
 - third_party\          submodules: musashi (kstenerud/Musashi, MIT-style), SDL (3.4.16, static).
-- src\launcher.cpp      the start screen (2026-10-22): two low-poly 3.5" disks (SDL_RenderGeometry, own projection
-                        and flat shading), the owner's hand-written labels (photos res\labels\*-photo.jpg, kept out of git: they show the room;
-                        Tools\make_labels.py crops the drawn box, divides out the lighting, black ink on white -> labels.png
-                        + src\labels.inc, run-length packed),
-                        pools of light + a faint bloom on pure black (owner: no beam, no grey floor, bloom halved, a hint
-                        on the unpicked disk), Y = how to play,
-                        B twice quits; games return to it (B twice on their title). main.cpp: RunLauncher /
-                        RunGame (a fresh st::Machine per game; input/game/grid::Reset). --program skips it.
-                        Tests: --lpress=N:<pad button>, --lshot=N:<bmp>, --lframes=N.
+- src\launcher.cpp      the start screen (2026-10-22; carousel 2026-11-01): low-poly 3.5" disks (SDL_RenderGeometry, own
+                        projection and flat shading) on a carousel - picked disk in the middle, neighbours shrinking
+                        back to the sides, wrapping (owner's choice), "< n / N >" under the name. Labels: the owner's
+                        hand-written photos (res\labels\*-photo.jpg, kept out of git: they show the room;
+                        Tools\make_labels.py crops the drawn box, divides out the lighting, black ink on white ->
+                        labels.png + src\labels.inc, run-length packed; no photo = an Ink Free stand-in, STAND_IN),
+                        pools of light + a faint bloom on pure black. Y = how to play + the game's options (up/down
+                        pick, left/right change: trainers, a user disk's program). LB/RB/mouse wheel turn too.
+                        B twice quits; games return to it. Tests: --lpress=N:<pad button>, --lshot=N:<bmp>, --lframes=N.
+- src\games.cpp         the registry (2026-11-01): the known games (id, caption, program, installer, save folder,
+                        input mode, disk colours, help) found by an identifying file on any .msa/.st (or, Trip, in a
+                        folder) under game\, the exe's folder, Private\ up the tree (3 levels deep); any OTHER disk
+                        image with a TOS program on it (header $601A) becomes a user disk (owner: "add more disks as
+                        I find them"): caption = file name, label = <image>.png next to it or a drawn one, colours
+                        from the name, generic controls, option "program" (settings disk_<name>_program), saves in
+                        userdata\disks\<name>. Saves: Llamatron/Gridrunner userdata\ itself, others userdata\<id>.
+                        --program=X runs the known game with that program as from the launcher (--disk picks the image).
 - res\                  README.txt (the player's readme), llamatron.ico + .rc.in (icon, version info).
 - licenses\             THIRD-PARTY-NOTICES.txt (SDL zlib, Musashi MIT-style, SoftFloat 2b, ayumi MIT).
 - Tools\                st_disk.py (msa -> files), depack.py (TRON1MEG.PRG -> tron.bin + tron.reloc),
@@ -93,6 +101,13 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   A = random of the three, X Space, Y Esc, Start F10, Back = number keys (waveforms), B twice = launcher.
   Other states: sticks = mouse, A/RT left, X/LT right, Y Esc. Hint line at the top (HintAtTop). Pad polled with
   edges (test pad: gr<deg>@<mag> right stick, ga gb gx gy gstart gback gup gdown gleft gright, glt grt).
+- Trip-A-Tron flashes (owner 2026-11-01: palettes 4, 5, 6 "particularly aggressive", tone down to pulses):
+  choosing a palette plays a background (colour 0 only) flash list: 4 red/green alternating 0.7 s, 5 white
+  flashes fading, 6 a magenta/blue strobe at ~8 Hz that never stops, 1 a short one. Machine::SetCalmBackground
+  (on while performing; settings trip_calm_background=1): colour 0 shown through a 16-frame peak hold, capped
+  at 40% per channel, smoothed (up 0.12, down 0.05 per frame) - flashes are ~1 s pulses, the strobe a steady
+  dim glow; measured max change 5% per frame. Other colours (the cycling) untouched. --palette-log=N:M logs
+  the colour registers per frame (+ "shown 0" while calm).
 - Trip-A-Tron music (owner 2026-11-01: "react to music like Neon, but still be interactive"): src/music.cpp =
   our Neon port's analysis (C:\Xblades\rexglue\src\audio.cpp: miniaudio WASAPI loopback, 2048 FFT, 20 log bands
   each against its own falling peak, 0.12 s release) + bass/mid/treble averages + onsets (low-band rise vs its
@@ -103,6 +118,36 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   15 s after the player chooses something. miniaudio in third_party/miniaudio (copied from Xblades, notices #5).
   Tests: --music=<wav> (decoded, fed at the game's pace, not played) --trip-music=N; log "music: ..." lines.
   Measured on a synthetic 120 bpm track: 10 beats per 5 s. Not yet tried by the owner on real music.
+- Shared (2026-11-01): src/pad.cpp = pad 1 as a per-frame snapshot (real or the test pad from --press=N:g...)
+  with edges; src/stgames.cpp = RMC and Andes controls (modes kRmc / kAndes). Registry play rule (games.h
+  play_at / play_value / play_word / play_vbl): the faster CPU (--cpu, x8) while that RAM value says "play";
+  --cpu-all=N forces a speed for a whole run (tests). Machine::TypeAhead = keys in the console buffer before the
+  program asks (crack prompts). --palette-log=N:M. Tools: copy Tools\dis.py as d68.py elsewhere and run it on
+  a --dump (runtime addresses).
+- RMC (REVENGE.TOS, D-Bug 28): VBL $1B4B6 calls the hook at $42E18: $1118E play (also the attract demo),
+  $10526 pause, $10294 title, $107FA menus; colour-0 flash list *$4269C (written at $1B502). Keys via its own
+  table ($42D10 -> flags $42D91, test $1B7AA): p pause, o resume ($10508 waits), x abort to the menu (play
+  only; $41AC0 = 4), cheat keys l / n behind $11114. Joystick 1. Logic in the VBL, the main loop draws
+  ($4505C hook, $113FE in play): at 8 MHz 13-19 drawn frames/s in play, x8 -> 50; scroll $384A8 identical
+  x1 vs x8 (scores differ: random numbers and per-frame collisions). Pad: stick = joystick 1, A/X/RT/Start
+  fire, Back pause, B paused = O then X (menu), B twice = disks; calm background in play.
+- Andes Attack (ANDES.BOY, Medway 5): state $12EEE (1 play, 3 paused, 5 title/demo). Mouse (Initmous,
+  $15384): y -> $2B682 (0x20..0xBE, down = bigger), left button held = thrust (speed $14BC4), right button =
+  reverse (facing $1C088: 0 right). Keys: Left Shift fire (verified: laser), Left Control smart bomb
+  (verified: a bomb icon crossed out), Right Shift pause, Space resume; Kbshift + Crawio. Shields / warp
+  keys NOT found (Alt, letters, digits, F keys tried; noisy). Text $2B494 "CONTROLS: Mouse = Altitude, Left
+  Mouse = Thrust, Right Mouse = Reverse, Left SHIFT = FIRE". Crack screen (right button = trainer, $1041A)
+  ends by itself; clicks at frame 100 changed nothing - trainer not offered yet. 13-19 drawn frames/s in play,
+  x8 -> 50 (thrust / altitude identical x1 vs x8). Its sky is a timer B raster: no calm background (it
+  changes colour 0 per line). Pad: see stgames.h.
+- Defender 2: boots from the launcher (the crack's "T for trainer" prompt answered by TypeAhead from the
+  options INVINCIBLE / FRIENDLY SPRITES: "" or "t" + y/n + y/n). VBL $4AF1A dispatches on $4B086 (table
+  $212A2): 0 play, 2 title, 8 player select. Pointer x/y $62456/$62458 (writable; $294FC a drawn copy).
+  Player select: click the figure (75,60) for ONE PLAYER (the words don't work). Play draws 25 frames/s at x1
+  (its design): no boost. Keys: translation $4B300 -> codes, flags $4B381 (test $4A71C); in play ($1B52A):
+  Control up, Left Shift down (ship y $21266), Alt -> $1BCCC (reverse? the demo flips it every 400 frames),
+  # -> $1BCD2 (fire?), Right Shift -> $1BCC2, Tab/Insert -> $1B69C, Caps Lock -> inviso?, Return -> $1B51E
+  (thrust? the demo holds it). Not confirmed; pad not done.
 - TOS added for them (machine.cpp): Pexec 0/3/4/5/6 + Pterm back to the parent, Malloc/Mfree/Mshrink,
   Fsfirst/Fsnext, Fsetdta/Fgetdta, Fdelete, Dfree, Cconin/Bconin wait for a key (trap re-run), GEM trap #2,
   Line-A, a ROM VBL routine (frclock, colorptr, screenpt, vblqueue at $1C00).

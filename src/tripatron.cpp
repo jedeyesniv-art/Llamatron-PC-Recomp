@@ -50,6 +50,7 @@ struct Tap {
   int frames;
 };
 std::vector<Tap> g_taps;
+bool g_calm = true;  // trip_calm_background: the background's flashes toned down (owner 2026-11-01)
 int g_effect = -1, g_symmetry = -1, g_palette = -1, g_wave = -1;  // -1: not chosen from the pad yet
 bool g_latch = false;
 uint32_t g_held = 0;                // pad buttons held last frame (edges)
@@ -112,6 +113,7 @@ void LoadSettings() {
   g_tune.deadzone = std::clamp(settings::Get("trip_stick_deadzone", 0.15), 0.0, 0.9);
   g_tune.spiro = std::clamp(settings::Get("trip_spiro_size", 0.9), 0.1, 1.0);
   g_music_mode = std::clamp(int(settings::Get("trip_music", 0)), 0, 2);
+  g_calm = settings::Get("trip_calm_background", 1) != 0;
 }
 
 void Reset() {
@@ -212,6 +214,8 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
   bool test = g_test;
   g_test = false;
   bool performing = State(*m) == 0;
+  // The palettes' background flashes (4: red / green, 5: white, 6: a constant strobe) as soft pulses.
+  m->SetCalmBackground(performing && g_calm);
   bool have_pad = pad || test;
   auto axis = [&](SDL_GamepadAxis a) {
     if (test) {

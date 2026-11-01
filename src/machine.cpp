@@ -622,12 +622,47 @@ void Machine::IkbdCommand(uint8_t b) {
 
 // ---- Shifter ----
 
+namespace {
+float Luma(uint16_t c) { return (0.30f * float((c >> 8) & 7) + 0.59f * float((c >> 4) & 7) + 0.11f * float(c & 7)) / 7; }
+}  // namespace
+
+void Machine::SetCalmBackground(bool on) {
+  if (on && !calm_) {
+    for (uint16_t& h : calm_hist_) h = palette_[0];
+    for (int k = 0; k < 3; ++k) calm_rgb_[k] = float((palette_[0] >> (8 - 4 * k)) & 7) / 7;
+  }
+  calm_ = on;
+}
+
+void Machine::CalmFrame() {
+  calm_hist_[calm_at_++ % 16] = palette_[0];
+  uint16_t peak = calm_hist_[0];
+  for (uint16_t h : calm_hist_)
+    if (Luma(h) > Luma(peak)) peak = h;
+  float target[3], shown_luma = 0.30f * calm_rgb_[0] + 0.59f * calm_rgb_[1] + 0.11f * calm_rgb_[2];
+  for (int k = 0; k < 3; ++k) target[k] = float((peak >> (8 - 4 * k)) & 7) / 7;
+  float target_luma = Luma(peak);
+  // A white flash becomes a dim grey glow, a red one dim red (saturated red flashes are the worst kind).
+  const float kMaxChannel = 0.4f;
+  float top = std::max({target[0], target[1], target[2]});
+  if (top > kMaxChannel)
+    for (float& t : target) t *= kMaxChannel / top;
+  target_luma = 0.30f * target[0] + 0.59f * target[1] + 0.11f * target[2];
+  float rate = target_luma > shown_luma ? 0.12f : 0.05f;  // up in ~1/4 s, down in ~1/2 s
+  for (int k = 0; k < 3; ++k) calm_rgb_[k] += (target[k] - calm_rgb_[k]) * rate;
+}
+
 void Machine::RenderLine(int y) {
   uint32_t pal[16];
   for (int i = 0; i < 16; ++i) {
     unsigned c = palette_[i];
     auto ch = [](unsigned v) { return (v << 5) | (v << 2) | (v >> 1); };  // 3 bits -> 8
     pal[i] = 0xFF000000u | ch((c >> 8) & 7) << 16 | ch((c >> 4) & 7) << 8 | ch(c & 7);
+  }
+  if (calm_) {
+    if (y == 0) CalmFrame();
+    auto b = [](float v) { return uint32_t(std::clamp(v, 0.0f, 1.0f) * 255 + 0.5f); };
+    pal[0] = 0xFF000000u | b(calm_rgb_[0]) << 16 | b(calm_rgb_[1]) << 8 | b(calm_rgb_[2]);
   }
   uint32_t* out = &frame_[y * kScreenW];
   for (int g = 0; g < 20; ++g) {
@@ -674,6 +709,16 @@ void Machine::IkbdSysHle() {
   Put32(&ram_[kIkbdTarget], vec);
   cpu::Set(cpu::A0, kIkbdPacket);
   cpu::Set(cpu::PC, kRomBase + kRomIkbdCall);
+}
+
+void Machine::TypeAhead(const std::string& text) {
+  for (char c : text) {
+    uint8_t code = 0;
+    static const char kKeys[] = "\0\x1b" "1234567890-=\b\tqwertyuiop[]\r\0asdfghjkl;'`\0#zxcvbnm,./";
+    for (uint8_t i = 1; i < sizeof(kKeys) - 1; ++i)
+      if (kKeys[i] == std::tolower(uint8_t(c))) code = i;
+    console_keys_.push_back(uint32_t(code) << 16 | uint8_t(c));
+  }
 }
 
 void Machine::ConsoleKey(uint8_t sc) {

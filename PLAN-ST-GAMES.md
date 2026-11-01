@@ -37,6 +37,16 @@ spending time): Colourspace (ST light synth, 1987), Photon Storm. Ask the owner 
 ## Order of work
 Shared groundwork first (A), then games from closest to furthest: RMC, Defender 2, Andes Attack, Hardcore.
 
+### Progress
+- 2026-11-01: A1 registry done (src\games.cpp), A2 carousel done, user disks (drop an image in game\) done,
+  options on the how-to-play page (ready for trainers), Trip-A-Tron's palette flashes calmed (CLAUDE.md).
+  Next: A3 console text, A5 smoke test, A6 packaging, then RMC.
+- 2026-11-01 (later): owner: all boot except Defender 2; wants Llamatron's frame-rate fix and pad support.
+  Done: Defender 2 boots (trainer prompt answered from launcher options); RMC: faster CPU in play (17 -> 50
+  frames/s) + pad module; Andes: faster CPU in play + pad module (smart bomb found, shields not). Defender 2:
+  25 frames/s by design, state / pointer / key codes found, pad NOT done (confirm keys first). Hardcore: not
+  looked at yet. Flashes: RMC calmed in play; Andes' smart bomb flash not handled (raster sky).
+
 ### A. Shared groundwork (do once, before the games)
 A1. Game registry instead of hard-coded games (main.cpp RunGame / RunTrip, launcher kDisks / kInfo / labels):
     one table entry per game: name, how to find its files (image name / file inside, folder with a file),
@@ -100,12 +110,14 @@ Being unfinished, agree with the owner what "playable" means here.
 Release packaging (A6); the owner's label photo; music mode tuning on real music (CLAUDE.md lists the knobs);
 untested: the Disk Control screen's file list, KML loading, FOR1024K.
 
-## Decisions to get from the owner at the start (ask together, then work)
-1. Launcher layout for 7+ disks (A2).
-2. Trainers / cheats: drop them, or offer them (e.g. a toggle on the launcher's how-to-play page)?
-3. Screen flashes and strobes in the other games: remove as in Llamatron, or keep?
-4. Hand-written labels for the new disks (photos), or stand-ins for now?
-5. Which other Llamasoft ST games they have (Colourspace, Photon Storm...).
+## The owner's decisions (2026-11-01)
+1. Launcher: a CAROUSEL (picked disk in the middle, neighbours shrinking off to the sides).
+2. Trainers / cheats: OFFER them, as a toggle (per game, on the launcher's how-to-play page).
+3. Flashes: REMOVE them, as in Llamatron. Trip-A-Tron too: its palettes 4, 5 and 6 flash aggressively - tone
+   them down to pulses if possible.
+4. Labels: stand-ins (Ink Free) for now.
+5. Wanted: adding more disks as the owner finds them (drop an image in game\ and it appears in the launcher,
+   generic controls, no rebuild).
 
 ## Techniques that worked (save rediscovering them)
 - Run a program directly: `build\llamatron.exe --headless --disk=<image or folder> --program=<NAME> --trace-tos

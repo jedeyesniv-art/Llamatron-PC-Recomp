@@ -65,6 +65,9 @@ add_executable(llamatron WIN32
   src/music.cpp
   src/miniaudio_impl.cpp
   src/launcher.cpp
+  src/games.cpp
+  src/pad.cpp
+  src/stgames.cpp
   src/crt.cpp
   src/settings.cpp
   src/log.cpp

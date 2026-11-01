@@ -17,8 +17,13 @@ LABELS = [
     ('gridrunner', 'gridrunner-photo.jpg', (188 / 1500, 732 / 2000, 1252 / 1500, 1598 / 2000), 'touch_up_g'),
     # No photo yet: a stand-in in a handwriting font until there is one (box = the whole photo when it comes).
     ('tripatron', 'tripatron-photo.jpg', (0, 0, 1, 1), None),
+    ('rmc', 'rmc-photo.jpg', (0, 0, 1, 1), None),
+    ('defender2', 'defender2-photo.jpg', (0, 0, 1, 1), None),
+    ('andes', 'andes-photo.jpg', (0, 0, 1, 1), None),
+    ('hardcore', 'hardcore-photo.jpg', (0, 0, 1, 1), None),
 ]
-STAND_IN = {'tripatron': ['Trip-A-Tron']}
+STAND_IN = {'tripatron': ['Trip-A-Tron'], 'rmc': ['Mutant', 'Camels'], 'defender2': ['Defender 2'],
+            'andes': ['Andes', 'Attack'], 'hardcore': ['Hardcore']}
 
 
 def stand_in(lines):

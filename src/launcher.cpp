@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <map>
 #include <string>
 #include <vector>
 
@@ -78,24 +77,42 @@ float ScreenArea(const SDL_FPoint* p, int n) {
   return a / 2;
 }
 
-struct Disk {
-  const char* name;
-  SDL_FColor body;
-  SDL_FColor band;  // the label's printed stripe
-};
-const Disk kDisks[kGames] = {
-    {"LLAMATRON", {0.12f, 0.24f, 0.62f, 1}, {0.95f, 0.55f, 0.12f, 1}},
-    {"SUPER GRIDRUNNER", {0.60f, 0.10f, 0.10f, 1}, {0.62f, 0.25f, 0.85f, 1}},
-    {"TRIP-A-TRON", {0.10f, 0.42f, 0.22f, 1}, {0.95f, 0.30f, 0.75f, 1}},
-};
+constexpr float kFloorY = -60;
 
-constexpr float kDiskX = 100, kFloorY = -60;
-// Where a disk sits: -1 left, 0 middle, 1 right (times kDiskX).
-float Slot(int game) { return float(game) - float(kGames - 1) / 2; }
+// The carousel: where a disk `d` places from the middle sits (x, how far back), how much it's lit and seen.
+struct Place {
+  float x, z, sel, vis;
+};
+Place PlaceAt(float d) {
+  float a = std::fabs(d), sign = d < 0 ? -1.0f : 1.0f;
+  Place p;
+  p.x = sign * (a <= 1 ? a * 122 : 122 + (a - 1) * 78 - (a > 2 ? (a - 2) * 18 : 0));
+  p.z = -55 * a - 28 * a * a;
+  p.sel = Smooth(1 - a);
+  // Further out: dimmer, and the ones beyond the second neighbour fade out.
+  p.vis = std::clamp(2.9f - a, 0.0f, 1.0f) * (a > 1 ? 1 - 0.3f * std::min(a - 1, 1.0f) : 1.0f);
+  return p;
+}
+
+// The built-in labels by game id (Tools/make_labels.py -> labels.inc).
+struct BuiltIn {
+  const char* id;
+  const unsigned char* data;
+  size_t size;
+};
+const BuiltIn kBuiltIn[] = {
+    {"llamatron", kLabel_llamatron, sizeof(kLabel_llamatron)},
+    {"gridrunner", kLabel_gridrunner, sizeof(kLabel_gridrunner)},
+    {"tripatron", kLabel_tripatron, sizeof(kLabel_tripatron)},
+    {"rmc", kLabel_rmc, sizeof(kLabel_rmc)},
+    {"defender2", kLabel_defender2, sizeof(kLabel_defender2)},
+    {"andes", kLabel_andes, sizeof(kLabel_andes)},
+    {"hardcore", kLabel_hardcore, sizeof(kLabel_hardcore)},
+};
 
 }  // namespace
 
-Launcher::Launcher(SDL_Renderer* renderer) : r_(renderer) {
+Launcher::Launcher(SDL_Renderer* renderer, const std::vector<games::Game>* games) : r_(renderer), games_(games) {
   uint32_t px = 0xFFFFFFFF;
   SDL_Surface* s = SDL_CreateSurfaceFrom(1, 1, SDL_PIXELFORMAT_ARGB8888, &px, 4);
   white_ = SDL_CreateTextureFromSurface(r_, s);
@@ -113,43 +130,117 @@ Launcher::~Launcher() {
     if (t) SDL_DestroyTexture(t);
 }
 
-// The owner's hand-written labels (Tools/make_labels.py -> labels.inc): grey ink on white, unpacked to textures.
-// (Trip-A-Tron's is a stand-in in a handwriting font until there's a photo.)
+// The owner's hand-written labels (grey ink on white, unpacked to textures); a user disk's picture
+// (<image name>.png next to it), or a label written for it.
 void Launcher::BuildLabels() {
-  const unsigned char* packed[kGames] = {kLabel_llamatron, kLabel_gridrunner, kLabel_tripatron};
-  const size_t sizes[kGames] = {sizeof(kLabel_llamatron), sizeof(kLabel_gridrunner), sizeof(kLabel_tripatron)};
   std::vector<uint32_t> pixels(size_t(kLabelW) * kLabelH);
-  for (int i = 0; i < kGames; ++i) {
-    size_t at = 0;
-    for (size_t k = 0; k + 1 < sizes[i] && at < pixels.size(); k += 2) {
-      uint32_t v = packed[i][k];
-      uint32_t argb = 0xFF000000u | v << 16 | v << 8 | v;
-      for (int n = 0; n < packed[i][k + 1] && at < pixels.size(); ++n) pixels[at++] = argb;
+  for (const games::Game& g : *games_) {
+    SDL_Texture* tex = nullptr;
+    for (const BuiltIn& b : kBuiltIn) {
+      if (g.user || g.id != b.id) continue;
+      size_t at = 0;
+      for (size_t k = 0; k + 1 < b.size && at < pixels.size(); k += 2) {
+        uint32_t v = b.data[k];
+        uint32_t argb = 0xFF000000u | v << 16 | v << 8 | v;
+        for (int n = 0; n < b.data[k + 1] && at < pixels.size(); ++n) pixels[at++] = argb;
+      }
+      SDL_Surface* s = SDL_CreateSurfaceFrom(kLabelW, kLabelH, SDL_PIXELFORMAT_ARGB8888, pixels.data(), kLabelW * 4);
+      tex = SDL_CreateTextureFromSurface(r_, s);
+      SDL_DestroySurface(s);
     }
-    SDL_Surface* s = SDL_CreateSurfaceFrom(kLabelW, kLabelH, SDL_PIXELFORMAT_ARGB8888, pixels.data(), kLabelW * 4);
-    labels_[i] = SDL_CreateTextureFromSurface(r_, s);
-    SDL_DestroySurface(s);
-    SDL_SetTextureScaleMode(labels_[i], SDL_SCALEMODE_LINEAR);
+    if (!tex && !g.label_picture.empty()) {
+      if (SDL_Surface* s = SDL_LoadPNG(g.label_picture.string().c_str())) {
+        tex = SDL_CreateTextureFromSurface(r_, s);
+        SDL_DestroySurface(s);
+      }
+    }
+    if (!tex) tex = StandInLabel(g);
+    if (tex) SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_LINEAR);
+    labels_.push_back(tex);
   }
 }
 
+// A label for a disk without one: its name in capitals, a ruled box, on white.
+SDL_Texture* Launcher::StandInLabel(const games::Game& g) {
+  SDL_Texture* tex = SDL_CreateTexture(r_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, kLabelW, kLabelH);
+  if (!tex) return nullptr;
+  SDL_Texture* old = SDL_GetRenderTarget(r_);
+  SDL_SetRenderTarget(r_, tex);
+  SDL_SetRenderDrawColor(r_, 255, 255, 255, 255);
+  SDL_RenderClear(r_);
+  SDL_SetRenderDrawColor(r_, 30, 30, 40, 255);
+  for (int i = 0; i < 6; ++i) {
+    SDL_FRect box{36.0f + i, 40.0f + i, kLabelW - 72.0f - 2 * i, kLabelH - 80.0f - 2 * i};
+    SDL_RenderRect(r_, &box);
+  }
+  // The name, broken into lines that fit, as big as fits.
+  std::vector<std::string> lines;
+  std::string word, line;
+  auto flush_word = [&]() {
+    if (word.empty()) return;
+    if (!line.empty() && (line.size() + 1 + word.size()) > 10) lines.push_back(line), line.clear();
+    line += (line.empty() ? "" : " ") + word;
+    word.clear();
+  };
+  for (char c : g.name) {
+    if (c == ' ' || c == '_' || c == '-') flush_word();
+    else word += c;
+  }
+  flush_word();
+  if (!line.empty()) lines.push_back(line);
+  size_t longest = 1;
+  for (const std::string& l : lines) longest = std::max(longest, l.size());
+  float scale = std::min(std::floor(380.0f / (8 * float(longest))), std::floor(220.0f / (12 * float(lines.size()))));
+  scale = std::max(2.0f, std::min(scale, 7.0f));
+  float y = (kLabelH - float(lines.size()) * 12 * scale) / 2;
+  SDL_SetRenderScale(r_, scale, scale);
+  for (const std::string& l : lines) {
+    float x = (kLabelW - float(l.size()) * 8 * scale) / 2;
+    SDL_RenderDebugText(r_, x / scale, y / scale, l.c_str());
+    y += 12 * scale;
+  }
+  SDL_SetRenderScale(r_, 1, 1);
+  SDL_SetRenderTarget(r_, old);
+  return tex;
+}
+
 void Launcher::Enter(int game) {
-  selected_ = game;
-  for (int i = 0; i < kGames; ++i) sel_anim_[i] = i == game ? 1.0f : 0.0f;
+  selected_ = std::clamp(game, 0, std::max(0, Count() - 1));
+  scroll_ = target_ = float(selected_);
   fade_in_ = 0;
   launching_ = -1;
   info_ = false;
   quit_armed_ms_ = 0;
 }
 
-void Launcher::Choose(int game) {
-  game = std::clamp(game, 0, kGames - 1);
-  if (game != selected_) info_ = false;
-  selected_ = game;
+void Launcher::Step(int dir) {
+  if (Count() < 2) return;
+  info_ = false;
+  option_row_ = 0;
+  selected_ = (selected_ + dir + Count()) % Count();
+  target_ += float(dir);
+}
+
+float Launcher::Offset(int game) const {
+  float n = float(Count());
+  float d = std::fmod(float(game) - scroll_, n);
+  if (d < -n / 2) d += n;
+  if (d >= n / 2) d -= n;
+  return d;
+}
+
+void Launcher::ChangeOption(int dir) {
+  const games::Game& g = (*games_)[size_t(selected_)];
+  if (g.options.empty()) return;
+  const games::Game::Option& o = g.options[size_t(option_row_)];
+  int n = int(o.values.size());
+  games::SetOption(g, o.key, (games::OptionValue(g, o.key) + dir + n) % n);
 }
 
 Action Launcher::HandleEvent(const SDL_Event& e) {
-  if (launching_ >= 0) return Action::kNone;
+  if (launching_ >= 0 || Count() == 0) return Action::kNone;
+  const games::Game& g = (*games_)[size_t(selected_)];
+  const bool options = info_ && !g.options.empty();
   auto back = [&]() {
     if (info_) {
       info_ = false;
@@ -163,13 +254,25 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
     info_ = false;
     launching_ = 0;
   };
+  auto left_right = [&](int dir) { options ? ChangeOption(dir) : Step(dir); };
+  auto up_down = [&](int dir) {
+    if (options) option_row_ = std::clamp(option_row_ + dir, 0, int(g.options.size()) - 1);
+  };
+  auto toggle_info = [&]() {
+    info_ = !info_;
+    option_row_ = 0;
+  };
   if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
     switch (e.gbutton.button) {
-      case SDL_GAMEPAD_BUTTON_DPAD_LEFT: Choose(selected_ - 1); break;
-      case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: Choose(selected_ + 1); break;
+      case SDL_GAMEPAD_BUTTON_DPAD_LEFT: left_right(-1); break;
+      case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: left_right(1); break;
+      case SDL_GAMEPAD_BUTTON_DPAD_UP: up_down(-1); break;
+      case SDL_GAMEPAD_BUTTON_DPAD_DOWN: up_down(1); break;
+      case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: Step(-1); break;
+      case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: Step(1); break;
       case SDL_GAMEPAD_BUTTON_SOUTH:
       case SDL_GAMEPAD_BUTTON_START: play(); break;
-      case SDL_GAMEPAD_BUTTON_NORTH: info_ = !info_; break;
+      case SDL_GAMEPAD_BUTTON_NORTH: toggle_info(); break;
       case SDL_GAMEPAD_BUTTON_WEST: if (crt::Available()) crt::Toggle(); break;
       case SDL_GAMEPAD_BUTTON_EAST:
       case SDL_GAMEPAD_BUTTON_BACK: return back();
@@ -177,20 +280,25 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
     }
   } else if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
     switch (e.key.scancode) {
-      case SDL_SCANCODE_LEFT: case SDL_SCANCODE_A: Choose(selected_ - 1); break;
-      case SDL_SCANCODE_RIGHT: case SDL_SCANCODE_D: Choose(selected_ + 1); break;
+      case SDL_SCANCODE_LEFT: case SDL_SCANCODE_A: left_right(-1); break;
+      case SDL_SCANCODE_RIGHT: case SDL_SCANCODE_D: left_right(1); break;
+      case SDL_SCANCODE_UP: case SDL_SCANCODE_W: up_down(-1); break;
+      case SDL_SCANCODE_DOWN: case SDL_SCANCODE_S: up_down(1); break;
       case SDL_SCANCODE_RETURN: case SDL_SCANCODE_SPACE: play(); break;
-      case SDL_SCANCODE_F1: case SDL_SCANCODE_I: case SDL_SCANCODE_H: case SDL_SCANCODE_TAB: info_ = !info_; break;
+      case SDL_SCANCODE_F1: case SDL_SCANCODE_I: case SDL_SCANCODE_H: case SDL_SCANCODE_TAB: toggle_info(); break;
       case SDL_SCANCODE_F9: case SDL_SCANCODE_C: if (crt::Available()) crt::Toggle(); break;
       case SDL_SCANCODE_ESCAPE: return back();
       default: break;
     }
+  } else if (e.type == SDL_EVENT_MOUSE_WHEEL) {
+    if (e.wheel.y != 0) Step(e.wheel.y > 0 ? -1 : 1);
   } else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_LEFT) {
     int w = 0, h = 0;
     SDL_GetRenderOutputSize(r_, &w, &h);
-    int game = std::clamp(int(e.button.x * kGames / std::max(1, w)), 0, kGames - 1);
-    if (game == selected_ && !info_) play();
-    else Choose(game);
+    float x = e.button.x / float(std::max(1, w));
+    if (x < 0.3f) Step(-1);
+    else if (x > 0.7f) Step(1);
+    else if (!info_) play();
   }
   return Action::kNone;
 }
@@ -198,14 +306,29 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
 Action Launcher::Update(SDL_Gamepad* pad, double dt) {
   time_ += dt;
   fade_in_ = std::min(1.0, fade_in_ + dt * 2);
-  if (pad && launching_ < 0) {
+  if (pad && launching_ < 0 && Count()) {
+    const games::Game& g = (*games_)[size_t(selected_)];
+    const bool options = info_ && !g.options.empty();
     float x = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
-    if (stick_latch_ == 0 && std::fabs(x) > 0.5f) stick_latch_ = x < 0 ? -1 : 1, Choose(selected_ + stick_latch_);
-    else if (std::fabs(x) < 0.3f) stick_latch_ = 0;
+    float y = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
+    if (stick_latch_ == 0 && std::fabs(x) > 0.5f) {
+      stick_latch_ = x < 0 ? -1 : 1;
+      options ? ChangeOption(stick_latch_) : Step(stick_latch_);
+    } else if (std::fabs(x) < 0.3f) {
+      stick_latch_ = 0;
+    }
+    if (stick_latch_y_ == 0 && std::fabs(y) > 0.5f) {
+      stick_latch_y_ = y < 0 ? -1 : 1;
+      if (options) option_row_ = std::clamp(option_row_ + stick_latch_y_, 0, int(g.options.size()) - 1);
+    } else if (std::fabs(y) < 0.3f) {
+      stick_latch_y_ = 0;
+    }
   }
-  for (int i = 0; i < kGames; ++i) {
-    float target = i == selected_ ? 1.0f : 0.0f;
-    sel_anim_[i] += (target - sel_anim_[i]) * float(std::min(1.0, dt * 7));
+  scroll_ += (target_ - scroll_) * float(std::min(1.0, dt * 8));
+  if (std::fabs(target_ - scroll_) < 0.001f) scroll_ = target_;
+  if (Count() && std::fabs(target_) > 1000) {  // keep the numbers small
+    float k = std::floor(target_ / float(Count())) * float(Count());
+    target_ -= k, scroll_ -= k;
   }
   if (launching_ >= 0) {
     launching_ += dt;
@@ -225,25 +348,28 @@ void Launcher::DrawText(const char* s, float x, float y, float scale, SDL_Color 
 void Launcher::DrawDisk(int game, float w, float h) {
   Camera cam;
   cam.f = h * 1.45f, cam.cx = w / 2, cam.cy = h * 0.47f;
-  float sel = Smooth(sel_anim_[game]);
-  float side = Slot(game);
+  float d = Offset(game);
+  Place pl = PlaceAt(d);
+  if (pl.vis <= 0) return;
+  float sel = pl.sel;
+  float side = std::clamp(d, -1.0f, 1.0f);
   float launch = launching_ >= 0 && game == selected_ ? Smooth(float(launching_ / 0.75)) : 0.0f;
-  // Where it is: the picked one lifts, comes forward and turns to face us; the other leans away. Both sway.
-  V3 pos{side * kDiskX * (1 - launch), 2 + 7 * sel + 1.5f * std::sin(float(time_) * 1.3f + game * 2.1f) - 25 * launch,
-         14 * sel + 250 * launch * launch};
+  // Where it is: the picked one lifts, comes forward and turns to face us; the others lean away. All sway.
+  V3 pos{pl.x * (1 - launch), 2 + 7 * sel + 1.5f * std::sin(float(time_) * 1.3f + game * 2.1f) - 25 * launch,
+         pl.z + 14 * sel + 250 * launch * launch};
   float yaw = side * 0.42f * (1 - sel) + 0.07f * std::sin(float(time_) * 0.8f + game * 1.7f) + launch * 0.6f * side;
   float pitch = -0.10f * (1 - sel) + 0.03f * std::sin(float(time_) * 0.6f + game) - launch * 0.5f;
   auto world = [&](float x, float y, float z) { return RotY(RotX(V3{x, y, z}, pitch), yaw) + pos; };
   auto normal = [&](V3 n) { return Normalize(RotY(RotX(n, pitch), yaw)); };
   // The spotlight above, in front; how much of it this disk gets.
-  float spot = 0.18f + 0.95f * sel;
-  V3 light_pos{side * kDiskX * (1 - launch), 230, 140};
+  float spot = (0.18f + 0.95f * sel) * pl.vis;
+  V3 light_pos{pl.x * (1 - launch), 230, 140};
   auto lit = [&](V3 centre, V3 n, float shine) {
     V3 l = Normalize(light_pos - centre);
     float diff = std::max(0.0f, Dot(n, l));
     V3 view = Normalize(cam.eye - centre), half = Normalize(l + view);
     float spec = shine > 0 ? std::pow(std::max(0.0f, Dot(n, half)), 24.0f) * shine : 0;
-    return 0.07f + (0.95f * diff + spec) * spot;
+    return 0.07f * pl.vis + (0.95f * diff + spec) * spot;
   };
 
   // The body: front, back, edges (culled to what faces us), then the parts on the front.
@@ -258,9 +384,9 @@ void Launcher::DrawDisk(int game, float w, float h) {
     float dsum = 0;
     V3 centre{0, 0, 0};
     for (V3 p : pts) {
-      float d;
-      f.p.push_back(cam.Project(p, &d));
-      dsum += d;
+      float dep;
+      f.p.push_back(cam.Project(p, &dep));
+      dsum += dep;
       centre = centre + p;
     }
     if (ScreenArea(f.p.data(), int(f.p.size())) >= 0) return false;  // facing away
@@ -270,7 +396,7 @@ void Launcher::DrawDisk(int game, float w, float h) {
     faces.push_back(f);
     return true;
   };
-  const SDL_FColor body = kDisks[game].body;
+  const SDL_FColor body = (*games_)[size_t(game)].body;
   std::vector<V3> front, back;
   for (int i = 0; i < 5; ++i) front.push_back(world(kOutline[i][0], kOutline[i][1], kThick / 2));
   for (int i = 4; i >= 0; --i) back.push_back(world(kOutline[i][0], kOutline[i][1], -kThick / 2));
@@ -297,7 +423,7 @@ void Launcher::DrawDisk(int game, float w, float h) {
     Polygon(r_, tex, p, tex ? uv : nullptr, 4, Shade(base, lit(centre, normal({0, 0, 1}), shine)));
   };
   float z = kThick / 2 + 0.05f;
-  rect(-38, -44, 38, 14, z, {1, 1, 1, 1}, 0.15f, labels_[game]);  // the label
+  rect(-38, -44, 38, 14, z, {1, 1, 1, 1}, 0.15f, labels_[size_t(game)]);  // the label
   rect(-24, 20, 26, 47, z + 0.02f, {0.74f, 0.76f, 0.80f, 1}, 0.9f, nullptr);  // the metal shutter
   rect(-10, 24, 4, 44, z + 0.04f, {0.05f, 0.05f, 0.07f, 1}, 0, nullptr);  // its window
   rect(-16, 22, -14, 46, z + 0.03f, {0.55f, 0.57f, 0.60f, 1}, 0.5f, nullptr);  // a groove
@@ -310,6 +436,13 @@ void Launcher::Render() {
   float w = float(iw), h = float(ih);
   SDL_SetRenderDrawColor(r_, 0, 0, 0, 255);
   SDL_RenderClear(r_);
+  float s = std::max(1.0f, std::floor(h / 300));  // the 8x8 font's scale
+  if (Count() == 0) {
+    DrawText("NO DISKS FOUND", w / 2, h * 0.45f, s * 1.5f, {255, 255, 255, 255}, true);
+    DrawText("Put the disk images (.msa / .st) in the game folder next to the program.", w / 2, h * 0.52f, s,
+             {150, 150, 165, 255}, true);
+    return;
+  }
   Camera cam;
   cam.f = h * 1.45f, cam.cx = w / 2, cam.cy = h * 0.47f;
 
@@ -328,27 +461,30 @@ void Launcher::Render() {
     for (int i = 1; i <= n; ++i) idx.insert(idx.end(), {0, i, i + 1});
     SDL_RenderGeometry(r_, white_add_, v.data(), int(v.size()), idx.data(), int(idx.size()));
   };
-  for (int g = 0; g < kGames; ++g) {
-    float sel = Smooth(sel_anim_[g]);
+  for (int g = 0; g < Count(); ++g) {
+    Place pl = PlaceAt(Offset(g));
+    if (pl.vis <= 0) continue;
     float launch = launching_ >= 0 && g == selected_ ? Smooth(float(launching_ / 0.75)) : 0.0f;
-    float k = (0.12f + 0.88f * sel) * (1 - launch);
-    float cx = Slot(g) * kDiskX;
-    glow({cx, kFloorY, 10}, 62, 38, true, {0.30f * k, 0.30f * k, 0.34f * k, 1});
-    float bloom = (0.012f + 0.088f * sel) * (1 - launch);  // a hint behind the other one
-    glow({cx, 2 + 7 * sel, 14 * sel - 6}, 80, 82, false, {bloom, bloom, bloom * 1.1f, 1});
+    float k = (0.12f + 0.88f * pl.sel) * (1 - launch) * pl.vis;
+    float rx = 62 * (1 - 0.25f * (1 - pl.sel));
+    glow({pl.x, kFloorY, pl.z + 10}, rx, 38, true, {0.30f * k, 0.30f * k, 0.34f * k, 1});
+    float bloom = (0.012f + 0.088f * pl.sel) * (1 - launch) * pl.vis;  // a hint behind the others
+    glow({pl.x, 2 + 7 * pl.sel, pl.z + 14 * pl.sel - 6}, 80, 82, false, {bloom, bloom, bloom * 1.1f, 1});
   }
-  // The disks, the picked one (in front) last.
-  for (int g = 0; g < kGames; ++g)
-    if (g != selected_) DrawDisk(g, w, h);
-  DrawDisk(selected_, w, h);
+  // The disks, back to front: the furthest from the middle first.
+  std::vector<int> order;
+  for (int g = 0; g < Count(); ++g) order.push_back(g);
+  std::sort(order.begin(), order.end(),
+            [&](int a, int b) { return std::fabs(Offset(a)) > std::fabs(Offset(b)); });
+  for (int g : order) DrawDisk(g, w, h);
 
-  // Words.
-  float s = std::max(1.0f, std::floor(h / 300));  // the 8x8 font's scale
-  for (int g = 0; g < kGames; ++g) {
-    SDL_FPoint p = cam.Project({Slot(g) * kDiskX, kFloorY - 8, 40});
-    bool on = g == selected_;
-    DrawText(kDisks[g].name, p.x, p.y, s * (on ? 1.3f : 1.0f), on ? SDL_Color{255, 255, 255, 255}
-                                                                   : SDL_Color{90, 90, 100, 255}, true);
+  // Words: the picked disk's name, where it is in the row.
+  const games::Game& picked = (*games_)[size_t(selected_)];
+  SDL_FPoint p = cam.Project({0, kFloorY - 8, 40});
+  DrawText(picked.name.c_str(), p.x, p.y, s * 1.3f, {255, 255, 255, 255}, true);
+  if (Count() > 1) {
+    std::string pos = "< " + std::to_string(selected_ + 1) + " / " + std::to_string(Count()) + " >";
+    DrawText(pos.c_str(), p.x, p.y + 14 * s, s * 0.9f, {90, 90, 100, 255}, true);
   }
   DrawText("LLAMASOFT ON THE ATARI ST", w / 2, h * 0.06f, s, {120, 120, 135, 255}, true);
   const char* hint = SDL_GetTicks() < quit_armed_ms_ ? "PRESS B AGAIN TO QUIT"
@@ -358,58 +494,39 @@ void Launcher::Render() {
   DrawText(hint, w / 2, h * 0.92f, s * 0.9f, {150, 150, 165, 255}, true);
 
   if (info_) {
-    static const char* const kInfo[kGames][17] = {
-        {"LLAMATRON  -  JEFF MINTER, 1991", "",
-         "Rescue the beasties. Kill everything else.", "",
-         "LEFT STICK / D-PAD   move",
-         "RIGHT STICK          aim (twin-stick game)",
-         "A AT THE TITLE       start a twin-stick game",
-         "X AT THE TITLE       start a one-stick game",
-         "A IN PLAY            fire / lock the fire angle",
-         "RB AT THE TITLE      analog aim on / off",
-         "BACK                 pause    (Y: the tentacle)",
-         "B ON THE PAUSE SCREEN  quit to the title",
-         "B TWICE AT THE TITLE   back to the disks", "",
-         "Keyboard: WASD + Space, cursors + Enter, P pause", nullptr},
-        {"SUPER GRIDRUNNER  -  JEFF MINTER", "",
-         "Shoot the snakes. Mind the zappers.", "",
-         "LEFT STICK           move the ship (d-pad: slowly)",
-         "RT OR A              fire",
-         "LT (HOLD)            nosecone back to the ship",
-         "RIGHT STICK FLICK    nosecone shot direction",
-         "RB                   voluntary martyrdom (a life!)",
-         "BACK                 pause",
-         "B ON THE PAUSE SCREEN  quit to the title",
-         "TITLE: X OPTIONS   Y GAME SECRETS   LB MORE INFO",
-         "B TWICE AT THE TITLE   back to the disks", "",
-         "The mouse works too: the original controls.", nullptr},
-        {"TRIP-A-TRON  -  JEFF MINTER, 1992", "",
-         "A light synthesiser: play light to your music.", "",
-         "LEFT STICK      move the light source",
-         "RIGHT STICK     spirograph: stick = position",
-         "RT (HOLD) / LT  make patterns / latch them on",
-         "D-PAD L/R  effect          D-PAD U/D  symmetry",
-         "LB / RB    palette         A  surprise me",
-         "X  stop    Y  control panel    START  starfields",
-         "BACK            waveforms (starfield demos)",
-         "ON THE PANEL    sticks = mouse, A / X = buttons",
-         "B TWICE         back to the disks", "",
-         "L3 / F12   music off / pulse / full (hears the PC)",
-         "Yak's README.DOC is in userdata\\tripatron.", nullptr}};
-    const char* const* lines = kInfo[selected_];
-    int n = 0, longest = 0;
-    for (; lines[n]; ++n) longest = std::max(longest, int(SDL_strlen(lines[n])));
+    std::vector<std::string> lines = picked.help;
+    int first_option = -1;
+    if (!picked.options.empty()) {
+      lines.push_back("");
+      first_option = int(lines.size());
+      for (size_t i = 0; i < picked.options.size(); ++i) {
+        const games::Game::Option& o = picked.options[i];
+        std::string label = o.label;
+        label.resize(std::max<size_t>(label.size() + 2, 16), ' ');
+        lines.push_back(label + "< " + o.values[size_t(games::OptionValue(picked, o.key))] + " >");
+      }
+      lines.push_back("UP/DOWN pick   LEFT/RIGHT change");
+    }
+    int n = int(lines.size()), longest = 0;
+    for (const std::string& l : lines) longest = std::max(longest, int(l.size()));
     float ts = std::max(1.0f, std::floor(std::min(w * 0.85f / (longest * 8), h * 0.7f / (n * 12))));
     float pw = longest * 8 * ts + 48 * ts / 2, ph = n * 12 * ts + 40 * ts / 2;
     SDL_FRect panel{(w - pw) / 2, (h - ph) / 2, pw, ph};
     SDL_SetRenderDrawBlendMode(r_, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r_, 0, 0, 0, 225);
     SDL_RenderFillRect(r_, &panel);
-    SDL_SetRenderDrawColorFloat(r_, kDisks[selected_].band.r, kDisks[selected_].band.g, kDisks[selected_].band.b, 1);
+    SDL_SetRenderDrawColorFloat(r_, picked.band.r, picked.band.g, picked.band.b, 1);
     SDL_RenderRect(r_, &panel);
-    for (int i = 0; i < n; ++i)
-      DrawText(lines[i], panel.x + 24 * ts / 2, panel.y + 20 * ts / 2 + i * 12 * ts, ts,
-               i == 0 ? SDL_Color{255, 255, 255, 255} : SDL_Color{200, 200, 210, 255}, false);
+    for (int i = 0; i < n; ++i) {
+      bool option = first_option >= 0 && i >= first_option && i < first_option + int(picked.options.size());
+      bool on = option && i - first_option == option_row_;
+      SDL_Color c = i == 0 ? SDL_Color{255, 255, 255, 255}
+                    : on   ? SDL_Color{uint8_t(picked.band.r * 255), uint8_t(picked.band.g * 255),
+                               uint8_t(picked.band.b * 255), 255}
+                    : option ? SDL_Color{150, 150, 160, 255}
+                             : SDL_Color{200, 200, 210, 255};
+      DrawText(lines[size_t(i)].c_str(), panel.x + 24 * ts / 2, panel.y + 20 * ts / 2 + i * 12 * ts, ts, c, false);
+    }
   }
 
   // Fades: in at the start, out into the game.

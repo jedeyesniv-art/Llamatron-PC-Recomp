@@ -37,7 +37,7 @@ void Update(st::Machine* m);
 // The player asked to quit the program (B twice at the title).
 bool QuitRequested();
 // Whose controls: Llamatron's, Gridrunner's (gridrunner.h), or the generic ones for other programs.
-enum class Mode { kLlamatron, kGridrunner, kGeneric, kTripATron };
+enum class Mode { kLlamatron, kGridrunner, kGeneric, kTripATron, kRmc, kAndes };  // the last two: stgames.h
 void SetMode(Mode mode);
 Mode GetMode();
 // Generic mode, once per frame: pad -> joysticks and mouse, plus the PC mouse movement / buttons given (bit 1

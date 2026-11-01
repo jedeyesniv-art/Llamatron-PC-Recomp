@@ -5,6 +5,7 @@
 
 #include "game.h"
 #include "gridrunner.h"
+#include "stgames.h"
 #include "tripatron.h"
 #include "settings.h"
 #include "log.h"
@@ -213,6 +214,12 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
       if (uint8_t code = StScancode(e.key.scancode)) m->KeyEvent(code, e.type == SDL_EVENT_KEY_DOWN);
     return false;
   }
+  if (g_mode == Mode::kRmc || g_mode == Mode::kAndes) {  // the pad is polled (stgames::Update)
+    if (stgames::HandleKey(e, m)) return true;
+    if ((e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) && !e.key.repeat)
+      if (uint8_t code = StScancode(e.key.scancode)) m->KeyEvent(code, e.type == SDL_EVENT_KEY_DOWN);
+    return false;
+  }
   if (g_mode == Mode::kGeneric) {  // every key goes to the ST; pad B twice leaves the game
     if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
       if (SDL_GetTicks() < g_quit_armed_ms) g_quit = true;
@@ -274,7 +281,7 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
   }
 }
 
-bool QuitRequested() { return g_quit || grid::QuitRequested() || trip::QuitRequested(); }
+bool QuitRequested() { return g_quit || grid::QuitRequested() || trip::QuitRequested() || stgames::QuitRequested(); }
 
 bool HintAtTop() { return g_mode == Mode::kTripATron; }
 
@@ -335,6 +342,7 @@ SDL_Gamepad* FirstPad() { return g_pads.empty() ? nullptr : g_pads[0]; }
 
 const char* Hint(st::Machine* m) {
   if (g_mode == Mode::kTripATron) return trip::Hint(m, !g_pads.empty());
+  if (g_mode == Mode::kRmc || g_mode == Mode::kAndes) return stgames::Hint(m, !g_pads.empty());
   if (g_mode == Mode::kGeneric)
     return SDL_GetTicks() < g_quit_armed_ms ? "Press B again to leave the game" : nullptr;
   if (g_gridrunner) return grid::Hint(m, !g_pads.empty());
