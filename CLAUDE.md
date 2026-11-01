@@ -1,4 +1,6 @@
-# Llamatron (Atari ST, Jeff Minter / Llamasoft 1991) - native PC port
+# Llamasoft on the ST (was "Llamatron PC" until 1.2.0) - Jeff Minter's Atari ST games, native on PC
+Title from 1.3.0 (owner 2026-11-01); the exe is still llamatron.exe, the repo Llamatron-PC-Recomp. Labels: all
+disks use the Ink Free stand-ins now (owner: consistent; the photos of the owner's handwriting no longer used).
 
 Hobby project, started 2026-10-22 after the Galaga Legions DX port (C:\GalagaRecomp, same owner and toolchain).
 Llamatron is shareware ("please spread this game everywhere", shareware screen at boot); the disk image is still

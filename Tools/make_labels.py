@@ -22,8 +22,11 @@ LABELS = [
     ('andes', 'andes-photo.jpg', (0, 0, 1, 1), None),
     ('hardcore', 'hardcore-photo.jpg', (0, 0, 1, 1), None),
 ]
-STAND_IN = {'tripatron': ['Trip-A-Tron'], 'rmc': ['Mutant', 'Camels'], 'defender2': ['Defender 2'],
-            'andes': ['Andes', 'Attack'], 'hardcore': ['Hardcore']}
+# Every disk uses the Ink Free stand-in (owner 2026-11-01: "replace my handwritten labels so all the disks are
+# consistent"); the photo processing stays for a disk taken off this list.
+STAND_IN = {'llamatron': ['Llamatron'], 'gridrunner': ['Super', 'Gridrunner'], 'tripatron': ['Trip-A-Tron'],
+            'rmc': ['Mutant', 'Camels'], 'defender2': ['Defender 2'], 'andes': ['Andes', 'Attack'],
+            'hardcore': ['Hardcore']}
 
 
 def stand_in(lines):
@@ -115,7 +118,7 @@ def main():
     arrays = []
     for name, photo, box, touch_up in LABELS:
         path = os.path.join(ROOT, 'res', 'labels', photo)
-        if not os.path.exists(path) and name in STAND_IN:
+        if name in STAND_IN:
             img = stand_in(STAND_IN[name])
         else:
             img = process(path, box, globals()[touch_up] if touch_up else None)

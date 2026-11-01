@@ -1,4 +1,4 @@
-# Llamatron: native PC port
+# Llamasoft on the ST
 
 Jeff Minter's Atari ST games - **Llamatron: 2112** and **Super Gridrunner**, **Trip-A-Tron**, **Revenge of
 the Mutant Camels**, **Andes Attack**, **Defender 2** and the unfinished **Hardcore** - as a native Windows app

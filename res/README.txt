@@ -1,5 +1,5 @@
-LLAMATRON - PC
-==============
+LLAMASOFT ON THE ST
+===================
 
 Jeff Minter's Atari ST games running natively on Windows with modern pad controls:
   Llamatron: 2112 (1991) and Super Gridrunner, the bonus game on the same disk
