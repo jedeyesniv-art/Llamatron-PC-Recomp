@@ -848,7 +848,8 @@ void RunProgram(Context& c) {
   for (const fs::path& src : sources) {
     std::string error;
     std::map<std::string, disk::Bytes> files = games::ReadSource(src, &error);
-    if (!files.count(opt.program) && src != sources.front()) continue;
+    bool given = !opt.disk.empty() && src == fs::path(opt.disk);  // --disk: used even without the program
+    if (!files.count(opt.program) && !given) continue;
     c.disk_files = std::move(files);
     c.disk_path = src.string();
     RunGame(c, opt.program, true, opt.program == "TRON1MEG.PRG"   ? input::Mode::kLlamatron
