@@ -11,7 +11,8 @@
 // left button = thrust, right button = reverse (facing $1C088: 0 right, 1 left); Left Shift = fire; Right
 // Shift = pause, Space = resume.
 //   left stick up / down = altitude; left / right = thrust that way (pushing against the facing reverses first);
-//   A / RT = fire, LT = thrust, X = reverse, Y = smart bomb (Left Control); Back = pause / resume; B twice =
+//   A / RT = fire, LT = thrust, X = reverse, Y = smart bomb (Left Control), LB / RB held = shield (Alternate:
+//   Kbshift bit 3, energy $1C440); Back = pause / resume; B twice =
 //   back to the disks. Away from play
 //   A / RT is the left mouse button (start).
 #pragma once

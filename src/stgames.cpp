@@ -109,6 +109,8 @@ float g_mouse_x = 0, g_mouse_y = 0;
 int g_stick_dir = 0;     // left stick pushed left (-1) / right (1): one reverse per push
 int g_reverse_frames = 0;  // the right button held for a few frames (a reverse)
 bool g_fire_held = false;
+bool g_shield_held = false;
+constexpr uint8_t kKeyAlt = 0x38;
 
 // The high score name: typed (Crawio, $1A38C: letters, Space = "_"), 3 of them ($1BC96 counts; the cursor
 // $1BC92 is negative when no name is being entered).
@@ -176,8 +178,12 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     bool fire = p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f;
     if (fire != g_fire_held) m->KeyEvent(kKeyLShift, fire), g_fire_held = fire;
     if (pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) TapKey(m, kKeyLCtrl);  // smart bomb
+    // Shield: Alternate held (Kbshift bit 3, $143B2: on while held, energy $1C440 drains 1 per 20 frames).
+    bool shield = p.Held(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) || p.Held(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    if (shield != g_shield_held) m->KeyEvent(kKeyAlt, shield), g_shield_held = shield;
   } else {
     if (g_fire_held) m->KeyEvent(kKeyLShift, false), g_fire_held = false;
+    if (g_shield_held) m->KeyEvent(kKeyAlt, false), g_shield_held = false;
     if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;
     if (p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.lt > 0.5f) buttons |= 1;
     g_stick_dir = 0;
@@ -525,6 +531,7 @@ void Start(Game g) {
   g_hc_strobes = settings::Get("hc_strobes", 0) != 0, g_hc_strobes_done = false;
   g_d2_50fps = settings::Get("d2_50fps", 1) != 0;
   g_fire_held = false;
+  g_shield_held = false;
   std::fill(std::begin(g_keys), std::end(g_keys), false);
 }
 

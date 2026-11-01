@@ -131,9 +131,10 @@ ANDES ATTACK - XBOX PAD
   Left stick up / down   altitude                 Left stick left / right   thrust that way (turns round first)
   A or RT                fire                     Y                         smart bomb
   X / LT                 reverse / thrust         Back                      pause
+  LB or RB (hold)        shield (its energy drains while it's up)
   High score name: up / down picks a letter, A enters it.     B, B: back to the disks
 Mouse and keyboard as the original: mouse up / down, left button thrust, right reverse, Left Shift fire,
-Control smart bomb, Right Shift pause, Space resume.
+Control smart bomb, Alt (hold) shield, Right Shift pause, Space resume.
 
 
 DEFENDER 2 - XBOX PAD

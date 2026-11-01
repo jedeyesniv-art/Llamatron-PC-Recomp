@@ -168,8 +168,10 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
 - Andes Attack (ANDES.BOY, Medway 5): state $12EEE (1 play, 3 paused, 5 title/demo). Mouse (Initmous,
   $15384): y -> $2B682 (0x20..0xBE, down = bigger), left button held = thrust (speed $14BC4), right button =
   reverse (facing $1C088: 0 right). Keys: Left Shift fire (verified: laser), Left Control smart bomb
-  (verified: a bomb icon crossed out), Right Shift pause, Space resume; Kbshift + Crawio. Shields / warp
-  keys NOT found (Alt, letters, digits, F keys tried; noisy). Text $2B494 "CONTROLS: Mouse = Altitude, Left
+  (verified: a bomb icon crossed out), Right Shift pause, Space resume; Kbshift + Crawio. Shield (found
+  2026-11-01): Alternate held - the play loop stores Kbshift in $12C06 ($1425E) and tests bit 1 fire, bit 3
+  shield ($143B2: on while held, $1C444 = 1, energy $1C440 from 16 drains 1 per 20 frames; "SHIELD" gauge over
+  the ship), bit 2 smart bomb (count $12BB4). Pad: LB / RB held. Warp: not found. Text $2B494 "CONTROLS: Mouse = Altitude, Left
   Mouse = Thrust, Right Mouse = Reverse, Left SHIFT = FIRE". Crack screen (right button = trainer, $1041A)
   ends by itself; clicks at frame 100 changed nothing - trainer not offered yet. 13-19 drawn frames/s in play,
   x8 -> 50 (thrust / altitude identical x1 vs x8). Its sky is a timer B raster: no calm background (it

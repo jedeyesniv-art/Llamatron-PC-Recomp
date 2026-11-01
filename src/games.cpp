@@ -171,12 +171,13 @@ std::vector<Known> KnownGames() {
                         "LEFT STICK L/R       thrust (turns round first)",
                         "A OR RT              fire",
                         "Y                    smart bomb",
+                        "LB OR RB (HOLD)      shield (it drains)",
                         "X / LT               reverse / thrust",
                         "BACK                 pause",
                         "HIGH SCORE NAME      up/down letter, A enter it",
                         "B TWICE              back to the disks", "",
                         "Mouse: up/down, left thrust, right reverse;",
-                        "Left Shift fire, Control smart bomb."};
+                        "Left Shift fire, Control smart bomb, Alt shield."};
   // Photon Storm (Arc / Llamasoft 1990), PHOTON.YAK (Automation-packed TOS program) on a compilation disk with
   // other Llamasoft .YAKs; the Andes Attack engine. State $44846 (1 play, 7 title, 10 paused).
   wip("photonstorm", "PHOTON STORM", "PHOTON.YAK", "PHOTON STORM  -  JEFF MINTER, ARC 1990",
