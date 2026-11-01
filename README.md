@@ -19,10 +19,12 @@ only the Llamasoft games' own files are kept.
 - Twin-stick "Robotron style" play on a pad (A on the title), or the classic one-stick mode (X); optional
   analog aim in any direction (RB on the title). TEAM mode with a second pad.
 - Super Gridrunner with the stick moving the ship, triggers firing, the nosecone on the shoulder buttons, and
-  pad-driven menus and name entry. The mouse still works the original way.
+  pad-driven menus and name entry. The mouse still works the original way. The level select unlocks the
+  level you died on.
 - Smooth: the ST's processor runs faster during play, so the screen updates 50 times a second instead of
   16-25. The game logic runs at exactly its original speed.
-- Fullscreen at a refresh rate that is a multiple of 50 Hz, so every frame is shown evenly; VRR screens too.
+- Borderless fullscreen (Alt+Enter / F11 for a window); `fullscreen_exclusive=1` switches to a refresh rate
+  that is a multiple of 50 Hz for even motion on screens without VRR.
 - No screen flashes (the kill flash and strobes are removed; `--flashes` keeps them).
 - Pad controls for every game (Trip-A-Tron's light synth on the sticks, with a music-reactive mode; the mouse
   games Andes Attack, Defender 2 and Hardcore on the sticks; menus and high score names on the d-pad).
