@@ -27,6 +27,8 @@ elease\Llamatron-<ver>-windows.zip (no game
   CPU-timed screens) - owner agreed to skip for now. Stage 2 (if ever): static recompilation of the 68000 code to C++ (Tools\ to write), with the interpreter kept as the
   reference (lockstep compare) and as fallback for code it can't place (self-modifying code, see below).
 - Gridrunner: runs (2026-10-22), see its section; controller design pending.
+- NEXT MAJOR STEP (owner 2026-11-01, after bug fixes from the owner's testing): PLAN-NEXT-LEVEL.md - run-ahead
+  (lower input lag, all games), then a native remaster renderer with Photon Storm as the pilot.
 
 ## Layout (C:\LlamatronRecomp)
 - Private\              (git-ignored) Llamatron ST.msa (owner's copy), disk\ = its files, tron.bin/.reloc =
