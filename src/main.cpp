@@ -356,6 +356,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   input::SetMode(mode);
   trip::Reset();
   pad::Reset();
+  stgames::Reset();  // (left with B twice, a game's "leave" would end the next one - Trip-A-Tron - at once)
   stgames::SetProgram(program_name);
   if (mode == input::Mode::kRmc) stgames::Start(stgames::Game::kRmc);
   if (mode == input::Mode::kAndes) stgames::Start(stgames::Game::kAndes);

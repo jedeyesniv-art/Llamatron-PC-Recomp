@@ -52,6 +52,8 @@ void StartDocs(const std::string& keys);
 void SetProgram(const std::string& program);
 
 void Start(Game g);
+// Forgets the last game's state (its "leave" request, held keys...): before every game, whichever kind.
+void Reset();
 // Once per frame, after pad::Poll: pad and keyboard joystick -> the ST; the host mouse's movement and buttons
 // (bit 1 left, bit 0 right) are added in.
 void Update(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_buttons);

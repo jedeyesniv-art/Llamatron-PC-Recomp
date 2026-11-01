@@ -427,6 +427,8 @@ void DocsUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
 
 }  // namespace
 
+void Reset() { Start(g_game); }
+
 void SetProgram(const std::string& program) {
   if (program == "REVSTE1M.TOS") kRmcHook = 0x3DD3E, kRmcPlay = 0x111DE, kRmcPause = 0x1056C;
   else kRmcHook = 0x42E18, kRmcPlay = 0x1118E, kRmcPause = 0x10526;
