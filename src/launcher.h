@@ -1,6 +1,6 @@
-// The start screen: two Atari ST floppy disks (low-poly, drawn with SDL_RenderGeometry) under a spotlight,
-// hand-labelled "Llamatron" and "Super Gridrunner". Left / right picks one, A plays it, Y shows how to play it,
-// B (twice) quits.
+// The start screen: Atari ST floppy disks (low-poly, drawn with SDL_RenderGeometry) under a spotlight,
+// hand-labelled "Llamatron", "Super Gridrunner" and "Trip-A-Tron". Left / right picks one, A plays it, Y shows
+// how to play it, B (twice) quits.
 #pragma once
 
 #include <SDL3/SDL.h>
@@ -8,7 +8,8 @@
 namespace launcher {
 
 enum class Action { kNone, kPlay, kQuit };
-enum Game { kLlamatron = 0, kGridrunner = 1 };
+enum Game { kLlamatron = 0, kGridrunner = 1, kTripATron = 2 };
+constexpr int kGames = 3;
 
 class Launcher {
  public:
@@ -33,9 +34,9 @@ class Launcher {
   SDL_Renderer* r_;
   SDL_Texture* white_add_ = nullptr;  // 1x1 white, additive (light)
   SDL_Texture* white_ = nullptr;      // 1x1 white, alpha blended
-  SDL_Texture* labels_[2] = {};
+  SDL_Texture* labels_[kGames] = {};
   int selected_ = 0;
-  float sel_anim_[2] = {1, 0};  // 0..1, follows the selection
+  float sel_anim_[kGames] = {1};  // 0..1, follows the selection
   double time_ = 0;
   double fade_in_ = 0;      // 0..1 at the start
   double launching_ = -1;   // >= 0: the "insert disk" animation runs (seconds)

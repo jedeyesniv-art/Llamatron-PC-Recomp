@@ -36,12 +36,19 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m);
 void Update(st::Machine* m);
 // The player asked to quit the program (B twice at the title).
 bool QuitRequested();
-// Gridrunner's controls (gridrunner.h) instead of Llamatron's.
-void SetGridrunner(bool on);
+// Whose controls: Llamatron's, Gridrunner's (gridrunner.h), or the generic ones for other programs.
+enum class Mode { kLlamatron, kGridrunner, kGeneric, kTripATron };
+void SetMode(Mode mode);
+Mode GetMode();
+// Generic mode, once per frame: pad -> joysticks and mouse, plus the PC mouse movement / buttons given (bit 1
+// left, bit 0 right).
+void UpdateGeneric(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_buttons);
 // Forgets the state of the last game (before starting another).
 void Reset();
 SDL_Gamepad* FirstPad();
 // A line to show over the picture (pause screen help, quit confirmation), or null.
 const char* Hint(st::Machine* m);
+// The hint goes at the top of the picture (Trip-A-Tron: its Control Panel fills the bottom).
+bool HintAtTop();
 
 }  // namespace input

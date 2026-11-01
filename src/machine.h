@@ -9,6 +9,7 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -113,8 +114,34 @@ class Machine {
   bool Gemdos(uint32_t args, uint32_t* d0);
   bool Bios(uint32_t args, uint32_t* d0);
   bool Xbios(uint32_t args, uint32_t* d0);
+  void Gem(uint32_t d0, uint32_t pb);
+  void LineA(int fn);
+  int GetPixel(int x, int y);  // logical screen, low resolution
+  void SetPixel(int x, int y, int colour);
+  void PlotMode(int x, int y, bool on, int colour, int mode);
+  uint32_t logbase_ = 0;  // where TOS (Line-A) draws: Setscreen's logical screen
+  std::set<int> gem_seen_;  // GEM calls logged once
+  int gem_mouse_x_ = 160, gem_mouse_y_ = 100;
   void SaveFile(const std::string& name);
   std::string ReadString(uint32_t a);
+  std::string FileName(uint32_t a);  // a path from the program: upper case, without folders or drive
+  // Processes (Pexec): places a program at basepage `bp` (TPA up to `hitpa`), relocated, BSS cleared.
+  void PlaceProgram(uint32_t bp, uint32_t hitpa, const disk::Program& program, uint32_t parent, uint32_t cmdline);
+  bool Pexec(uint32_t args, uint32_t* d0, bool* started);
+  void StartProcess(uint32_t bp);  // in user mode at its text, 4(sp) = basepage, returning to kRomPterm
+  bool EndProcess(uint32_t code);  // back to the parent's Pexec (false: the first program ended)
+  struct Process {
+    uint32_t bp = 0, end = 0;  // the parent: basepage, end of its memory (Mshrink)
+    uint32_t regs[16] = {}, usp = 0, ssp = 0, ret = 0;  // its Pexec trap: registers, stacks, return address
+    uint16_t sr = 0;
+  };
+  std::vector<Process> parents_;
+  uint32_t cur_bp_ = 0, cur_end_ = 0;  // the running process: basepage, end of its memory
+  uint32_t malloc_top_ = 0;            // Malloc hands out memory downwards from here
+  std::map<uint32_t, uint32_t> mallocs_;  // address -> size
+  bool trap_wait_ = false;
+  uint32_t dta_ = 0;                // Fsetdta (0: the basepage's)
+  std::deque<std::string> search_;  // Fsfirst matches not returned yet  // the call has to wait (Cconin without a key): run the trap again
 
   std::vector<uint8_t> ram_ = std::vector<uint8_t>(kRamSize);
   std::map<uint32_t, std::function<void(Machine&)>> hooks_;

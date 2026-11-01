@@ -15,7 +15,39 @@ W, H = 512, 392
 LABELS = [
     ('llamatron', 'llamatron-photo.jpg', (150 / 1500, 558 / 2000, 1268 / 1500, 1408 / 2000), None),
     ('gridrunner', 'gridrunner-photo.jpg', (188 / 1500, 732 / 2000, 1252 / 1500, 1598 / 2000), 'touch_up_g'),
+    # No photo yet: a stand-in in a handwriting font until there is one (box = the whole photo when it comes).
+    ('tripatron', 'tripatron-photo.jpg', (0, 0, 1, 1), None),
 ]
+STAND_IN = {'tripatron': ['Trip-A-Tron']}
+
+
+def stand_in(lines):
+    """A label written in Windows' Ink Free font (felt-pen look), for a disk without a photographed label: a
+    wobbly hand-drawn box, the name in the upper middle, "by Yak" at the bottom right, like the owner's."""
+    from PIL import ImageFont
+    rng = np.random.default_rng(1992)
+    big = Image.new('L', (W * 2, H * 2), 255)
+    d = ImageDraw.Draw(big)
+    fonts = os.path.join(os.environ.get('WINDIR', 'C:/Windows'), 'Fonts', 'Inkfree.ttf')
+    font, small = ImageFont.truetype(fonts, 150), ImageFont.truetype(fonts, 100)
+    # The box: each side a few slightly wandering segments, corners overshooting a little.
+    x0, y0, x1, y1 = 70, 80, W * 2 - 60, H * 2 - 70
+    for (ax, ay), (bx, by) in [((x0 - 10, y0), (x1 + 8, y0 + 6)), ((x1, y0 - 8), (x1 - 6, y1 + 10)),
+                               ((x1 + 6, y1), (x0 - 4, y1 - 4)), ((x0, y1 + 8), (x0 + 4, y0 - 12))]:
+        pts = [(ax + (bx - ax) * t + rng.normal(0, 2.5), ay + (by - ay) * t + rng.normal(0, 2.5))
+               for t in np.linspace(0, 1, 7)]
+        d.line(pts, fill=0, width=11, joint='curve')
+    heights = [d.textbbox((0, 0), t, font=font, stroke_width=5) for t in lines]
+    total = sum(b[3] - b[1] for b in heights) + 40 * (len(lines) - 1)
+    y = (H * 2 - total) // 2 - 70
+    for t, b in zip(lines, heights):
+        d.text(((W * 2 - (b[2] - b[0])) // 2 - b[0], y - b[1]), t, font=font, fill=0, stroke_width=5, stroke_fill=0)
+        y += b[3] - b[1] + 40
+    bb = d.textbbox((0, 0), 'by Yak', font=small, stroke_width=4)
+    d.text((x1 - 50 - (bb[2] - bb[0]) - bb[0], y1 - 40 - (bb[3] - bb[1]) - bb[1]), 'by Yak', font=small, fill=0,
+           stroke_width=4, stroke_fill=0)
+    big = big.rotate(-2, resample=Image.BICUBIC, fillcolor=255)
+    return big.resize((W, H), Image.LANCZOS)
 
 
 def stroke_mask(size, lines, width):
@@ -77,7 +109,11 @@ def rle(data):
 def main():
     arrays = []
     for name, photo, box, touch_up in LABELS:
-        img = process(os.path.join(ROOT, 'res', 'labels', photo), box, globals()[touch_up] if touch_up else None)
+        path = os.path.join(ROOT, 'res', 'labels', photo)
+        if not os.path.exists(path) and name in STAND_IN:
+            img = stand_in(STAND_IN[name])
+        else:
+            img = process(path, box, globals()[touch_up] if touch_up else None)
         img.save(os.path.join(ROOT, 'res', 'labels', name + '.png'))
         packed = rle(img.tobytes())
         arrays.append((name, packed))

@@ -61,12 +61,18 @@ add_executable(llamatron WIN32
   src/input.cpp
   src/game.cpp
   src/gridrunner.cpp
+  src/tripatron.cpp
+  src/music.cpp
+  src/miniaudio_impl.cpp
   src/launcher.cpp
   src/crt.cpp
   src/settings.cpp
   src/log.cpp
   src/crash.cpp)
 target_link_libraries(llamatron PRIVATE SDL3::SDL3-static musashi)
+# miniaudio 0.11.21 (public domain / MIT-0), as in our Neon port: loopback capture of the PC's sound.
+target_include_directories(llamatron PRIVATE ${CMAKE_SOURCE_DIR}/third_party/miniaudio)
+set_source_files_properties(src/miniaudio_impl.cpp PROPERTIES COMPILE_OPTIONS "-w")
 target_compile_definitions(llamatron PRIVATE _CRT_SECURE_NO_WARNINGS)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(llamatron PRIVATE -Wall -Wextra -Wno-unused-parameter)

@@ -16,6 +16,12 @@ constexpr uint32_t kRomTrap1 = 0x000, kRomTrap13 = 0x004, kRomTrap14 = 0x008;  /
 constexpr uint32_t kRomRte = 0x00C, kRomRts = 0x010;
 constexpr uint32_t kRomIkbdDefault = 0x014;  // TOS's IKBD handler (ikbdsys): ILLEGAL -> IkbdSysHle
 constexpr uint32_t kRomPterm = 0x01C;        // the program's return address: ILLEGAL
+constexpr uint32_t kRomTrap2 = 0x020;        // GEM (AES / VDI): ILLEGAL; RTE
+constexpr uint32_t kRomLineA = 0x024;        // Line-A exception: ILLEGAL (LineA does the work and returns)
+constexpr uint32_t kRomFont = 0x100;         // an empty font header for Line-A's font table (90 bytes)
+constexpr uint32_t kRomVbl = 0x200;          // TOS's VBL routine (see Load)
+constexpr uint32_t kLineA = 0x1A00;          // the Line-A variables (negative offsets below it too)
+constexpr uint32_t kVblQueue = 0x1C00;       // TOS's VBL queue: 8 slots (programs add routines there)
 constexpr uint32_t kRomAcia = 0x040;         // MFP ACIA interrupt (see Load)
 constexpr uint32_t kRomIkbdCall = 0x080;     // calls a Kbdvbase vector with a packet (see Load)
 constexpr uint32_t kRomVectors = 0x400;      // one ILLEGAL per exception vector: unhandled exceptions
@@ -67,6 +73,42 @@ bool Machine::Load(const disk::Program& program, std::map<std::string, disk::Byt
   rom16(kRomRts, {0x4E75});
   rom16(kRomIkbdDefault, {0x4AFC});
   rom16(kRomPterm, {0x4AFC});
+  rom16(kRomTrap2, {0x4AFC, 0x4E73});
+  rom16(kRomLineA, {0x4AFC});
+  // The VBL as TOS does it: count frames, take a new palette (colorptr) and screen (screenpt), then call the
+  // routines in the VBL queue.
+  rom16(kRomVbl, {0x52B8, 0x0466,          // addq.l #1,frclock.w
+                  0x48E7, 0xFFFE,          // movem.l d0-d7/a0-a6,-(sp)
+                  0x52B8, 0x0462,          // addq.l #1,_vbclock.w
+                  0x2038, 0x045A,          // move.l colorptr.w,d0
+                  0x6712,                  // beq.s (no new palette)
+                  0x2040,                  // movea.l d0,a0
+                  0x43F8, 0x8240,          // lea $ff8240.w,a1
+                  0x7007,                  // moveq #7,d0
+                  0x22D8,                  // move.l (a0)+,(a1)+
+                  0x51C8, 0xFFFC,          // dbra d0,(the move)
+                  0x42B8, 0x045A,          // clr.l colorptr.w
+                  0x2038, 0x045E,          // move.l screenpt.w,d0
+                  0x670C,                  // beq.s (no new screen)
+                  0xE088,                  // lsr.l #8,d0
+                  0x11C0, 0x8203,          // move.b d0,$ff8203.w
+                  0xE048,                  // lsr.w #8,d0
+                  0x11C0, 0x8201,          // move.b d0,$ff8201.w
+                  0x3E38, 0x0454,          // move.w nvbls.w,d7
+                  0x5347,                  // subq.w #1,d7
+                  0x6B18,                  // bmi.s (done)
+                  0x2078, 0x0456,          // movea.l vblqueue.w,a0
+                  0x2018,                  // loop: move.l (a0)+,d0
+                  0x670C,                  // beq.s (next)
+                  0x48E7, 0x0180,          // movem.l d7/a0,-(sp)
+                  0x2040,                  // movea.l d0,a0
+                  0x4E90,                  // jsr (a0)
+                  0x4CDF, 0x0180,          // movem.l (sp)+,d7/a0
+                  0x51CF, 0xFFEE,          // next: dbra d7,loop
+                  0x4CDF, 0x7FFF,          // done: movem.l (sp)+,d0-d7/a0-a6
+                  0x4E73});                // rte
+  // Line-A's table of font header pointers (3) at kRomFont + 0x80, all to the empty header.
+  for (int i = 0; i < 3; ++i) Put32(&rom_[kRomFont + 0x80 + i * 4], kRomBase + kRomFont);
   // The ACIA interrupt, as TOS does it: call the IKBD handler (Kbdvbase()->ikbdsys) while the ACIA still
   // requests an interrupt (GPIP bit 4 low), then end the MFP's in-service bit.
   rom16(kRomAcia, {0x48E7, 0xF0F0,                         // movem.l d0-d3/a0-a3,-(sp)
@@ -91,8 +133,20 @@ bool Machine::Load(const disk::Program& program, std::map<std::string, disk::Byt
   Put32(m + 0, kSsp);
   for (uint32_t v = 2; v < 256; ++v) Put32(m + v * 4, kRomBase + kRomVectors + v * 2);
   Put32(m + 0x68, kRomBase + kRomRte);     // HBL
-  Put32(m + 0x70, kRomBase + kRomRte);     // VBL
+  Put32(m + 0x70, kRomBase + kRomVbl);     // VBL
+  Put16(m + 0x452, 1);                     // vblsem
+  Put16(m + 0x454, 8);                     // nvbls
+  Put32(m + 0x456, kVblQueue);             // _vblqueue (8 empty slots)
   Put32(m + 0x84, kRomBase + kRomTrap1);   // GEMDOS
+  Put32(m + 0x88, kRomBase + kRomTrap2);   // GEM
+  Put32(m + 0x28, kRomBase + kRomLineA);   // Line-A
+  // Line-A variables: planes, bytes per line; below the base: screen size in pixels and bytes per line.
+  Put16(m + kLineA + 0x00, 4);
+  Put16(m + kLineA + 0x02, 160);
+  Put16(m + kLineA - 0x0C, kScreenW);
+  Put16(m + kLineA - 0x04, kScreenH);
+  Put16(m + kLineA - 0x02, 160);
+  logbase_ = kScreen;
   Put32(m + 0xB4, kRomBase + kRomTrap13);  // BIOS
   Put32(m + 0xB8, kRomBase + kRomTrap14);  // XBIOS
   Put32(m + 0x118, kRomBase + kRomAcia);   // MFP vector base $40 + channel 6
@@ -105,21 +159,12 @@ bool Machine::Load(const disk::Program& program, std::map<std::string, disk::Byt
   kbdvbase_ = kKbdvbase;
 
   // The program, relocated, and its basepage.
-  std::memcpy(m + kTextBase, program.text.data(), program.text.size());
-  for (uint32_t r : program.relocs) {
+  for (uint32_t r : program.relocs)
     if (r + 4 > program.text.size()) return *error = "bad relocation", false;
-    Put32(m + kTextBase + r, Get32(m + kTextBase + r) + kTextBase);
-  }
-  uint8_t* bp = m + kBasepage;
-  Put32(bp + 0x00, kBasepage);
-  Put32(bp + 0x04, kHitpa);
-  Put32(bp + 0x08, kTextBase);
-  Put32(bp + 0x0C, uint32_t(program.text.size()));
-  Put32(bp + 0x10, text_end);
-  Put32(bp + 0x18, text_end);
-  Put32(bp + 0x1C, program.bss_size);
-  Put32(bp + 0x20, kBasepage + 0x80);  // DTA = the command line
-  Put32(bp + 0x2C, kBasepage + 0xF0);  // empty environment
+  parents_.clear();
+  mallocs_.clear();
+  malloc_top_ = kHitpa;
+  PlaceProgram(kBasepage, kHitpa, program, 0, 0);
 
   // Hardware as TOS leaves it.
   mfp_[VR] = 0x48;  // vector base $40, software end-of-interrupt
@@ -132,19 +177,127 @@ bool Machine::Load(const disk::Program& program, std::map<std::string, disk::Byt
   palette_[0] = 0x777;
   ym_.Reset();
 
-  // The CPU: in user mode at the program's entry, 4(sp) = basepage.
   cpu::Init(this);
-  uint32_t usp = kHitpa - 8;
+  StartProcess(kBasepage);
+  return true;
+}
+
+void Machine::PlaceProgram(uint32_t bp, uint32_t hitpa, const disk::Program& program, uint32_t parent,
+                           uint32_t cmdline) {
+  uint8_t* m = ram_.data();
+  uint32_t text = bp + 0x100, size = uint32_t(program.text.size());
+  uint32_t text_end = text + size;
+  std::fill(m + bp, m + bp + 0x100, 0);
+  std::memcpy(m + text, program.text.data(), size);
+  for (uint32_t r : program.relocs)
+    if (r + 4 <= size) Put32(m + text + r, Get32(m + text + r) + text);
+  std::fill(m + text_end, m + std::min(text_end + program.bss_size, kRamSize), 0);
+  uint8_t* b = m + bp;
+  Put32(b + 0x00, bp);
+  Put32(b + 0x04, hitpa);
+  Put32(b + 0x08, text);
+  Put32(b + 0x0C, size);  // text + data together: our loader doesn't keep them apart
+  Put32(b + 0x10, text_end);
+  Put32(b + 0x18, text_end);
+  Put32(b + 0x1C, program.bss_size);
+  Put32(b + 0x20, bp + 0x80);  // DTA = the command line
+  Put32(b + 0x24, parent);
+  Put32(b + 0x2C, bp + 0xF0);  // empty environment
+  if (cmdline) std::memcpy(b + 0x80, m + (cmdline & 0xFFFFFF), 0x80);
+  cur_bp_ = bp;
+  cur_end_ = hitpa;
+}
+
+// The CPU: in user mode at the program's entry, the stack at the top of its memory with 4(sp) = basepage.
+void Machine::StartProcess(uint32_t bp) {
+  uint8_t* m = ram_.data();
+  uint32_t usp = (Get32(m + bp + 4) & ~1u) - 8;
   Put32(m + usp, kRomBase + kRomPterm);
-  Put32(m + usp + 4, kBasepage);
+  Put32(m + usp + 4, bp);
   cpu::Set(cpu::SR, 0x2300);
   cpu::Set(cpu::A7, kSsp);
   cpu::Set(cpu::USP, usp);
   cpu::Set(cpu::SR, 0x0300);
-  cpu::Set(cpu::PC, kTextBase);
+  cpu::Set(cpu::PC, Get32(m + bp + 8));
+  for (int r = 0; r < 15; ++r) cpu::Set(cpu::Reg(r), 0);
+  cpu::Set(cpu::A0, 0);  // 0 = an application (not an accessory)
   // TOS's loader leaves A4 at the end of the program's text + data (the BSS start); packers rely on it (the
   // Pompey Packer stub on GRIDRUNR.PRG reads its packed length from just below A4).
-  cpu::Set(cpu::Reg(cpu::A0 + 4), text_end);
+  cpu::Set(cpu::Reg(cpu::A0 + 4), Get32(m + bp + 0x10));
+  cpu::Set(cpu::Reg(cpu::A0 + 5), bp);
+  cur_bp_ = bp;
+  cur_end_ = Get32(m + bp + 4);
+}
+
+// Pexec(mode, name, cmdline, env): 0 load and go, 3 load (returns the basepage), 4 go (basepage), 5 create a
+// basepage, 6 go and free. The parent waits in its trap; the child's Pterm comes back to it (EndProcess).
+bool Machine::Pexec(uint32_t args, uint32_t* d0, bool* started) {
+  const uint8_t* p = &ram_[args];
+  int mode = Get16(p + 2);
+  uint32_t name = Get32(p + 4), cmd = Get32(p + 8);
+  uint32_t bp = 0;
+  if (mode == 0 || mode == 3 || mode == 5 || mode == 7) {
+    disk::Program prog;
+    std::string fname;
+    if (mode != 5 && mode != 7) {
+      fname = FileName(name);
+      auto it = files_.find(fname);
+      std::string error;
+      if (it == files_.end()) {
+        LOG("Pexec(%d, %s): not found", mode, fname.c_str());
+        return *d0 = uint32_t(-33), true;
+      }
+      if (!disk::LoadPrg(it->second, &prog, &error)) {
+        LOG("Pexec(%d, %s): %s", mode, fname.c_str(), error.c_str());
+        return *d0 = uint32_t(-66), true;  // EPLFMT
+      }
+    }
+    // The child goes after the running program's memory (as shrunk by Mshrink), up to the Malloc'ed blocks.
+    bp = (cur_end_ + 0xFF) & ~0xFFu;
+    uint32_t hitpa = malloc_top_;
+    if (bp + 0x100 + prog.text.size() + prog.bss_size > hitpa) {
+      LOG("Pexec(%d, %s): no memory ($%X..$%X)", mode, fname.c_str(), bp, hitpa);
+      return *d0 = uint32_t(-39), true;  // ENSMEM
+    }
+    uint32_t keep_bp = cur_bp_, keep_end = cur_end_;
+    PlaceProgram(bp, hitpa, prog, keep_bp, cmd);
+    cur_bp_ = keep_bp, cur_end_ = keep_end;  // still the parent running
+    LOG("Pexec(%d, %s): basepage $%X, %zu bytes", mode, fname.c_str(), bp, prog.text.size());
+    if (mode == 3 || mode == 5 || mode == 7) return *d0 = bp, true;
+  } else if (mode == 4 || mode == 6) {
+    bp = Get32(p + 8);
+    LOG("Pexec(%d): go, basepage $%X", mode, bp);
+  } else {
+    return false;
+  }
+  // Go: the parent waits in this trap.
+  uint32_t ssp = cpu::Get(cpu::A7);
+  Process parent;
+  parent.bp = cur_bp_, parent.end = cur_end_;
+  for (int r = 0; r < 16; ++r) parent.regs[r] = cpu::Get(cpu::Reg(r));
+  parent.usp = cpu::Get(cpu::USP);
+  parent.sr = Get16(&ram_[ssp]);
+  parent.ret = Get32(&ram_[ssp + 2]);
+  parent.ssp = ssp + 6;
+  parents_.push_back(parent);
+  StartProcess(bp);
+  *started = true;
+  return true;
+}
+
+bool Machine::EndProcess(uint32_t code) {
+  if (parents_.empty()) return false;
+  Process parent = parents_.back();
+  parents_.pop_back();
+  LOG("process $%X ended (%d): back to $%X", cur_bp_, int(code), parent.bp);
+  cur_bp_ = parent.bp, cur_end_ = parent.end;
+  cpu::Set(cpu::SR, 0x2700);
+  for (int r = 0; r < 15; ++r) cpu::Set(cpu::Reg(r), parent.regs[r]);
+  cpu::Set(cpu::A7, parent.ssp);
+  cpu::Set(cpu::USP, parent.usp);
+  cpu::Set(cpu::SR, parent.sr);
+  cpu::Set(cpu::D0, code);
+  cpu::Set(cpu::PC, parent.ret);
   return true;
 }
 
@@ -390,7 +543,12 @@ void Machine::SetJoystick(int port, uint8_t state) {
 void Machine::KeyEvent(uint8_t scancode, bool down) { IkbdSend({uint8_t(down ? scancode : scancode | 0x80)}); }
 
 void Machine::MouseInput(int dx, int dy, uint8_t buttons) {
-  if (!mouse_on_) return;
+  gem_mouse_x_ = std::clamp(gem_mouse_x_ + dx, 0, kScreenW - 1);
+  gem_mouse_y_ = std::clamp(gem_mouse_y_ + dy, 0, kScreenH - 1);
+  if (!mouse_on_) {
+    mouse_buttons_ = buttons;
+    return;
+  }
   mouse_dx_ += dx, mouse_dy_ += dy;
   mouse_buttons_ = buttons;
   SendMouse();
@@ -399,11 +557,14 @@ void Machine::MouseInput(int dx, int dy, uint8_t buttons) {
 // Relative mouse packets: $F8 | buttons, dx, dy (each -128..127), once a threshold is reached or the buttons
 // change. Not too many queued: the ACIA moves ~780 bytes a second.
 void Machine::SendMouse() {
-  while (ikbd_out_.size() < 24 && (std::abs(mouse_dx_) >= mouse_thr_x_ || std::abs(mouse_dy_) >= mouse_thr_y_ ||
+  while (ikbd_out_.size() < 30 &&(std::abs(mouse_dx_) >= mouse_thr_x_ || std::abs(mouse_dy_) >= mouse_thr_y_ ||
                                    mouse_buttons_ != mouse_sent_buttons_)) {
-    int dx = std::clamp(mouse_dx_, -128, 127), dy = std::clamp(mouse_dy_, -128, 127);
+    // Small steps, as a real mouse sends at threshold 1: Defender 2's handler checks for a packet header ($F8-$FB)
+    // before it checks whether it's inside a packet, so a delta of -5..-8 would be read as a new packet.
+    int dx = std::clamp(mouse_dx_, -4, 4), dy = std::clamp(mouse_dy_, -4, 4);
     mouse_dx_ -= dx, mouse_dy_ -= dy;
     mouse_sent_buttons_ = mouse_buttons_;
+    if (trace_tos) LOG("mouse packet: buttons %d dx %d dy %d", mouse_buttons_ & 3, dx, dy);
     IkbdSend({uint8_t(0xF8 | (mouse_buttons_ & 3)), uint8_t(int8_t(dx)), uint8_t(int8_t(mouse_y_up_ ? -dy : dy))});
   }
 }
@@ -630,6 +791,13 @@ std::string Machine::ReadString(uint32_t a) {
   return s;
 }
 
+std::string Machine::FileName(uint32_t a) {
+  std::string name = Upper(ReadString(a & 0xFFFFFF));
+  size_t slash = name.find_last_of("\\:");
+  if (slash != std::string::npos) name = name.substr(slash + 1);
+  return name;
+}
+
 bool Machine::IllegalOpcode(int) {
   uint32_t pc = cpu::Get(cpu::PPC) & 0xFFFFFF;
   if (auto hook = hooks_.find(pc); hook != hooks_.end()) {
@@ -643,9 +811,25 @@ bool Machine::IllegalOpcode(int) {
     return true;
   }
   if (off == kRomPterm) {
+    if (EndProcess(cpu::Get(cpu::D0))) return true;
     LOG("program returned (rts from its entry)");
     ended_ = true;
     cpu::EndSlice();
+    return true;
+  }
+  if (off == kRomLineA) {  // the frame: SR, then the address of the $Axxx instruction
+    uint32_t ssp = cpu::Get(cpu::A7);
+    uint16_t sr = Get16(&ram_[ssp]);
+    uint32_t at = Get32(&ram_[ssp + 2]) & 0xFFFFFF;
+    LineA(Read16(at) & 0xFFF);
+    cpu::Set(cpu::A7, ssp + 6);
+    cpu::Set(cpu::SR, sr);
+    cpu::Set(cpu::PC, at + 2);
+    return true;
+  }
+  if (off == kRomTrap2) {  // GEM: d0 = $C8 AES / $73 VDI, d1 = the parameter block; RTE follows the ILLEGAL
+    Gem(cpu::Get(cpu::D0), cpu::Get(cpu::Reg(cpu::D0 + 1)) & 0xFFFFFF);
+    cpu::Set(cpu::PC, pc + 2);
     return true;
   }
   if (off >= kRomVectors) {
@@ -696,7 +880,29 @@ bool Machine::IllegalOpcode(int) {
     cpu::Set(cpu::PC, func);
     return true;
   }
-  bool handled = off == kRomTrap1 ? Gemdos(args, &d0) : off == kRomTrap13 ? Bios(args, &d0) : Xbios(args, &d0);
+  if (off == kRomTrap1 && (fn == 0x00 || fn == 0x4C || fn == 0x31)) {  // Pterm0, Pterm(code), Ptermres
+    uint32_t code = fn == 0x00 ? 0 : uint32_t(int32_t(int16_t(Get16(&ram_[args + (fn == 0x31 ? 6 : 2)]))));
+    if (EndProcess(code)) return true;
+    LOG("program ended (Pterm)");
+    ended_ = true;
+    cpu::EndSlice();
+    return true;
+  }
+  trap_wait_ = false;
+  bool handled;
+  if (off == kRomTrap1 && fn == 0x4B) {
+    bool started = false;
+    handled = Pexec(args, &d0, &started);
+    if (started) return true;  // the child runs now; its Pterm returns from this trap
+  } else {
+    handled = off == kRomTrap1 ? Gemdos(args, &d0) : off == kRomTrap13 ? Bios(args, &d0) : Xbios(args, &d0);
+  }
+  if (trap_wait_) {  // nothing to read yet: run the trap again
+    cpu::Set(cpu::A7, ssp + 6);
+    cpu::Set(cpu::SR, sr);
+    cpu::Set(cpu::PC, ret - 2);
+    return true;
+  }
   if (!handled) {
     LOG("args: %04X %04X %04X %04X %04X %04X %04X", Get16(&ram_[args + 2]), Get16(&ram_[args + 4]),
         Get16(&ram_[args + 6]), Get16(&ram_[args + 8]), Get16(&ram_[args + 10]), Get16(&ram_[args + 12]),
@@ -731,10 +937,113 @@ bool Machine::Gemdos(uint32_t args, uint32_t* d0) {
       return true;
     case 0x01:  // Cconin
     case 0x07:  // Crawcin
-    case 0x08:  // Cnecin
+    case 0x08:  // Cnecin: these wait for a key
       if (!console_keys_.empty()) *d0 = console_keys_.front(), console_keys_.pop_front();
-      else *d0 = 0;
+      else trap_wait_ = true;
       return true;
+    case 0x02:  // Cconout
+    case 0x03:  // Cauxin
+    case 0x04:  // Cauxout
+    case 0x05:  // Cprnout
+      return true;
+    case 0x0A: {  // Cconrs(buf): a line from the keyboard - an empty one
+      uint32_t buf = Get32(p + 2) & 0xFFFFFF;
+      if (buf + 1 < kRamSize) ram_[buf + 1] = 0;
+      return true;
+    }
+    case 0x10: *d0 = uint32_t(-1); return true;  // Cconos
+    case 0x11:                                   // Cprnos
+    case 0x13: *d0 = uint32_t(-1); return true;  // Cauxos: ready (output goes nowhere)
+    case 0x12: *d0 = 0; return true;             // Cauxis: nothing from the serial port
+    case 0x1A: dta_ = Get32(p + 2); return true;  // Fsetdta
+    case 0x2F: *d0 = dta_ ? dta_ : cur_bp_ + 0x80; return true;  // Fgetdta
+    case 0x2A: *d0 = (2026 - 1980) << 9 | 10 << 5 | 31; return true;  // Tgetdate
+    case 0x2C: *d0 = 12 << 11; return true;  // Tgettime
+    case 0x2B:
+    case 0x2D: return true;  // Tsetdate, Tsettime
+    case 0x30: *d0 = 0x1300; return true;  // Sversion: GEMDOS 0.19 (TOS 1.04)
+    case 0x36: {  // Dfree(buf, drive): an empty 720 KB disk
+      uint32_t buf = Get32(p + 2) & 0xFFFFFF;
+      Put32(&ram_[buf], 700), Put32(&ram_[buf + 4], 711), Put32(&ram_[buf + 8], 512), Put32(&ram_[buf + 12], 2);
+      return true;
+    }
+    case 0x3B: return true;  // Dsetpath
+    case 0x47: {             // Dgetpath(buf, drive): the root
+      ram_[Get32(p + 2) & 0xFFFFFF] = 0;
+      return true;
+    }
+    case 0x41: {  // Fdelete
+      std::string name = FileName(Get32(p + 2));
+      *d0 = files_.erase(name) ? 0 : uint32_t(-33);
+      return true;
+    }
+    case 0x43: {  // Fattrib(name, set, attr)
+      *d0 = files_.count(FileName(Get32(p + 2))) ? 0 : uint32_t(-33);
+      return true;
+    }
+    case 0x4E:    // Fsfirst(name, attr)
+    case 0x4F: {  // Fsnext
+      if (fn == 0x4E) {
+        std::string pattern = FileName(Get32(p + 2));
+        search_.clear();
+        auto match = [](const std::string& pat, const std::string& s) {  // * and ? as in TOS (8.3 parts)
+          auto part = [](const std::string& x, bool ext) {
+            size_t dot = x.find('.');
+            return ext ? (dot == std::string::npos ? std::string() : x.substr(dot + 1)) : x.substr(0, dot);
+          };
+          for (int e = 0; e < 2; ++e) {
+            std::string pp = part(pat, e), ss = part(s, e);
+            size_t i = 0;
+            for (; i < pp.size(); ++i) {
+              if (pp[i] == '*') break;
+              if (i >= ss.size() || (pp[i] != '?' && pp[i] != ss[i])) return false;
+            }
+            if (i == pp.size() && ss.size() > pp.size()) return false;
+          }
+          return true;
+        };
+        for (const auto& [n, data] : files_)
+          if (match(pattern, n)) search_.push_back(n);
+        if (trace_tos) LOG("gemdos Fsfirst(%s): %zu found", pattern.c_str(), search_.size());
+      }
+      if (search_.empty()) return *d0 = uint32_t(fn == 0x4E ? -33 : -49), true;  // EFILNF, ENMFIL
+      std::string n = search_.front();
+      search_.pop_front();
+      uint32_t dta = (dta_ ? dta_ : cur_bp_ + 0x80) & 0xFFFFFF;
+      std::fill(&ram_[dta], &ram_[dta + 44], 0);
+      ram_[dta + 21] = 0;  // attributes
+      Put16(&ram_[dta + 22], 0), Put16(&ram_[dta + 24], 0);  // time, date
+      uint32_t size = uint32_t(files_[n].size());
+      Put32(&ram_[dta + 26], size);
+      std::memcpy(&ram_[dta + 30], n.c_str(), std::min<size_t>(n.size(), 13));
+      *d0 = 0;
+      return true;
+    }
+    case 0x48: {  // Malloc(size): -1 = the largest free block; taken from the top of memory
+      int32_t size = int32_t(Get32(p + 2));
+      uint32_t low = (cur_end_ + 0xFF) & ~0xFFu;
+      uint32_t free = malloc_top_ > low ? malloc_top_ - low : 0;
+      if (size < 0) return *d0 = free, true;
+      uint32_t n = (uint32_t(size) + 15) & ~15u;
+      if (n > free) {
+        LOG("Malloc(%d): only %u free", size, free);
+        return *d0 = 0, true;
+      }
+      malloc_top_ -= n;
+      mallocs_[malloc_top_] = n;
+      if (trace_tos) LOG("gemdos Malloc(%d) = $%X", size, malloc_top_);
+      *d0 = malloc_top_;
+      return true;
+    }
+    case 0x49: {  // Mfree(block): the space comes back if it's the lowest block
+      uint32_t a = Get32(p + 2);
+      auto it = mallocs_.find(a);
+      if (it == mallocs_.end()) return *d0 = uint32_t(-40), true;
+      mallocs_.erase(it);
+      malloc_top_ = mallocs_.empty() ? kHitpa : mallocs_.begin()->first;
+      *d0 = 0;
+      return true;
+    }
     case 0x0B:  // Cconis
       *d0 = console_keys_.empty() ? 0 : uint32_t(-1);
       return true;
@@ -744,12 +1053,16 @@ bool Machine::Gemdos(uint32_t args, uint32_t* d0) {
       return true;
     case 0x0E: *d0 = 1; return true;  // Dsetdrv: drive bitmap (A:)
     case 0x19: *d0 = 0; return true;  // Dgetdrv
-    case 0x4A: *d0 = 0; return true;  // Mshrink
-    case 0x3C:                        // Fcreate(name, attr)
-    case 0x3D: {                      // Fopen(name, mode)
-      std::string name = Upper(ReadString(Get32(p + 2)));
-      size_t slash = name.find_last_of("\\:");
-      if (slash != std::string::npos) name = name.substr(slash + 1);
+    case 0x4A: {  // Mshrink(0, block, size): the running program gives back the end of its memory
+      uint32_t block = Get32(p + 4), size = Get32(p + 8);
+      if (block == cur_bp_) cur_end_ = block + size;
+      if (trace_tos) LOG("gemdos Mshrink($%X, %u)", block, size);
+      *d0 = 0;
+      return true;
+    }
+    case 0x3C:    // Fcreate(name, attr)
+    case 0x3D: {  // Fopen(name, mode)
+      std::string name = FileName(Get32(p + 2));
       if (fn == 0x3C) {
         files_[name].clear();
       } else if (!files_.count(name)) {
@@ -811,15 +1124,214 @@ bool Machine::Gemdos(uint32_t args, uint32_t* d0) {
   }
 }
 
+// GEM, as much as a full-screen program uses it at startup: AES (d0 $C8) and VDI (d0 $73). Results are what
+// TOS gives in ST low resolution. Calls we don't know are logged once and return "ok".
+void Machine::Gem(uint32_t d0, uint32_t pb) {
+  auto w16 = [&](uint32_t a, int i, int v) { Put16(&ram_[(a & 0xFFFFFF) + uint32_t(i) * 2], uint16_t(v)); };
+  auto r16 = [&](uint32_t a, int i) { return int(int16_t(Get16(&ram_[(a & 0xFFFFFF) + uint32_t(i) * 2]))); };
+  auto first = [&](int code) { return gem_seen_.insert(code).second; };
+  if ((d0 & 0xFFFF) == 0xC8) {
+    uint32_t control = Get32(&ram_[pb]), global = Get32(&ram_[pb + 4]), int_in = Get32(&ram_[pb + 8]);
+    uint32_t int_out = Get32(&ram_[pb + 12]), addr_in = Get32(&ram_[pb + 16]);
+    int op = r16(control, 0);
+    if (trace_tos || first(0x10000 + op)) LOG("AES %d", op);
+    w16(int_out, 0, 1);
+    switch (op) {
+      case 10:  // appl_init: AES 1.40, one application, id 0
+        w16(int_out, 0, 0);
+        w16(global, 0, 0x0140), w16(global, 1, 1), w16(global, 2, 0);
+        break;
+      case 77:  // graf_handle: VDI handle, character cell 8x8, box 9x9 (low resolution)
+        w16(int_out, 0, 1), w16(int_out, 1, 8), w16(int_out, 2, 8), w16(int_out, 3, 9), w16(int_out, 4, 9);
+        break;
+      case 79:  // graf_mkstate: mouse x, y, buttons, shift keys
+        w16(int_out, 1, gem_mouse_x_), w16(int_out, 2, gem_mouse_y_);
+        w16(int_out, 3, (mouse_buttons_ & 2 ? 1 : 0) | (mouse_buttons_ & 1 ? 2 : 0)), w16(int_out, 4, modifiers_);
+        break;
+      case 52:  // form_alert(default, text)
+        LOG("AES form_alert: %s", ReadString(Get32(&ram_[addr_in & 0xFFFFFF])).c_str());
+        w16(int_out, 0, r16(int_in, 0) > 0 ? r16(int_in, 0) : 1);
+        break;
+      case 90:  // fsel_input: cancelled (no GEM file selector here)
+        w16(int_out, 0, 1), w16(int_out, 1, 0);
+        break;
+      default:
+        break;
+    }
+    return;
+  }
+  if ((d0 & 0xFFFF) == 0x73) {
+    uint32_t contrl = Get32(&ram_[pb]), intout = Get32(&ram_[pb + 12]), ptsout = Get32(&ram_[pb + 16]);
+    int op = r16(contrl, 0);
+    if (trace_tos || first(op)) LOG("VDI %d", op);
+    w16(contrl, 2, 0), w16(contrl, 4, 0);
+    switch (op) {
+      case 1:
+      case 100: {  // v_opnwk / v_opnvwk: low resolution workstation
+        w16(contrl, 6, 1);
+        static const int16_t kOut[45] = {319, 199, 0, 278, 278, 3, 7, 6, 8, 8, 24, 12, 16, 1, 0, 2,
+                                         0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        for (int i = 0; i < 45; ++i) w16(intout, i, kOut[i]);
+        w16(intout, 13, 16), w16(intout, 39, 512);  // colours, palette size
+        static const int16_t kPts[12] = {0, 7, 0, 1, 15, 1, 0, 0, 0, 0, 0, 0};
+        for (int i = 0; i < 12; ++i) w16(ptsout, i, kPts[i]);
+        w16(contrl, 2, 6), w16(contrl, 4, 45);
+        break;
+      }
+      case 124:  // vq_mouse: buttons, x, y
+        w16(intout, 0, (mouse_buttons_ & 2 ? 1 : 0) | (mouse_buttons_ & 1 ? 2 : 0));
+        w16(ptsout, 0, gem_mouse_x_), w16(ptsout, 1, gem_mouse_y_);
+        w16(contrl, 2, 1), w16(contrl, 4, 1);
+        break;
+      default:  // v_clsvwk, v_show_c, v_hide_c, ...: nothing to do
+        break;
+    }
+    return;
+  }
+  if (first(0x20000 + int(d0 & 0xFFFF))) LOG("GEM trap with d0 = $%X", d0);
+}
+
+// ---- Line-A (low resolution, 4 planes, drawing into the logical screen) ----
+
+int Machine::GetPixel(int x, int y) {
+  uint32_t a = (logbase_ + uint32_t(y) * 160 + uint32_t(x >> 4) * 8) % kRamSize;
+  int bit = 15 - (x & 15), c = 0;
+  for (int p = 0; p < 4; ++p) c |= ((Get16(&ram_[a + p * 2]) >> bit) & 1) << p;
+  return c;
+}
+
+void Machine::SetPixel(int x, int y, int c) {
+  if (x < 0 || y < 0 || x >= kScreenW || y >= kScreenH) return;
+  uint32_t a = (logbase_ + uint32_t(y) * 160 + uint32_t(x >> 4) * 8) % kRamSize;
+  uint16_t bit = uint16_t(0x8000 >> (x & 15));
+  for (int p = 0; p < 4; ++p) {
+    uint16_t w = Get16(&ram_[a + p * 2]);
+    Put16(&ram_[a + p * 2], (c >> p) & 1 ? (w | bit) : (w & ~bit));
+  }
+}
+
+// One pixel by the write mode: 0 replace, 1 transparent, 2 xor, 3 reverse transparent; `on` = the pattern bit.
+void Machine::PlotMode(int x, int y, bool on, int colour, int mode) {
+  if (x < 0 || y < 0 || x >= kScreenW || y >= kScreenH) return;
+  switch (mode & 3) {
+    case 0: SetPixel(x, y, on ? colour : 0); break;
+    case 1: if (on) SetPixel(x, y, colour); break;
+    case 2: if (on) SetPixel(x, y, GetPixel(x, y) ^ 15); break;
+    case 3: if (!on) SetPixel(x, y, colour); break;
+  }
+}
+
+void Machine::LineA(int fn) {
+  uint8_t* v = &ram_[kLineA];
+  auto var = [&](int off) { return int(int16_t(Get16(v + off))); };
+  int colour = (var(0x18) & 1) | (var(0x1A) & 1) << 1 | (var(0x1C) & 1) << 2 | (var(0x1E) & 1) << 3;
+  int mode = var(0x24);
+  if (gem_seen_.insert(0x30000 + fn).second) LOG("Line-A $A%03X", fn);
+  switch (fn) {
+    case 0x0:  // init: a0 = d0 = the variables, a1 = font headers, a2 = the routine table
+      cpu::Set(cpu::D0, kLineA);
+      cpu::Set(cpu::A0, kLineA);
+      cpu::Set(cpu::Reg(cpu::A0 + 1), kRomBase + kRomFont + 0x80);
+      cpu::Set(cpu::Reg(cpu::A0 + 2), kRomBase + kRomFont + 0x90);
+      break;
+    case 0x3: {  // arbitrary line X1,Y1 - X2,Y2 with the line mask
+      int x0 = var(0x26), y0 = var(0x28), x1 = var(0x2A), y1 = var(0x2C);
+      uint16_t mask = uint16_t(var(0x22));
+      int dx = std::abs(x1 - x0), dy = -std::abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+      int err = dx + dy;
+      for (int guard = 0; guard < 4096; ++guard) {
+        bool last = x0 == x1 && y0 == y1;
+        if (!last || var(0x20)) PlotMode(x0, y0, mask & 0x8000, colour, mode);
+        mask = uint16_t(mask << 1 | mask >> 15);
+        if (last) break;
+        int e2 = 2 * err;
+        if (e2 >= dy) err += dy, x0 += sx;
+        if (e2 <= dx) err += dx, y0 += sy;
+      }
+      Put16(v + 0x22, mask);
+      break;
+    }
+    case 0x6: {  // horizontal line X1 - X2 at Y1 with the fill pattern (PATPTR, PATMSK, MFILL)
+      int x0 = var(0x26), y = var(0x28), x1 = var(0x2A);
+      if (x0 > x1) std::swap(x0, x1);
+      uint32_t pat = Get32(v + 0x2E) & 0xFFFFFF;
+      int patmsk = var(0x32), mfill = var(0x34);
+      if (var(0x36)) {  // clipping
+        x0 = std::max(x0, var(0x38)), x1 = std::min(x1, var(0x3C));
+        if (y < var(0x3A) || y > var(0x3E)) break;
+      }
+      for (int x = x0; x <= x1; ++x) {
+        if (!pat) {
+          PlotMode(x, y, true, colour, mode);
+          continue;
+        }
+        int row = y & patmsk, bit = 15 - (x & 15);
+        if (mfill) {  // a multi-plane pattern: the colour comes from the pattern
+          int c = 0;
+          for (int p = 0; p < 4; ++p) c |= ((Get16(&ram_[(pat + uint32_t((p * (patmsk + 1) + row) * 2)) & 0xFFFFFF]) >> bit) & 1) << p;
+          if (mode == 0 || c) SetPixel(x, y, c);
+        } else {
+          PlotMode(x, y, (Get16(&ram_[(pat + uint32_t(row * 2)) & 0xFFFFFF]) >> bit) & 1, colour, mode);
+        }
+      }
+      break;
+    }
+    case 0xC: {  // undraw sprite: a2 = the save buffer (our layout: valid, x, y, 16 rows of 32 pixels' colours)
+      uint32_t buf = cpu::Get(cpu::Reg(cpu::A0 + 2)) & 0xFFFFFF;
+      if (!Get16(&ram_[buf])) break;
+      int x = int(int16_t(Get16(&ram_[buf + 2]))), y = int(int16_t(Get16(&ram_[buf + 4])));
+      for (int r = 0; r < 16; ++r)
+        for (int c = 0; c < 16; c += 2) {
+          uint8_t b = ram_[buf + 6 + uint32_t(r * 8 + c / 2)];
+          SetPixel(x + c, y + r, b >> 4), SetPixel(x + c + 1, y + r, b & 15);
+        }
+      Put16(&ram_[buf], 0);
+      break;
+    }
+    case 0xD: {  // draw sprite at d0, d1: a0 = definition (hot x, hot y, format, bg colour, fg colour, 16 x
+                 // (bg mask, fg mask)), a2 = the save buffer
+      uint32_t def = cpu::Get(cpu::A0) & 0xFFFFFF, buf = cpu::Get(cpu::Reg(cpu::A0 + 2)) & 0xFFFFFF;
+      int x = int(int16_t(cpu::Get(cpu::D0))) - int(int16_t(Get16(&ram_[def]))),
+          y = int(int16_t(cpu::Get(cpu::Reg(cpu::D0 + 1)))) - int(int16_t(Get16(&ram_[def + 2])));
+      int fmt = int(int16_t(Get16(&ram_[def + 4]))), bg = Get16(&ram_[def + 6]) & 15, fg = Get16(&ram_[def + 8]) & 15;
+      Put16(&ram_[buf], 1), Put16(&ram_[buf + 2], uint16_t(x)), Put16(&ram_[buf + 4], uint16_t(y));
+      for (int r = 0; r < 16; ++r) {
+        for (int c = 0; c < 16; c += 2) {
+          auto at = [&](int px) { return x + px >= 0 && x + px < kScreenW && y + r >= 0 && y + r < kScreenH ? GetPixel(x + px, y + r) : 0; };
+          ram_[buf + 6 + uint32_t(r * 8 + c / 2)] = uint8_t(at(c) << 4 | at(c + 1));
+        }
+        uint16_t bm = Get16(&ram_[def + 10 + uint32_t(r * 4)]), fm = Get16(&ram_[def + 12 + uint32_t(r * 4)]);
+        for (int c = 0; c < 16; ++c) {
+          bool b = (bm >> (15 - c)) & 1, f = (fm >> (15 - c)) & 1;
+          if (fmt == -1) {  // xor
+            if (b) SetPixel(x + c, y + r, bg);
+            if (f && x + c >= 0 && x + c < kScreenW && y + r >= 0 && y + r < kScreenH)
+              SetPixel(x + c, y + r, GetPixel(x + c, y + r) ^ fg);
+          } else {
+            if (b) SetPixel(x + c, y + r, bg);
+            if (f) SetPixel(x + c, y + r, fg);
+          }
+        }
+      }
+      break;
+    }
+    default:
+      LOG("Line-A $A%03X not done", fn);
+      break;
+  }
+}
+
 bool Machine::Bios(uint32_t args, uint32_t* d0) {
   const uint8_t* p = &ram_[args];
   switch (Get16(p)) {
     case 1:  // Bconstat(dev): 2 = console
       *d0 = Get16(p + 2) == 2 && !console_keys_.empty() ? uint32_t(-1) : 0;
       return true;
-    case 2:  // Bconin(dev): doesn't wait - 0 if there is no key
-      if (Get16(p + 2) == 2 && !console_keys_.empty()) *d0 = console_keys_.front(), console_keys_.pop_front();
-      else *d0 = 0;
+    case 2:  // Bconin(dev): waits for a key (console); other devices: 0
+      if (Get16(p + 2) != 2) *d0 = 0;
+      else if (!console_keys_.empty()) *d0 = console_keys_.front(), console_keys_.pop_front();
+      else trap_wait_ = true;
       return true;
     case 3:                                  // Bconout(dev, c)
       if (Get16(p + 2) == 4) IkbdCommand(uint8_t(Get16(p + 4)));
@@ -887,12 +1399,14 @@ bool Machine::Xbios(uint32_t args, uint32_t* d0) {
       return true;
     }
     case 2:  // Physbase
-    case 3:  // Logbase
       *d0 = uint32_t(vbase_hi_) << 16 | uint32_t(vbase_mid_) << 8;
       return true;
+    case 3: *d0 = logbase_; return true;  // Logbase
+    case 15: *d0 = 0; return true;        // Rsconf (serial port settings)
     case 4: *d0 = res_; return true;  // Getrez
     case 5: {                         // Setscreen(log, phys, rez)
-      uint32_t phys = Get32(p + 6);
+      uint32_t log = Get32(p + 2), phys = Get32(p + 6);
+      if (log != 0xFFFFFFFF) logbase_ = log & 0xFFFFFF, Put32(&ram_[0x44E], logbase_);
       if (phys != 0xFFFFFFFF) vbase_hi_ = uint8_t(phys >> 16), vbase_mid_ = uint8_t(phys >> 8);
       int16_t rez = int16_t(Get16(p + 10));
       if (rez >= 0) res_ = uint8_t(rez);

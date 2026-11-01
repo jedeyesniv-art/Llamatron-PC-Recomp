@@ -25,6 +25,8 @@ Bytes ReadFile(const std::string& path) {
 
 }  // namespace
 
+Bytes ReadHostFile(const std::string& path) { return ReadFile(path); }
+
 Bytes LoadImage(const std::string& path, std::string* error) {
   Bytes d = ReadFile(path);
   if (d.size() < 512) {

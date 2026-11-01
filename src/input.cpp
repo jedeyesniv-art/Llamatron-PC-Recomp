@@ -5,6 +5,7 @@
 
 #include "game.h"
 #include "gridrunner.h"
+#include "tripatron.h"
 #include "settings.h"
 #include "log.h"
 #include "machine.h"
@@ -14,7 +15,10 @@ namespace {
 
 std::vector<SDL_Gamepad*> g_pads;  // in connection order: [0] = player 1
 bool g_keys[SDL_SCANCODE_COUNT] = {};
+Mode g_mode = Mode::kLlamatron;
 bool g_gridrunner = false;  // Gridrunner's controls (gridrunner.cpp) instead of Llamatron's
+float g_mouse_x = 0, g_mouse_y = 0;  // generic: right stick movement not sent yet
+bool g_start_held = false, g_back_held = false;
 bool g_a_held = false, g_a_to_stick0 = false;  // pad 1's A: which stick's fire it is while held
 
 // ST keys we tap for the player: pressed now, released a few frames later (the game polls key flags per VBL).
@@ -200,6 +204,25 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
       break;
   }
   if (!m) return false;  // no game running (the launcher): only pads connecting
+  if (g_mode == Mode::kTripATron) {  // every key goes to the ST; the pad is polled (trip::Update)
+    if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.scancode == SDL_SCANCODE_F12) {  // music mode
+      trip::MusicKey();
+      return true;
+    }
+    if ((e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) && !e.key.repeat)
+      if (uint8_t code = StScancode(e.key.scancode)) m->KeyEvent(code, e.type == SDL_EVENT_KEY_DOWN);
+    return false;
+  }
+  if (g_mode == Mode::kGeneric) {  // every key goes to the ST; pad B twice leaves the game
+    if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
+      if (SDL_GetTicks() < g_quit_armed_ms) g_quit = true;
+      else g_quit_armed_ms = SDL_GetTicks() + 3000;
+      return true;
+    }
+    if ((e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) && !e.key.repeat)
+      if (uint8_t code = StScancode(e.key.scancode)) m->KeyEvent(code, e.type == SDL_EVENT_KEY_DOWN);
+    return false;
+  }
   if (g_gridrunner) {  // its pad buttons and Esc; every key goes to the ST
     if (grid::HandleEvent(e, m)) return true;
     if ((e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) && !e.key.repeat)
@@ -251,9 +274,52 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
   }
 }
 
-bool QuitRequested() { return g_quit || grid::QuitRequested(); }
+bool QuitRequested() { return g_quit || grid::QuitRequested() || trip::QuitRequested(); }
 
-void SetGridrunner(bool on) { g_gridrunner = on; }
+bool HintAtTop() { return g_mode == Mode::kTripATron; }
+
+void SetMode(Mode mode) {
+  g_mode = mode;
+  g_gridrunner = mode == Mode::kGridrunner;
+}
+
+Mode GetMode() { return g_mode; }
+
+// Other programs: pad 1 = joystick 1 (left stick / d-pad, A fire) and the mouse (right stick, RT left button,
+// LT right button); Start = Space, Back = Esc. A second pad = joystick 0. Mouse and buttons from the PC mouse
+// (and test input) are added in.
+void UpdateGeneric(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_buttons) {
+  uint8_t j0 = 0, j1 = 0, buttons = mouse_buttons;
+  if (!g_pads.empty()) {
+    SDL_Gamepad* p = g_pads[0];
+    auto button = [&](SDL_GamepadButton b) { return SDL_GetGamepadButton(p, b); };
+    j1 |= StickBits(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY) | DpadBits(p);
+    if (button(SDL_GAMEPAD_BUTTON_SOUTH) || button(SDL_GAMEPAD_BUTTON_WEST)) j1 |= st::kJoyFire;
+    if (SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000) buttons |= 2;
+    if (SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16000) buttons |= 1;
+    float x = SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
+    float y = SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
+    float mag = std::sqrt(x * x + y * y);
+    if (mag > 0.15f) {  // quadratic: fine control near the centre, 6 px a frame at full deflection
+      float k = 6.0f * (mag - 0.15f) / 0.85f * (mag - 0.15f) / 0.85f / mag;
+      g_mouse_x += x * k, g_mouse_y += y * k;
+    }
+    bool start = button(SDL_GAMEPAD_BUTTON_START), back = button(SDL_GAMEPAD_BUTTON_BACK);
+    if (start != g_start_held) m->KeyEvent(0x39, start);  // Space
+    if (back != g_back_held) m->KeyEvent(0x01, back);     // Esc
+    g_start_held = start, g_back_held = back;
+  }
+  if (g_pads.size() >= 2) {
+    SDL_Gamepad* p = g_pads[1];
+    j0 |= StickBits(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY) | DpadBits(p);
+    if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_SOUTH)) j0 |= st::kJoyFire;
+  }
+  int dx = int(g_mouse_x), dy = int(g_mouse_y);
+  g_mouse_x -= float(dx), g_mouse_y -= float(dy);
+  m->SetJoystick(0, Clean(j0));
+  m->SetJoystick(1, Clean(j1));
+  m->MouseInput(mouse_dx + dx, mouse_dy + dy, buttons);
+}
 
 void Reset() {
   std::fill(std::begin(g_keys), std::end(g_keys), false);
@@ -262,10 +328,15 @@ void Reset() {
   g_quit_to_title = 0;
   g_quit_armed_ms = g_aim_hint_ms = 0;
   g_quit = g_was_title = false;
+  g_mouse_x = g_mouse_y = 0;
+  g_start_held = g_back_held = false;
 }
 SDL_Gamepad* FirstPad() { return g_pads.empty() ? nullptr : g_pads[0]; }
 
 const char* Hint(st::Machine* m) {
+  if (g_mode == Mode::kTripATron) return trip::Hint(m, !g_pads.empty());
+  if (g_mode == Mode::kGeneric)
+    return SDL_GetTicks() < g_quit_armed_ms ? "Press B again to leave the game" : nullptr;
   if (g_gridrunner) return grid::Hint(m, !g_pads.empty());
   if (game::Paused(*m))
     return g_pads.empty() ? "O: resume   Esc: quit to title\nT / G: tentacle on / off"
@@ -281,7 +352,7 @@ const char* Hint(st::Machine* m) {
 }
 
 void Update(st::Machine* m) {
-  if (g_gridrunner) return;  // grid::Update, called by main with the mouse
+  if (g_mode != Mode::kLlamatron) return;  // grid::Update / UpdateGeneric, called by main with the mouse
   for (size_t i = 0; i < g_taps.size();) {  // release tapped keys
     if (--g_taps[i].frames > 0) {
       ++i;

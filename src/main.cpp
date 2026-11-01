@@ -18,6 +18,8 @@
 #include "disk.h"
 #include "game.h"
 #include "gridrunner.h"
+#include "tripatron.h"
+#include "music.h"
 #include "settings.h"
 #include "input.h"
 #include "crt.h"
@@ -56,6 +58,8 @@ struct Options {
   bool headless = false;   // --headless: no window or audio (tests)
   int frames = 0;          // --frames=N: quit after N frames
   std::string wav;         // --wav=<file>: also write the audio to a WAV file (tests)
+  std::string music;       // --music=<file>: Trip-A-Tron hears this file instead of the PC (tests)
+  int trip_music = -1;     // --trip-music=0|1|2: Trip-A-Tron's music mode for this run
   std::map<int, std::string> shots;  // --shot=N:<file.bmp>
   std::map<int, std::string> rshots;  // --rshot=N:<file.bmp>: the screen as shown (CRT look included)
   // --press=N:<what>[:frames]: from frame N hold a key (SDL scancode name), "j0"/"j1" + fire|up|down|left|right,
@@ -128,6 +132,8 @@ Options ParseArgs(int argc, char** argv) {
     else if (Arg(a, "lpress", &v)) o.lpresses.push_back({std::atoi(v.c_str()), v.substr(v.find(':') + 1)});
     else if (Arg(a, "lshot", &v)) o.lshots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
     else if (Arg(a, "lframes", &v)) o.lframes = std::atoi(v.c_str());
+    else if (Arg(a, "music", &v)) o.music = v;
+    else if (Arg(a, "trip-music", &v)) o.trip_music = std::atoi(v.c_str());
     else if (Arg(a, "program", &v)) {
       o.program_given = true;
       o.program = v;
@@ -283,6 +289,7 @@ struct Context {
   SDL_AudioStream* audio = nullptr;
   int view_h = st::kScreenH;
   std::vector<float> wav;
+  fs::path trip_dir;  // Trip-A-Tron's files (a folder with TRIP1.TOS, its installer), if found
 };
 
 constexpr int kRate = 48000;
@@ -308,6 +315,45 @@ std::map<std::string, disk::Bytes> FilesWithSaves(const Context& c) {
   return files;
 }
 
+// A folder of loose ST files (Trip-A-Tron came that way), keyed by upper-case name.
+std::map<std::string, disk::Bytes> ReadFolder(const fs::path& dir) {
+  std::map<std::string, disk::Bytes> files;
+  std::error_code ec;
+  for (const auto& e : fs::directory_iterator(dir, ec)) {
+    if (!e.is_regular_file()) continue;
+    std::string name = e.path().filename().string();
+    std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+    files[name] = disk::ReadHostFile(e.path().string());
+  }
+  return files;
+}
+
+// The folder holding `file` (e.g. TRIP1.TOS), a few levels down from game\ next to the exe, the exe's folder, or
+// the nearest Private\ up the tree (the development layout).
+fs::path FindFolderWith(const std::string& file) {
+  std::vector<fs::path> roots = {ExeDir() / "game", ExeDir()};
+  for (fs::path p = ExeDir(); !p.empty(); p = p.parent_path()) {
+    roots.push_back(p / "Private");
+    if (p == p.parent_path()) break;
+  }
+  for (const fs::path& root : roots) {
+    std::error_code ec;
+    if (!fs::is_directory(root, ec)) continue;
+    for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
+         it != fs::recursive_directory_iterator(); it.increment(ec)) {
+      if (ec) break;
+      if (it.depth() > 3) {
+        it.disable_recursion_pending();
+        continue;
+      }
+      std::string name = it->path().filename().string();
+      std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+      if (name == file && it->is_regular_file(ec)) return it->path().parent_path();
+    }
+  }
+  return {};
+}
+
 enum class GameEnd { kQuitApp, kToLauncher, kError };
 
 // Runs one game (a program on the disk) until the player leaves it.
@@ -316,8 +362,11 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
   std::string error;
   disk::Program program;
   const bool llamatron = program_name == "TRON1MEG.PRG";
-  auto it = c.disk_files.find(program_name);
-  bool loaded = it != c.disk_files.end() && (llamatron ? disk::UnpackLlamatron(it->second, &program, &error)
+  const bool gridrunner = program_name == "GRIDRUNR.PRG";  // anything else: generic controls
+  const bool tripatron = program_name == "TRIP.PRG";
+  std::map<std::string, disk::Bytes> files = FilesWithSaves(c);  // saved files too (an installer's output)
+  auto it = files.find(program_name);
+  bool loaded = it != files.end() && (llamatron ? disk::UnpackLlamatron(it->second, &program, &error)
                                                       : disk::LoadPrg(it->second, &program, &error));
   if (!loaded) {
     if (error.empty()) error = program_name + " not found on the disk";
@@ -331,7 +380,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
   auto machine_owner = std::make_unique<st::Machine>();
   st::Machine& machine = *machine_owner;
   machine.trace_tos = opt.trace_tos;
-  if (!machine.Load(program, FilesWithSaves(c), c.save_dir.string(), &error)) {
+  if (!machine.Load(program, std::move(files), c.save_dir.string(), &error)) {
     LOG("load failed: %s", error.c_str());
     return GameEnd::kError;
   }
@@ -340,7 +389,13 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
   grid::Reset();
   game::g_llamatron = llamatron;
   if (llamatron) game::ApplyPatches(machine, opt.game);
-  input::SetGridrunner(!llamatron);
+  input::SetMode(llamatron    ? input::Mode::kLlamatron
+                 : gridrunner ? input::Mode::kGridrunner
+                 : tripatron  ? input::Mode::kTripATron
+                              : input::Mode::kGeneric);
+  trip::Reset();
+  if (!opt.music.empty()) music::StartTestFile(opt.music);
+  if (opt.trip_music >= 0) trip::SetMusicMode(opt.trip_music);
   grid::SetHideEntryLane(!opt.entry_lane);
   machine.SetSampleRate(kRate);
   LOG("analog aim %s, cpu speed during play x%d", game::AnalogAim() ? "on" : "off", opt.cpu_speed);
@@ -396,6 +451,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
     if (input::QuitRequested()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
     if (frame % 50 == 0 && settings::Reload()) {  // edited while running
       grid::LoadSettings();
+      trip::LoadSettings();
       crt::LoadSettings();
       if (opt.aim < 0) game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
     }
@@ -451,6 +507,19 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
             test_pad = true;
           }
           if (p.what.rfind("gry", 0) == 0) tp.ry = float(std::atof(p.what.c_str() + 3)), test_pad = true;
+          if (p.what.rfind("gr", 0) == 0 && p.what.find('@') != std::string::npos) {  // gr<degrees>@<deflection>
+            double deg = std::atof(p.what.c_str() + 2), mag = std::atof(p.what.c_str() + p.what.find('@') + 1);
+            tp.rx = float(std::cos(deg * 3.14159265 / 180) * mag), tp.ry = float(std::sin(deg * 3.14159265 / 180) * mag);
+            test_pad = true;
+          }
+          if (p.what == "ga") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_SOUTH, test_pad = true;
+          if (p.what == "gb") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_EAST, test_pad = true;
+          if (p.what == "gstart") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_START, test_pad = true;
+          if (p.what == "gback") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_BACK, test_pad = true;
+          if (p.what == "gup") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_DPAD_UP, test_pad = true;
+          if (p.what == "gdown") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_DPAD_DOWN, test_pad = true;
+          if (p.what == "gleft") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_DPAD_LEFT, test_pad = true;
+          if (p.what == "gright") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_DPAD_RIGHT, test_pad = true;
           if (p.what == "glt") tp.lt = 1, test_pad = true;
           if (p.what == "grt") tp.rt = 1, test_pad = true;
           if (p.what == "gx") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_WEST, test_pad = true;
@@ -465,7 +534,14 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
         if (test_pad) grid::SetTestPad(tp);
         int dx = int(mouse_x), dy = int(mouse_y);
         mouse_x -= float(dx), mouse_y -= float(dy);
-        grid::Update(&machine, input::FirstPad(), dx, dy, buttons);
+        if (gridrunner) {
+          grid::Update(&machine, input::FirstPad(), dx, dy, buttons);
+        } else if (tripatron) {
+          if (test_pad) trip::SetTestPad({tp.lx, tp.ly, tp.rx, tp.ry, tp.lt, tp.rt, tp.buttons});
+          trip::Update(&machine, input::FirstPad(), dx, dy, buttons);
+        } else {
+          input::UpdateGeneric(&machine, dx, dy, buttons);
+        }
       }
       for (const auto& p : opt.presses) {  // scripted input (tests)
         if (frame < p.frame || frame >= p.frame + p.length) continue;
@@ -513,7 +589,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
       if (frame == opt.profile_to) cpu::g_profile = nullptr, WriteProfile(opt.profile_file);
       // The faster CPU only while playing: the drawing keeps up with the sprites (the game logic is in the 50 Hz
       // VBL either way); other screens are timed by CPU speed and keep the original.
-      bool playing = llamatron ? game::Playing(machine) : grid::GameState(machine) == grid::kPlay;
+      bool playing = llamatron ? game::Playing(machine) : gridrunner && grid::GameState(machine) == grid::kPlay;
       machine.SetCpuSpeed(playing ? opt.cpu_speed : 1);
       playing_second &= playing;
       if (!machine.RunFrame()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
@@ -583,7 +659,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
           lines.emplace_back(p, nl ? nl : p + std::strlen(p));
           p = nl ? nl + 1 : p + std::strlen(p);
         }
-        float y = float(view_h - 12 - 10 * int(lines.size()));
+        float y = input::HintAtTop() ? 4.0f : float(view_h - 12 - 10 * int(lines.size()));
         for (const std::string& line : lines) {
           float w = float(line.size() * 8), x = (st::kScreenW - w) / 2;
           SDL_FRect box{x - 4, y - 1, w + 8, 10};
@@ -612,6 +688,73 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct) {
   if (window) SDL_SetWindowRelativeMouseMode(window, false);
   if (audio) SDL_ClearAudioStream(audio);
   LOG("%s ended after %d frames", program_name.c_str(), frame);
+  return end;
+}
+
+// Trip-A-Tron's installer (TRIP1.TOS) writes the program and its data files to a blank disk: here that's its
+// save folder. Run once, unseen and fast, until TRIP.PRG is written (the last file; then it waits for a key).
+bool InstallTrip(Context& c, const std::map<std::string, disk::Bytes>& files) {
+  disk::Program program;
+  std::string error;
+  auto it = files.find("TRIP1.TOS");
+  if (it == files.end() || !disk::LoadPrg(it->second, &program, &error)) return false;
+  LOG("installing Trip-A-Tron into %s", c.save_dir.string().c_str());
+  auto machine = std::make_unique<st::Machine>();
+  if (!machine->Load(program, files, c.save_dir.string(), &error)) return false;
+  machine->SetCpuSpeed(8);
+  machine->SetSampleRate(kRate);
+  for (int frame = 0; frame < 30000; ++frame) {
+    if (!machine->RunFrame()) break;
+    machine->Audio().clear();
+    if (frame % 25) continue;
+    std::error_code ec;
+    if (fs::exists(c.save_dir / "TRIP.PRG", ec)) {
+      LOG("installed after %d frames", frame);
+      return true;
+    }
+    SDL_Event e;
+    while (SDL_PollEvent(&e))
+      if (e.type == SDL_EVENT_QUIT) return false;
+    if (c.renderer) {  // a word while it works
+      SDL_SetRenderLogicalPresentation(c.renderer, 320, 200, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+      SDL_SetRenderDrawColor(c.renderer, 0, 0, 0, 255);
+      SDL_RenderClear(c.renderer);
+      SDL_SetRenderDrawColor(c.renderer, 200, 200, 210, 255);
+      const char* msg = (frame / 25) % 4 == 0 ? "INSTALLING TRIP-A-TRON" : (frame / 25) % 4 == 1 ? "INSTALLING TRIP-A-TRON."
+                        : (frame / 25) % 4 == 2 ? "INSTALLING TRIP-A-TRON.." : "INSTALLING TRIP-A-TRON...";
+      SDL_RenderDebugText(c.renderer, 160 - 8 * 11, 96, msg);
+      SDL_RenderPresent(c.renderer);
+    }
+  }
+  return false;
+}
+
+// Trip-A-Tron: its own files (not on the Llamatron disk) and its own save folder (userdata\tripatron), installed
+// there on first use.
+GameEnd RunTrip(Context& c) {
+  auto fail = [&](const std::string& msg) {
+    LOG("%s", msg.c_str());
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Trip-A-Tron", msg.c_str(), c.window);
+    return GameEnd::kError;
+  };
+  if (c.trip_dir.empty())
+    return fail("Trip-A-Tron's files weren't found.\nPut the folder from TRIP_A_T.ZIP (with TRIP1.TOS in it) in "
+                "the game folder next to the program.");
+  std::map<std::string, disk::Bytes> files = ReadFolder(c.trip_dir);
+  fs::path root_save = c.save_dir;
+  std::map<std::string, disk::Bytes> root_files = std::move(c.disk_files);
+  c.save_dir = root_save / "tripatron";
+  std::error_code ec;
+  fs::create_directories(c.save_dir, ec);
+  c.disk_files = files;
+  GameEnd end;
+  if (!fs::exists(c.save_dir / "TRIP.PRG", ec) && !InstallTrip(c, files)) {
+    end = fail("Trip-A-Tron couldn't be installed from " + c.trip_dir.string());
+  } else {
+    end = RunGame(c, "TRIP.PRG", false);
+  }
+  c.save_dir = root_save;
+  c.disk_files = std::move(root_files);
   return end;
 }
 
@@ -673,10 +816,16 @@ int main(int argc, char** argv) {
                              "next to the program.", nullptr);
     return 1;
   }
-  disk::Bytes image = disk::LoadImage(c.disk_path, &error);
-  c.disk_files = disk::ReadFiles(image);
+  if (fs::is_directory(c.disk_path, ec)) {  // a folder of loose files (Trip-A-Tron came that way)
+    c.disk_files = ReadFolder(c.disk_path);
+  } else {
+    disk::Bytes image = disk::LoadImage(c.disk_path, &error);
+    c.disk_files = disk::ReadFiles(image);
+  }
   LOG("disk %s: %zu files", c.disk_path.c_str(), c.disk_files.size());
-  if (!c.disk_files.count("TRON1MEG.PRG")) {
+  c.trip_dir = FindFolderWith("TRIP1.TOS");
+  LOG("Trip-A-Tron: %s", c.trip_dir.empty() ? "not found" : c.trip_dir.string().c_str());
+  if (!opt.program_given && !c.disk_files.count("TRON1MEG.PRG")) {
     std::string msg = c.disk_path + ":\nnot the Llamatron disk (TRON1MEG.PRG not found)" +
                       (error.empty() ? "" : "\n" + error);
     LOG("%s", msg.c_str());
@@ -688,6 +837,7 @@ int main(int argc, char** argv) {
   settings::Load((c.save_dir / "settings.txt").string());
   game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
   grid::LoadSettings();
+  trip::LoadSettings();
   settings::Save();  // so every setting is in the file, with its default
   if (opt.aim >= 0) game::SetAnalogAim(opt.aim == 1);
 
@@ -728,7 +878,8 @@ int main(int argc, char** argv) {
     l.Enter(launcher::kLlamatron);
     while (RunLauncher(c, l)) {
       int game = l.Selected();
-      GameEnd end = RunGame(c, game == launcher::kLlamatron ? "TRON1MEG.PRG" : "GRIDRUNR.PRG", false);
+      GameEnd end = game == launcher::kTripATron ? RunTrip(c)
+                    : RunGame(c, game == launcher::kLlamatron ? "TRON1MEG.PRG" : "GRIDRUNR.PRG", false);
       if (end == GameEnd::kQuitApp) break;
       l.Enter(game);
     }

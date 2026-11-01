@@ -66,6 +66,47 @@ starts a twin-stick game. Screenshots -> PNG with pillow to view them.
 Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --obj=build\llamatron.exe
 0x140000000+offset.
 
+## More Llamasoft ST games (2026-10-31; owner downloaded them from Llamasoft's site into Private\)
+- Private\*.zip unpacked to Private\new\<zip name>\ (andesattack-st, defender2-st, hardcore-st, rmc-st:
+  crack compilation disks; trip_a_t: loose files). --disk takes a folder of loose files too.
+- Other programs use generic controls (input::Mode::kGeneric): keys to the ST, PC mouse passed through, pad left
+  stick/d-pad + A = joystick 1, right stick = mouse (RT left, LT right button), Start = Space, Back = Esc, B
+  twice = leave. Gridrunner's code (pokes its RAM) only runs for GRIDRUNR.PRG.
+- Status: RMC (REVENGE.TOS) plays; Andes Attack (ANDES.BOY) reaches its "left button: start" screen; Hardcore
+  (HARDCORE.PRG) title only; Defender 2 (DEFENDR2.PRG -> Pexec DEFENDR2.EXE) plays: menus are mouse-only (Space,
+  click a game box, click ONE PLAYER; the triangle = sector code); in play keyboard Ctrl up / LShift down / # fire
+  + Alt Tab RShift Caps, or mouse (left fire, right, Space Ctrl Alt) - meanings not mapped yet. Its IKBD handler
+  takes $F8-$FB as a packet header even mid-packet: we send mouse deltas of at most +-4.
+- Trip-A-Tron (third launcher disk, launcher::kTripATron): TRIP1.TOS is an installer writing TRIP.PRG etc. to a
+  blank disk; main.cpp RunTrip finds the folder with TRIP1.TOS (game\, exe folder, Private\ up to 3 levels down),
+  saves in userdata\tripatron, installs there on first use (unseen, CPU x8, stops when TRIP.PRG exists). Uses
+  GEM (AES/VDI at startup), Line-A ($A000/3/6/C/D, drawn into the logical screen) and TOS's VBL queue. Label:
+  stand-in in Ink Free (Tools/make_labels.py STAND_IN) until res\labels\tripatron-photo.jpg exists.
+- Trip-A-Tron pad (owner 2026-10-31, src/tripatron.cpp, input::Mode::kTripATron): state $108B0 (0 performing,
+  1 title, 2 Control Panel, 3 closing it); light source x/y $10692/$10694 (mouse handler $10752: clamps on the
+  panel, wraps while performing). Performing: left stick relative (trip_stick_speed 5, _curve 2, _deadzone 0.15),
+  right stick = spirograph (writes x/y: centre + stick * trip_spiro_size 0.9 of the half screen), RT hold / LT
+  latch = left button, d-pad L/R = letters A-Z (all 26 live with the default KML), U/D = symmetry (cursor
+  cluster Up Down Left Right Insert Home Help Undo, all 8 distinct: $102D4), LB/RB = keypad digits (palettes),
+  A = random of the three, X Space, Y Esc, Start F10, Back = number keys (waveforms), B twice = launcher.
+  Other states: sticks = mouse, A/RT left, X/LT right, Y Esc. Hint line at the top (HintAtTop). Pad polled with
+  edges (test pad: gr<deg>@<mag> right stick, ga gb gx gy gstart gback gup gdown gleft gright, glt grt).
+- Trip-A-Tron music (owner 2026-11-01: "react to music like Neon, but still be interactive"): src/music.cpp =
+  our Neon port's analysis (C:\Xblades\rexglue\src\audio.cpp: miniaudio WASAPI loopback, 2048 FFT, 20 log bands
+  each against its own falling peak, 0.12 s release) + bass/mid/treble averages + onsets (low-band rise vs its
+  recent mean + 1.6 sd, >= 0.25 s apart). L3 / F12 cycles trip_music 0 off / 1 pulse / 2 full (saved). While
+  performing: the source orbits a centre the left stick / mouse moves (radius bass, speed mids, treble shimmer,
+  wraps), each beat holds the button 12-22 frames, the right stick still overrides; full adds palette every 16
+  beats, effect at beat 8 of 32, symmetry on strong beats (>= 6 s apart), Space after 2 s of silence; none for
+  15 s after the player chooses something. miniaudio in third_party/miniaudio (copied from Xblades, notices #5).
+  Tests: --music=<wav> (decoded, fed at the game's pace, not played) --trip-music=N; log "music: ..." lines.
+  Measured on a synthetic 120 bpm track: 10 beats per 5 s. Not yet tried by the owner on real music.
+- TOS added for them (machine.cpp): Pexec 0/3/4/5/6 + Pterm back to the parent, Malloc/Mfree/Mshrink,
+  Fsfirst/Fsnext, Fsetdta/Fgetdta, Fdelete, Dfree, Cconin/Bconin wait for a key (trap re-run), GEM trap #2,
+  Line-A, a ROM VBL routine (frclock, colorptr, screenpt, vblqueue at $1C00).
+- Tools gotcha: Tools\dis.py shadows Python's dis module for scripts in Tools\ (numpy/capstone import inspect):
+  run them with python -P (make_labels.py), or copy dis.py elsewhere under another name.
+
 ## Gridrunner (GRIDRUNR.PRG, --program=GRIDRUNR.PRG) - runs, controls TBD (owner: "really challenging")
 - Standard TOS PRG, Pompey Packer 2.5: unpacks itself in our ST (disk::LoadPrg). Its stub reads the packed
   length below A4: TOS's loader leaves A4 = end of text+data (Machine::Load sets it). After unpacking the code is
