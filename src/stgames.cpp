@@ -212,6 +212,8 @@ struct Point {
 const Point kD2Boxes[6] = {{75, 143}, {160, 149}, {243, 143}, {22, 190}, {160, 193}, {298, 190}};
 const Point kD2PlayerBoxes[2] = {{75, 60}, {190, 60}};  // the figures (the words don't take clicks)
 int g_d2_sel = 1, g_d2_players = 0;
+int g_d2_frame = 0, g_d2_space_at = -1;  // on the title: when we sent Space (-1: not yet)
+const char* const kD2BoxNames[6] = {"DEFENDER", "DEFENDER II", "STARGATE", "TRAINER", "OPTIONS", "HISTORY"};
 int g_d2_click_in = 0, g_d2_click_frames = 0;  // a click due in n frames / held for n more
 Point g_d2_click_at{0, 0};
 bool g_host_paused = false;
@@ -291,19 +293,24 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   } else {
     ReleaseAll(m);
     g_stick_dir = 0;
+    if (state != kD2Title) g_d2_space_at = -1;
     if (state == kD2Title) {
+      // The pointer only shows after "PRESS SPACE": the first d-pad press sends Space, so the choice is seen.
+      bool dpad = pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ||
+                  pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_UP) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+      bool a = pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START);
+      if ((dpad || a) && g_d2_space_at < 0) TapKey(m, kKeySpace), g_d2_space_at = g_d2_frame;
+      ++g_d2_frame;
       int sel = g_d2_sel;
       if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) sel = sel % 3 == 0 ? sel + 2 : sel - 1;
       if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) sel = sel % 3 == 2 ? sel - 2 : sel + 1;
       if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_UP) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) sel = (sel + 3) % 6;
-      if (sel != g_d2_sel) {
-        g_d2_sel = sel;
+      g_d2_sel = sel;
+      // Keep the pointer on the choice (the title may put it back after Space).
+      if (g_d2_space_at >= 0 && g_d2_click_frames == 0)
         Put16(m, kD2PtrX, kD2Boxes[sel].x), Put16(m, kD2PtrY, kD2Boxes[sel].y);
-      }
-      if (pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START)) {
-        TapKey(m, kKeySpace);  // "press Space" first, then the box can be clicked
-        D2Click(kD2Boxes[g_d2_sel], 50);
-      }
+      // A: click the choice once the pointer is up (about a second after Space).
+      if (a && g_d2_click_in == 0) D2Click(kD2Boxes[g_d2_sel], std::max(1, g_d2_space_at + 50 - g_d2_frame));
     } else if (state == kD2Screen && Get32(*m, kD2Sub) == kD2SubPlayers) {
       int sel = g_d2_players;
       if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) sel ^= 1;
@@ -448,6 +455,7 @@ void Start(Game g) {
   g_mouse_x = g_mouse_y = 0;
   g_stick_dir = g_reverse_frames = 0;
   g_d2_sel = 1, g_d2_players = 0;
+  g_d2_frame = 0, g_d2_space_at = -1;
   g_d2_click_in = g_d2_click_frames = 0;
   g_host_paused = false;
   std::fill(std::begin(g_d2_held), std::end(g_d2_held), uint8_t(0));
@@ -498,6 +506,13 @@ const char* Hint(st::Machine* m, bool have_pad) {
   if (g_host_paused) return have_pad ? "PAUSED   Back: resume   B twice: leave" : "PAUSED";
   if (g_game == Game::kDocs && have_pad && g_docs_frame < 400)
     return "Up/Down: scroll   LB/RB: page   B: back to the disks";
+  if (g_game == Game::kDefender2 && have_pad && Get16(*m, kD2State) == kD2Title) {
+    static char buf[64];
+    std::snprintf(buf, sizeof(buf), "< %s >   D-pad: choose   A: play", kD2BoxNames[g_d2_sel]);
+    return buf;
+  }
+  if (g_game == Game::kDefender2 && have_pad && Get16(*m, kD2State) == kD2Screen && Get32(*m, kD2Sub) == kD2SubPlayers)
+    return g_d2_players ? "< TWO PLAYERS >   A: start" : "< ONE PLAYER >   A: start";
   if (g_game == Game::kDefender2 && have_pad && Get16(*m, kD2State) == kD2Screen && Get32(*m, kD2Sub) == kD2SubName)
     return "Left/Right: letter   A: fix it   X: delete";
   if (g_game == Game::kHardcore && Get32(*m, kHcHook) == kHcPaused)
