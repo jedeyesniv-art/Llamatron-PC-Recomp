@@ -93,7 +93,8 @@ In the game:
   Back or Start   pause; B on the pause screen quits to the title
 
 Title screen:
-  A               play (on the level select: d-pad left / right picks the level, A blasts off)
+  A               play (on the level select: d-pad left / right picks the level, A blasts off; levels 1-4
+                  to begin with, then up to the furthest level you've reached - it unlocks when you die there)
   X               options (d-pad up / down, A changes, B back)
   Y               game secrets
   LB              more info
@@ -172,9 +173,10 @@ IMPROVEMENTS OVER THE ORIGINAL
 ------------------------------
 - Smooth: during play the ST's processor runs faster, so the screen updates 50 times a second instead of
   16-25 (the busy waves used to stutter badly). The game itself runs at exactly its original speed.
-- Fullscreen picks a refresh rate that is a multiple of the game's 50 Hz (100 Hz on a 120 Hz screen, 50 Hz on
-  60 Hz screens that offer it), so every frame is shown evenly. Variable refresh (G-Sync / FreeSync) screens
-  are smooth too.
+- Fullscreen is borderless (Alt+Enter or F11 for a window; Alt+Tab without the screen blanking).
+  Variable refresh (G-Sync / FreeSync) screens show every frame evenly. Without one, fullscreen_exclusive=1
+  in settings.txt picks a refresh rate that is a multiple of the game's 50 Hz (100 Hz on a 120 Hz screen,
+  50 Hz on 60 Hz screens that offer it) for perfectly even motion, at the cost of a blink when switching.
 - No screen flashes: the white flash on every kill and the red and multicolour strobes are removed (they can
   be uncomfortable or a risk for photosensitive players). Gameplay is unchanged.
 - The picture has the shape it had on a UK TV in 1991.
@@ -191,6 +193,8 @@ IMPROVEMENTS OVER THE ORIGINAL
 SETTINGS (userdata\settings.txt)
 --------------------------------
 Written on the first run with every setting and its default. Edit it while the game runs: it's reread.
+  fullscreen_exclusive    1 = fullscreen switches the display to a multiple of the game's refresh rate
+                          (even motion without G-Sync / FreeSync; the screen blinks when switching away)
   crt                     1 = CRT look on, 0 = off
   crt_scanlines           how dark the gaps between lines are (0..1)
   crt_beam_min / _max     line thickness for dark / bright colours
@@ -203,6 +207,8 @@ Written on the first run with every setting and its default. Edit it while the g
   grid_stick_speed, grid_stick_curve, grid_stick_deadzone, grid_dpad_speed   Gridrunner's ship movement
   grid_fire_mode_swap     1 = flip which way a right-stick flick turns the nosecone shot
   grid_50fps              1 = Gridrunner at 50 frames a second (0 = the original)
+  grid_unlock_level_died  1 = the level select unlocks the level you died on (0 = the original: the one before,
+                          from level 6)
   d2_50fps                1 = Defender 2 at 50 (60) frames a second (0 = the original 25 / 30)
   defender2_60hz          1 = Defender 2 in its 60 Hz mode, as the arcade (its speeds adjusted); 0 = 50 Hz
   hc_strobes              1 = keep Hardcore's strobes on
@@ -223,7 +229,7 @@ COMMAND LINE OPTIONS
   --window              start in a window
   --flashes             keep the original screen flashes
   --aspect=square       square pixels (16:10) instead of the TV shape
-  --refresh=desktop     fullscreen at the desktop's refresh rate
+  --refresh=desktop     with fullscreen_exclusive=1: keep the desktop's refresh rate
   --cpu=1               the original processor speed during play (the original stutter)
   --aim=8 / --aim=analog   aiming for this run only
   --disk=<file>         use this disk image

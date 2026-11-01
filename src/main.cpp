@@ -785,11 +785,15 @@ GameEnd RunEntry(Context& c, const games::Game& g, bool direct, bool docs = fals
 launcher::Action RunLauncher(Context& c, launcher::Launcher& l) {
   Options& opt = *c.opt;
   SDL_SetRenderLogicalPresentation(c.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
-  uint64_t last = SDL_GetTicksNS();
+  uint64_t last = SDL_GetTicksNS(), last_mouse_ms = 0;
   for (int frame = 0;; ++frame) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
       if (e.type == SDL_EVENT_QUIT) return launcher::Action::kQuit;
+      if (e.type == SDL_EVENT_MOUSE_MOTION) {
+        last_mouse_ms = SDL_GetTicks();
+        if (!(SDL_GetWindowFlags(c.window) & SDL_WINDOW_FULLSCREEN)) SDL_ShowCursor();
+      }
       if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat &&
           (e.key.scancode == SDL_SCANCODE_F11 ||
            (e.key.scancode == SDL_SCANCODE_RETURN && (e.key.mod & SDL_KMOD_ALT)))) {
@@ -808,6 +812,10 @@ launcher::Action RunLauncher(Context& c, launcher::Launcher& l) {
       launcher::Action a = l.HandleEvent(be);
       if (a == launcher::Action::kQuit || a == launcher::Action::kDocs) return a;
     }
+    // The cursor: hidden in fullscreen; in a window it shows while the mouse moves, then hides.
+    if (c.window && SDL_CursorVisible() &&
+        ((SDL_GetWindowFlags(c.window) & SDL_WINDOW_FULLSCREEN) || SDL_GetTicks() - last_mouse_ms > 2000))
+      SDL_HideCursor();
     uint64_t now = SDL_GetTicksNS();
     double dt = std::min(0.1, double(now - last) / 1e9);
     last = now;
@@ -891,6 +899,9 @@ int main(int argc, char** argv) {
 
   // Settings (userdata\settings.txt, key=value; reread while running when it changes).
   settings::Load((c.save_dir / "settings.txt").string());
+  // Fullscreen is borderless at the desktop's mode (owner 2026-11-01: no blink when switching away); setting
+  // fullscreen_exclusive=1 switches the display to a refresh rate that is a multiple of the game's instead.
+  if (settings::Get("fullscreen_exclusive", 0) == 0) opt.match_refresh = false;
   game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
   grid::LoadSettings();
   trip::LoadSettings();

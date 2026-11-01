@@ -340,6 +340,11 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   look-ahead (3390+82, 3405+67...), shown from 3405 (orig: visible, old: never), whole snake visible coming down.
   Same input with / without: RAM differs only in drawing (restore lists, lane pixels, stack). Rejected (owner agreed): hittable in the lane (breaks the safe zone / balance), a taller
   playfield (frame, rails, limits, HUD all move). Tool: grid_objects.py <dump> lists the objects.
+- Restart best (already in the game, verified 2026-11-01): the level select's [+] stops at the byte $49735 =
+  HISCORES.COW byte $215 (4 on the disk). Game over ($18638) on level N >= 5 raises it to N - 1 and saves the
+  file (after name entry if any; not after the pause screen cheat: $13846). So dying on level 6 unlocks 5.
+  Owner 2026-11-01: unlock the level you died on - hook at $1865C (gridrunner.cpp: d0 = level + 1, max $40;
+  setting grid_unlock_level_died, default 1). Verified: died on 9 -> 9 saved, the select goes to 9.
 - High scores: HISCORES.COW, 40 x (8-digit score + 3 letters) + 3 messages; byte $217 = checksum: $27 + the
   sum of bytes 0..$216 ($193AC); a bad checksum = the file is ignored silently (the built-in table $49520 is
   used, which lacks the disk's "jon 55323"). Never hand-edit without fixing the checksum.
@@ -455,7 +460,10 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   DC blocked. Levels from ayumi (MIT).
 - Musashi gotcha: m68k_set_reg(SR) doesn't swap USP/SSP on a mode change - cpu::Set(SR) does it.
 - Pacing (owner 2026-10-22: "run it at 60 but with the speed from 50?" - the game moves a fixed amount per frame
-  and its own 60 Hz mode is just 20% faster, so: show 50 Hz evenly). Fullscreen picks the desktop resolution at
+  and its own 60 Hz mode is just 20% faster, so: show 50 Hz evenly). 2026-11-01 (owner: exclusive fullscreen
+  "a hefty blink when minimising"): fullscreen is BORDERLESS at the desktop mode by default (clock pacing unless
+  the desktop rate is a multiple; VRR makes it even); settings fullscreen_exclusive=1 = the old behaviour below
+  (opt.match_refresh). The launcher hides the cursor too (fullscreen; windowed: shown while moving). Before: fullscreen picked the desktop resolution at
   the fastest refresh that is a whole multiple of 50 Hz (owner's 4K 120 Hz screen: 100 Hz; 60 Hz screens often
   have 50), and if the display's refresh is k x the game's rate, one game frame per k vsyncs (game runs at
   50.00 instead of 50.05). Otherwise (windowed at 120 Hz...) by the wall clock: uneven 2/3 refreshes per frame.

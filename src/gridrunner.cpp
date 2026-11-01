@@ -31,6 +31,11 @@ constexpr int kOptionRows[4] = {84, 104, 134, 186};  // pause mode demo, freeze,
 // ($1655E, a3 = the object; "cmpi.w #$1D,6(a3); beq rts") is hooked to skip objects whose lowest row is above
 // line 20, i.e. y < 14: invisible until they can be hit.
 constexpr uint32_t kDrawObject = 0x1655E, kDrawObjectNext = 0x16568, kDrawObjectSkip = 0x12C3C;
+// Restart best: the level select's [+] stops at the byte $49735 (HISCORES.COW byte $215, 4 on the disk). At game
+// over ($18638) on level N >= 5 the game drops the level to N - 1 ($1864C; the completion path $10222 joins after
+// that with $40) and $1865C reads it to raise the best. Hooked there: the level you died on (owner 2026-11-01),
+// at most $40; the level variable itself keeps the original's value (the $40 check at $1881E = completed).
+constexpr uint32_t kBestRead = 0x1865C, kBestReadNext = 0x18662, kLevel = 0x48BCE;
 constexpr int kLaneHiddenBelowY = 14;
 
 // "Show them 1.5 s before they can be hit" (owner): the game doesn't decide in advance when a snake leaves the
@@ -68,6 +73,7 @@ uint64_t g_quit_armed_ms = 0;
 bool g_quit = false;
 bool g_running = false;  // the game has unpacked itself and reached its title
 bool g_hide_entry_lane = true;
+bool g_unlock_died = true;  // grid_unlock_level_died
 bool g_hooked = false;
 int64_t g_frame = 0;                    // frames since the game started
 int64_t g_reveal_at[kObjectSlots] = {};  // a lane object is drawn from this frame on (kNever: not soon)
@@ -143,6 +149,21 @@ void InstallHooks(st::Machine* m) {
     cpu::Set(cpu::PC, skip ? kDrawObjectSkip : kDrawObjectNext);
   });
   LOG("gridrunner: entry lane hook installed (%s)", g_hide_entry_lane ? "hiding it" : "original look");
+
+  static const uint8_t kBestExpect[6] = {0x30, 0x39, 0x00, 0x04, 0x8B, 0xCE};  // move.w $48BCE,d0
+  if (std::memcmp(m->Ram() + kBestRead, kBestExpect, sizeof(kBestExpect)) != 0) {
+    LOG("gridrunner: unexpected code at $%X, restart best hook not installed", kBestRead);
+    return;
+  }
+  Put16(*m, kBestRead, 0x4AFC);
+  m->AddHook(kBestRead, [](st::Machine& running) {
+    uint32_t level = Get16(running, kLevel);
+    if (g_unlock_died) level = std::min<uint32_t>(level + 1, 0x40);
+    uint32_t d0 = cpu::Get(cpu::D0);
+    cpu::Set(cpu::D0, (d0 & 0xFFFF0000u) | level);
+    if (!running.sandbox) LOG("gridrunner: game over, best level candidate %u", level);
+    cpu::Set(cpu::PC, kBestReadNext);
+  });
 }
 
 bool InLane(st::Machine& m, int slot) {
@@ -274,6 +295,7 @@ void LoadSettings() {
   g_tune.dpad = settings::Get("grid_dpad_speed", 1.0);
   g_tune.fire_mode_swap = settings::Get("grid_fire_mode_swap", 0.0) != 0;
   g_tune.draw_50 = settings::Get("grid_50fps", 1.0) != 0;
+  g_unlock_died = settings::Get("grid_unlock_level_died", 1.0) != 0;
   LOG("gridrunner stick: speed %.2f, curve %.2f, dead zone %.2f, d-pad %.2f", g_tune.speed, g_tune.curve,
       g_tune.deadzone, g_tune.dpad);
 }
