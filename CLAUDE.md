@@ -67,6 +67,8 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
 0x140000000+offset.
 
 ## More Llamasoft ST games (2026-10-31; owner downloaded them from Llamasoft's site into Private\)
+- NEXT (owner 2026-11-01): the other ST disks, all booting from the launcher with pad controls. The plan, order
+  and the owner's open decisions: PLAN-ST-GAMES.md - start there.
 - Private\*.zip unpacked to Private\new\<zip name>\ (andesattack-st, defender2-st, hardcore-st, rmc-st:
   crack compilation disks; trip_a_t: loose files). --disk takes a folder of loose files too.
 - Other programs use generic controls (input::Mode::kGeneric): keys to the ST, PC mouse passed through, pad left
