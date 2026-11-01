@@ -46,7 +46,12 @@ namespace stgames {
 // Docs: a document reader on a game's disk (D-Bug's displayers, The Alien's DOC displayer): up / down (d-pad
 // or stick, repeating) = cursor keys, LB / RB / LT / RT = Shift + cursor (pages), A Return, Y Help, B = back
 // to the disks at once. Keys given to StartDocs are typed first (a menu choice).
-enum class Game { kRmc, kAndes, kDefender2, kHardcore, kDocs };
+// Photon Storm (PHOTON.YAK, Arc / Llamasoft 1990; the Andes Attack engine): state $44846 (1 play, 7 title,
+// 10 paused); pointer $4F1C0 / $4F1C2 (0..79): its place from the middle is the ship's direction (16, table
+// $27958); left button fire, right button thrust; Right Shift pause, Space resume, Q quit.
+//   left stick = the direction (written to the pointer), pushed far = thrust too; A / RT fire, X / LT thrust;
+//   Back pause / resume, B paused = quit to the title, B twice = disks; elsewhere the stick is the mouse.
+enum class Game { kRmc, kAndes, kDefender2, kHardcore, kDocs, kPhotonStorm };
 void StartDocs(const std::string& keys);
 // Which build is running (addresses differ: Revenge 512K / 1 MB STE).
 void SetProgram(const std::string& program);

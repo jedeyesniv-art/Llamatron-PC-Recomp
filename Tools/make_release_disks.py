@@ -18,6 +18,9 @@ DISKS = [
     ('Defender 2.st', 'Private/new/defender2-st/defender2/defender2.msa',
      ['DEFENDR2.PRG', 'DEFENDR2.EXE', 'SAFESNG2.EXE', 'DEFENDER.SET', 'TITLE.4V', 'READ_ME.PP']),
     ('Hardcore.st', 'Private/new/hardcore-st/hardcore/DBUG100E.MSA', ['HARDCORE.PRG', 'DOC100E.PRG', 'EXPLAN.TXT']),
+    # Llamasoft's compilation (with Andes, Defender 2 and Gridrunner .YAKs we ship already) - Photon Storm only;
+    # the boot sector there is a download site's message.
+    ('Photon Storm.st', 'Private/new/photonstorm/photonstorm/PhotonStorm.st', ['PHOTON.YAK', 'PSHIGHS.GNU']),
 ]
 
 

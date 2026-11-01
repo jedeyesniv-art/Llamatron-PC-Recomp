@@ -363,6 +363,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   if (mode == input::Mode::kAndes) stgames::Start(stgames::Game::kAndes);
   if (mode == input::Mode::kDefender2) stgames::Start(stgames::Game::kDefender2);
   if (mode == input::Mode::kHardcore) stgames::Start(stgames::Game::kHardcore);
+  if (mode == input::Mode::kPhotonStorm) stgames::Start(stgames::Game::kPhotonStorm);
   if (mode == input::Mode::kDocs) stgames::StartDocs(c.docs_keys);
   if (!opt.music.empty()) music::StartTestFile(opt.music);
   if (opt.trip_music >= 0) trip::SetMusicMode(opt.trip_music);
@@ -523,7 +524,8 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           if (test_pad) trip::SetTestPad({tp.lx, tp.ly, tp.rx, tp.ry, tp.lt, tp.rt, tp.buttons});
           trip::Update(&machine, input::FirstPad(), dx, dy, buttons);
         } else if (mode == input::Mode::kRmc || mode == input::Mode::kAndes || mode == input::Mode::kDefender2 ||
-                   mode == input::Mode::kHardcore || mode == input::Mode::kDocs) {
+                   mode == input::Mode::kHardcore || mode == input::Mode::kDocs ||
+                   mode == input::Mode::kPhotonStorm) {
           stgames::Update(&machine, dx, dy, buttons);
           int hold;
           float cap, release;

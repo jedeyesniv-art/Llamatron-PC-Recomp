@@ -208,6 +208,17 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   State 8 is several screens, told apart by the sub-handler $1F200: $1157E player select, $1134C high score
   initials (letter = pointer x / 8; left button fixes, right deletes; then table (6), title). Pad there:
   d-pad steps the pointer 8 px (a letter), A fixes, X deletes. With no high score: game over -> 6 -> 2 alone.
+- Photon Storm (owner 2026-11-01, Private\photonstorm-st.zip -> Private\new\photonstorm\photonstorm\
+  PhotonStorm.st: a Llamasoft compilation - PHOTON.YAK, DEF2.YAK, ANDES.YAK, GRIDRUN.YAK are TOS programs;
+  the boot sector is AtariForce's message, not a loader): PHOTON.YAK (Automation 2.2f; Arc / Llamasoft 1990,
+  the Andes Attack engine). State $44846 (1 play, 7 title, 10 paused). Own mouse handler $448EA: pointer
+  $4F1C0 / $4F1C2 (0..79, limits $448E4 / $448E6), buttons $4F1C8; in play the pointer's 5x5 cell ($17BCA,
+  table $27958: 16 directions, centre -1) = the ship's direction $27956; left fire, right thrust (verified).
+  Right Shift pause (Kbshift bit 0 -> 10), Space resume, Q quit. Title: left = 1 player, right = 2 players;
+  left / right also change $16E5A (a level start). Draws every $466BE VBLs (2) - the main loop $4622E waits for
+  $4F1BE; logic in the VBL: x8 + divisor 1 in play = 50 frames/s, state and final picture identical to x1
+  (photonstorm_50fps). No 60 Hz mode. Pad: stgames.cpp (stick = direction written to the pointer, far =
+  thrust). Release: "Photon Storm.st" with PHOTON.YAK + PSHIGHS.GNU (make_release_disks.py).
 - Hardcore (HARDCORE.PRG, D-Bug 100; Yak 1992, an unfinished "5-level evaluation demo"): plays. VBL $168F2
   calls the hook at $338BA: $104EA title (a click starts), $145D0 level intro, $10C82 play, $11242 paused;
   colour 0 flash list *$33136. Own IKBD handler $16D56 (keys: table $337B2 -> flags $33833, test $16ECE;

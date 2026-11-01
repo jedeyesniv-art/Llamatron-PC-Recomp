@@ -21,12 +21,13 @@ LABELS = [
     ('defender2', 'defender2-photo.jpg', (0, 0, 1, 1), None),
     ('andes', 'andes-photo.jpg', (0, 0, 1, 1), None),
     ('hardcore', 'hardcore-photo.jpg', (0, 0, 1, 1), None),
+    ('photonstorm', 'photonstorm-photo.jpg', (0, 0, 1, 1), None),
 ]
 # Every disk uses the Ink Free stand-in (owner 2026-11-01: "replace my handwritten labels so all the disks are
 # consistent"); the photo processing stays for a disk taken off this list.
 STAND_IN = {'llamatron': ['Llamatron'], 'gridrunner': ['Super', 'Gridrunner'], 'tripatron': ['Trip-A-Tron'],
             'rmc': ['Mutant', 'Camels'], 'defender2': ['Defender 2'], 'andes': ['Andes', 'Attack'],
-            'hardcore': ['Hardcore']}
+            'hardcore': ['Hardcore'], 'photonstorm': ['Photon', 'Storm']}
 
 
 def stand_in(lines):

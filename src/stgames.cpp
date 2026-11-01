@@ -432,6 +432,62 @@ void DocsUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   m->MouseInput(mdx, mdy, mbuttons);
 }
 
+// ---- Photon Storm ----
+
+constexpr uint32_t kPsState = 0x44846, kPsX = 0x4F1C0, kPsY = 0x4F1C2;
+// Frames are drawn every $466BE VBLs (2: 25 a second; the main loop $4622E waits for the VBL's countdown
+// $4F1BE); the logic is in the VBL, so 1 in play only draws more often (same state and picture as the
+// original, frame for frame). photonstorm_50fps (1): 1 in play, with the faster CPU.
+constexpr uint32_t kPsDivisor = 0x466BE;
+bool g_ps_50fps = true;
+constexpr int kPsPlay = 1, kPsPaused = 10;
+constexpr uint8_t kKeyQ = 0x10;
+float g_ps_mx = 0, g_ps_my = 0;
+
+void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
+  const pad::State& p = pad::Now();
+  int state = Get16(*m, kPsState);
+  uint8_t buttons = mbuttons;
+  if (g_ps_50fps && Get16(*m, kPsDivisor) > 0) {
+    int want = state == kPsPlay ? 1 : 2;
+    if (Get16(*m, kPsDivisor) != want) Put16(m, kPsDivisor, want);
+  }
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_BACK)) {
+    if (state == kPsPlay) TapKey(m, kKeyRShift);
+    else if (state == kPsPaused) TapKey(m, kKeySpace);
+  }
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) {
+    if (state == kPsPaused) TapKey(m, kKeyQ);  // quit to the title
+    else ArmQuit();
+  }
+  int dx = 0, dy = 0;
+  if (state == kPsPlay && p.connected) {
+    // The pointer's place from the middle (40, 40) of its 0..79 square is the ship's direction (16 of them,
+    // $17BCA via the table $27958): the stick sets it directly; pushed far, the ship also flies (thrust).
+    float x = p.lx, y = p.ly;
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) x = -1;
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) x = 1;
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_UP)) y = -1;
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) y = 1;
+    float mag = std::sqrt(x * x + y * y);
+    if (mag > 1) x /= mag, y /= mag, mag = 1;
+    if (mag < 0.25f) x = y = 0;
+    Put16(m, kPsX, std::clamp(int(40 + x * 39.5f), 0, 79));
+    Put16(m, kPsY, std::clamp(int(40 + y * 39.5f), 0, 79));
+    if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;                    // fire
+    if (mag > 0.7f || p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.lt > 0.5f) buttons |= 1;      // thrust
+  } else {
+    // Menus and the initials: the stick is the mouse, A / RT the left button, X / LT the right one.
+    if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;
+    if (p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.lt > 0.5f) buttons |= 1;
+    float x = std::fabs(p.lx) > 0.2f ? p.lx : 0, y = std::fabs(p.ly) > 0.2f ? p.ly : 0;
+    g_ps_mx += x * std::fabs(x) * 3, g_ps_my += y * std::fabs(y) * 3;
+    dx = int(g_ps_mx), dy = int(g_ps_my);
+    g_ps_mx -= float(dx), g_ps_my -= float(dy);
+  }
+  m->MouseInput(mdx + dx, mdy + dy, buttons);
+}
+
 }  // namespace
 
 void Reset() { Start(g_game); }
@@ -462,6 +518,8 @@ void Start(Game g) {
   g_d2_pwm = 0;
   g_letter = 0, g_letter_repeat = 0;
   g_hc_x = g_hc_y = -1;
+  g_ps_mx = g_ps_my = 0;
+  g_ps_50fps = settings::Get("photonstorm_50fps", 1) != 0;
   g_docs_frame = g_docs_repeat = 0;
   g_docs_keys.clear();
   g_hc_strobes = settings::Get("hc_strobes", 0) != 0, g_hc_strobes_done = false;
@@ -476,6 +534,7 @@ void Update(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_buttons) {
   else if (g_game == Game::kAndes) AndesUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
   else if (g_game == Game::kHardcore) HardcoreUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
   else if (g_game == Game::kDocs) DocsUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
+  else if (g_game == Game::kPhotonStorm) PhotonUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
   else Defender2Update(m, mouse_dx, mouse_dy, mouse_buttons);
 }
 
@@ -517,6 +576,8 @@ const char* Hint(st::Machine* m, bool have_pad) {
     return "Left/Right: letter   A: fix it   X: delete";
   if (g_game == Game::kHardcore && Get32(*m, kHcHook) == kHcPaused)
     return have_pad ? "PAUSED   Back: resume   B twice: leave" : "PAUSED   O: resume";
+  if (g_game == Game::kPhotonStorm && Get16(*m, kPsState) == kPsPaused)
+    return have_pad ? "PAUSED   Back: resume   B: quit to the title" : nullptr;
   if (g_game == Game::kRmc && RmcPaused(*m))
     return have_pad ? "Back: resume   B: back to the menu" : "O: resume   Esc: back to the menu";
   if (g_game == Game::kAndes && AndesNameEntry(*m) && have_pad) {

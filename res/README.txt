@@ -8,6 +8,7 @@ Jeff Minter's Atari ST games running natively on Windows with modern pad control
   Andes Attack (1988)
   Defender 2 (Arcadia 1990: Defender, Defender II and Stargate)
   Hardcore (1992), Yak's unfinished 5-level evaluation demo
+  Photon Storm (Arc 1990)
 The original game code runs unchanged inside a small Atari ST built into this program, plus a few optional
 improvements listed below.
 
@@ -147,6 +148,16 @@ The crack's trainer (invincibility, friendly sprites) is on the how-to-play page
 its 60 Hz mode (as the arcade did; the game adjusts its speeds), on a 60 / 120 Hz display mode in fullscreen.
 
 
+PHOTON STORM - XBOX PAD
+-----------------------
+  Left stick       point the ship (push far: fly)  A or RT         fire
+  X or LT          thrust                          Back            pause
+  B (paused)       quit to the title               B, B            back to the disks
+  Title: A = one player, X = two players.
+Mouse as the original: where it points from the middle is the direction; left button fire, right thrust.
+Right Shift pauses (Space resumes, Q quits).
+
+
 HARDCORE - XBOX PAD
 -------------------
 The guns ride the four edges of the field and fire by themselves; the puck ricochets around.
@@ -194,6 +205,7 @@ Written on the first run with every setting and its default. Edit it while the g
   d2_50fps                1 = Defender 2 at 50 (60) frames a second (0 = the original 25 / 30)
   defender2_60hz          1 = Defender 2 in its 60 Hz mode, as the arcade (its speeds adjusted); 0 = 50 Hz
   hc_strobes              1 = keep Hardcore's strobes on
+  photonstorm_50fps       1 = Photon Storm at 50 frames a second (0 = the original 25)
   trip_calm_background    0 = Trip-A-Tron's palettes flash as originally
   trip_music              Trip-A-Tron's music mode (0 off, 1 pulse, 2 full; also L3 / F12)
   trip_stick_speed, trip_stick_curve, trip_stick_deadzone, trip_spiro_size   Trip-A-Tron's sticks
@@ -211,13 +223,13 @@ COMMAND LINE OPTIONS
   --aim=8 / --aim=analog   aiming for this run only
   --disk=<file>         use this disk image
   --program=GRIDRUNR.PRG   start Super Gridrunner directly, no start screen (also TRON1MEG.PRG, TRIP.PRG,
-                        REVSTE1M.TOS, ANDES.BOY, DEFENDR2.PRG, HARDCORE.PRG)
+                        REVSTE1M.TOS, ANDES.BOY, DEFENDR2.PRG, HARDCORE.PRG, PHOTON.YAK)
   --entry-lane          Super Gridrunner: the original entry lane (snakes hidden until they come down)
 
 
 CREDITS
 -------
 Llamatron, Super Gridrunner, Trip-A-Tron, Revenge of the Mutant Camels, Andes Attack, Hardcore: Jeff Minter
-(yak) / Llamasoft. Defender 2: Jeff Minter for Arcadia, 1990.
+(yak) / Llamasoft. Defender 2: Jeff Minter for Arcadia, 1990. Photon Storm: Jeff Minter / Arc, 1990.
 This PC version uses SDL 3, the Musashi 68000 emulator and SoftFloat (see licenses\THIRD-PARTY-NOTICES.txt).
 The CRT shader is this project's own. The disk labels on the start screen were hand-written by the author.

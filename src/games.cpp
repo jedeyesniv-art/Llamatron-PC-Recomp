@@ -177,6 +177,24 @@ std::vector<Known> KnownGames() {
                         "B TWICE              back to the disks", "",
                         "Mouse: up/down, left thrust, right reverse;",
                         "Left Shift fire, Control smart bomb."};
+  // Photon Storm (Arc / Llamasoft 1990), PHOTON.YAK (Automation-packed TOS program) on a compilation disk with
+  // other Llamasoft .YAKs; the Andes Attack engine. State $44846 (1 play, 7 title, 10 paused).
+  wip("photonstorm", "PHOTON STORM", "PHOTON.YAK", "PHOTON STORM  -  JEFF MINTER, ARC 1990",
+      "Blast the alien swarms in deep space.", {0.08f, 0.10f, 0.30f, 1}, {0.95f, 0.75f, 0.20f, 1});
+  k.back().game.play_at = 0x44846, k.back().game.play_value = 1, k.back().game.play_word = true;
+  k.back().game.mode = input::Mode::kPhotonStorm;
+  k.back().game.help = {"PHOTON STORM  -  JEFF MINTER, ARC 1990", "",
+                        "Blast the alien swarms in deep space.", "",
+                        "LEFT STICK           point the ship; push far to fly",
+                        "A OR RT              fire",
+                        "X OR LT              thrust",
+                        "BACK                 pause",
+                        "B ON THE PAUSE SCREEN  quit to the title",
+                        "B TWICE ELSEWHERE    back to the disks",
+                        "TITLE: A = 1 PLAYER, X = 2 PLAYERS", "",
+                        "Mouse: where it points from the middle = the",
+                        "direction; left fire, right thrust. Right Shift",
+                        "pauses (Space resumes, Q quits)."};
   wip("hardcore", "HARDCORE", "HARDCORE.PRG", "HARDCORE  -  YAK, 1992 (UNFINISHED)",
       "Never released: Yak's unfinished blaster.", {0.30f, 0.06f, 0.06f, 1}, {0.85f, 0.85f, 0.85f, 1});
   // VBL $168F2 calls the hook at $338BA: $104EA title, $145D0 level intro, $10C82 play, $11242 paused.
