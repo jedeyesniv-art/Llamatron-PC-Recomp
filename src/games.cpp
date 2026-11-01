@@ -101,7 +101,10 @@ std::vector<Known> KnownGames() {
   };
   wip("rmc", "MUTANT CAMELS", "REVENGE.TOS", "REVENGE OF THE MUTANT CAMELS  -  JEFF MINTER",
       "Giant camels against the forces of evil.", {0.62f, 0.40f, 0.10f, 1}, {0.20f, 0.65f, 0.90f, 1});
-  k.back().game.play_at = 0x42E18, k.back().game.play_value = 0x1118E;  // VBL $1B4B6 calls the hook at $42E18
+  // VBL $1B4B6 calls the hook at $42E18: $1118E play, $11252 the end-of-wave bonus, $193F0 the high score name
+  // (all VBL-timed: the name's cursor ends on the same letter at x1 and x8).
+  k.back().game.play_at = 0x42E18, k.back().game.play_value = 0x1118E;
+  k.back().game.play_value2 = 0x11252, k.back().game.play_value3 = 0x193F0;
   k.back().game.mode = input::Mode::kRmc;
   k.back().game.help = {"REVENGE OF THE MUTANT CAMELS  -  JEFF MINTER", "",
                         "Giant camels against the forces of evil.", "",
@@ -113,8 +116,10 @@ std::vector<Known> KnownGames() {
                         "Keyboard: cursor keys + Space, P pause, O resume"};
   wip("defender2", "DEFENDER 2", "DEFENDR2.PRG", "DEFENDER 2  -  JEFF MINTER, ARCADIA 1990",
       "Defender, Stargate and Defender II.", {0.16f, 0.16f, 0.18f, 1}, {0.30f, 0.85f, 0.30f, 1});
-  // The VBL ($4AF1A) dispatches on $4B086 through the table at $212A2: 0 play, 2 title, 8 player select. No
-  // faster CPU: it draws a steady 25 frames/s in play at 8 MHz already (its design, as Gridrunner's).
+  // The VBL ($4AF1A) dispatches on $4B086 through the table at $212A2: 0 play, 2 title, 8 player select (and
+  // other screens). 25 frames/s by design; the faster CPU in play lets stgames.cpp draw at 50 (d2_50fps).
+  k.back().game.play_at = 0x4B086, k.back().game.play_value = 0, k.back().game.play_word = true;
+  k.back().game.play_vbl = 0x4AF1A;
   k.back().game.mode = input::Mode::kDefender2;
   k.back().game.help = {"DEFENDER 2  -  JEFF MINTER, ARCADIA 1990", "",
                         "Defender, Defender II and Stargate.", "",

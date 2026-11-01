@@ -27,7 +27,7 @@ struct Game {
   std::vector<std::string> help;  // the how-to-play page; the first line is its title
   // The faster CPU (--cpu) while this long in RAM holds this value (its VBL's play-state hook): only where the
   // game logic is timed by the VBL, so only the drawing speeds up. 0 = never.
-  uint32_t play_at = 0, play_value = 0;
+  uint32_t play_at = 0, play_value = 0, play_value2 = 0, play_value3 = 0;  // any of these (0 = unused, but the first)
   bool play_word = false;  // play_at is a word, not a long
   uint32_t play_vbl = 0;   // and the VBL vector ($70) is this (the game is running, not still loading)
   bool user = false;    // a disk the player added (not one we know); its "program" option picks what runs

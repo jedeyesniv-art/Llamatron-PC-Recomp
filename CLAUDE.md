@@ -127,7 +127,9 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
 - RMC (REVENGE.TOS, D-Bug 28): VBL $1B4B6 calls the hook at $42E18: $1118E play (also the attract demo),
   $10526 pause, $10294 title, $107FA menus; colour-0 flash list *$4269C (written at $1B502). Keys via its own
   table ($42D10 -> flags $42D91, test $1B7AA): p pause, o resume ($10508 waits), x abort to the menu (play
-  only; $41AC0 = 4), cheat keys l / n behind $11114. Joystick 1. Logic in the VBL, the main loop draws
+  only; $41AC0 = 4), cheat keys l / n behind $11114. Joystick 1. Other hooks: $11252 end-of-wave bonus,
+  $193F0 high score name (joystick letter grid): both VBL-timed (the name cursor ends on the same letter at x1
+  and x8), boosted too (play_value2 / 3). --cpu-all-from=F: force --cpu-all only from frame F (tests). Logic in the VBL, the main loop draws
   ($4505C hook, $113FE in play): at 8 MHz 13-19 drawn frames/s in play, x8 -> 50; scroll $384A8 identical
   x1 vs x8 (scores differ: random numbers and per-frame collisions). Pad: stick = joystick 1, A/X/RT/Start
   fire, Back pause, B paused = O then X (menu), B twice = disks; calm background in play.
@@ -146,7 +148,10 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   options INVINCIBLE / FRIENDLY SPRITES: "" or "t" + y/n + y/n). VBL $4AF1A dispatches on $4B086 (table
   $212A2): 0 play, 2 title, 8 player select. Pointer x/y $62456/$62458 (writable; $294FC a drawn copy).
   Player select: click the figure (75,60) for ONE PLAYER (the words don't work). Play draws 25 frames/s at x1
-  (its design): no boost (no simple 2-VBL wait found for a 50 fps mode). Variant $1F7F8: 0 Defender, 1
+  (its design). 50 fps (2026-11-01): the main loop $1B2D8 waits for the VBL countdown $62454 (reloaded from
+  the divisor $4D1EC: 2, set at $109BC) and the game logic is in the VBL ($1BCEA), so stgames.cpp writes
+  $4D1EC = 1 in play (2 elsewhere; setting d2_50fps, default 1) with the faster CPU in play (play rule
+  $4B086 = 0 and VBL $4AF1A): 50 drawn frames/s, world position identical frame for frame vs the original. Variant $1F7F8: 0 Defender, 1
   Stargate, 2 Defender II (title boxes (75,143) (243,143) (160,149); Trainer (22,190), Options (160,193),
   History (298,190)); the title needs Space before a box click works. Control scheme $1BCC4 through the
   table $1B8BC: 0 mouse ($1B8C8 + $1B400: pointer y = altitude, x = speed / direction, left fire, right

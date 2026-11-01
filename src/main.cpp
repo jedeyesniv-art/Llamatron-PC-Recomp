@@ -46,6 +46,7 @@ struct Options {
   int aim = -1;             // --aim=8|analog for this run (else the saved setting, RB at the title)
   int cpu_speed = 8;        // --cpu=N: CPU speed multiple during play (1 = the ST's 8 MHz)
   int cpu_all = 0;          // --cpu-all=N: this CPU speed all the time (tests: is a game timed by its VBL?)
+  int cpu_all_from = 0;     // --cpu-all-from=F: ... from frame F only
   // --aspect=square (320x200 with square pixels: 16:10) or pal (as on a UK TV: an ST pixel is 8 MHz wide on a
   // line where square pixels are 14.75 MHz, and two TV lines tall -> pixel aspect 0.92, picture ~1.48:1)
   bool pal_aspect = true;
@@ -118,6 +119,7 @@ Options ParseArgs(int argc, char** argv) {
       o.pokes.push_back({std::atoi(v.c_str()), uint32_t(std::strtoul(v.c_str() + c1 + 1, nullptr, 16)),
                          uint16_t(std::strtoul(v.c_str() + c2 + 1, nullptr, 16))});
     }
+    else if (Arg(a, "cpu-all-from", &v)) o.cpu_all_from = std::atoi(v.c_str());
     else if (Arg(a, "cpu-all", &v)) o.cpu_all = std::atoi(v.c_str());
     else if (Arg(a, "palette-log", &v)) {
       o.palette_from = std::atoi(v.c_str());
@@ -311,7 +313,7 @@ bool PlayRule(const st::Machine& m, const games::Game& g) {
   uint32_t v = g.play_word ? uint32_t(p[0] << 8 | p[1]) : uint32_t(p[0]) << 24 | uint32_t(p[1]) << 16 | uint32_t(p[2]) << 8 | p[3];
   if (g.play_vbl && uint32_t(m.Ram()[0x70] << 24 | m.Ram()[0x71] << 16 | m.Ram()[0x72] << 8 | m.Ram()[0x73]) != g.play_vbl)
     return false;
-  return v == g.play_value;
+  return v == g.play_value || (g.play_value2 && v == g.play_value2) || (g.play_value3 && v == g.play_value3);
 }
 
 // Runs one game (a program on the disk) until the player leaves it.
@@ -557,8 +559,9 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
                      : gridrunner ? grid::GameState(machine) == grid::kPlay
                      : c.game && c.game->play_at ? PlayRule(machine, *c.game)
                                                  : false;
-      if (opt.cpu_all) playing = true;
-      machine.SetCpuSpeed(opt.cpu_all ? opt.cpu_all : playing ? opt.cpu_speed : 1);
+      const bool forced = opt.cpu_all && frame >= opt.cpu_all_from;
+      if (forced) playing = true;
+      machine.SetCpuSpeed(forced ? opt.cpu_all : playing ? opt.cpu_speed : 1);
       playing_second &= playing;
       if (stgames::HostPaused() && (mode == input::Mode::kDefender2)) {
         machine.Audio().clear();  // paused: the picture stays, no sound, no frames

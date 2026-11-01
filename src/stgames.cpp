@@ -7,6 +7,7 @@
 
 #include "log.h"
 #include "pad.h"
+#include "settings.h"
 
 namespace stgames {
 namespace {
@@ -187,6 +188,11 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
 
 // ---- Defender 2 ----
 
+// Frames are drawn every $4D1EC VBLs (2 = 25 frames/s, set at $109BC; the main loop $1B2D8 waits for the
+// VBL's countdown $62454); the game logic is in the VBL ($1BCEA), so 1 only draws more often (verified: world
+// position identical frame for frame). d2_50fps (default 1): 1 in play, with the faster CPU.
+constexpr uint32_t kD2Divisor = 0x4D1EC;
+bool g_d2_50fps = true;
 constexpr uint32_t kD2State = 0x4B086, kD2PtrX = 0x62456, kD2PtrY = 0x62458, kD2Scheme = 0x1BCC4,
                    kD2Facing = 0x1B4B8;
 constexpr int kD2Play = 0, kD2Title = 2, kD2Screen = 8;
@@ -243,6 +249,10 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   if (g_d2_click_frames > 0) {
     Put16(m, kD2PtrX, g_d2_click_at.x), Put16(m, kD2PtrY, g_d2_click_at.y);
     if (--g_d2_click_frames < 4) buttons |= 2;
+  }
+  if (g_d2_50fps) {
+    int want = state == kD2Play ? 1 : 2;
+    if (Get16(*m, kD2Divisor) != want) Put16(m, kD2Divisor, want);
   }
   if (state == kD2Play) {
     if (p.connected && Get16(*m, kD2Scheme) == 0) Put16(m, kD2Scheme, 1);  // the keyboard scheme
@@ -333,6 +343,7 @@ void Start(Game g) {
   std::fill(std::begin(g_d2_held), std::end(g_d2_held), uint8_t(0));
   g_d2_pwm = 0;
   g_letter = 0, g_letter_repeat = 0;
+  g_d2_50fps = settings::Get("d2_50fps", 1) != 0;
   g_fire_held = false;
   std::fill(std::begin(g_keys), std::end(g_keys), false);
 }
