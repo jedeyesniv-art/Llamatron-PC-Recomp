@@ -50,7 +50,8 @@ Shared groundwork first (A), then games from closest to furthest: RMC, Defender 
 - Then: Defender 2 50 fps (divisor), RMC bonus / name screens boosted, Andes / Defender 2 high score names on
   the pad, Hardcore: pad (pointer on the sticks), 50 fps, flashes calmed. Every game boots and plays on the
   pad. Left: A5 smoke test, A6 packaging, Andes trainer / shields, Defender 2 bomb flash.
-- A3 console text done (VT52). Medium resolution display not supported (D-Bug 28's doc reader needs it). Flashes: RMC calmed in play; Andes' smart bomb flash not handled (raster sky).
+- A3 console text done (VT52), medium resolution too (the D-Bug doc readers work: idea - offer them from the
+  launcher, "read the docs", with keys on the pad). Flashes: RMC calmed in play; Andes' smart bomb flash not handled (raster sky).
 
 ### A. Shared groundwork (do once, before the games)
 A1. Game registry instead of hard-coded games (main.cpp RunGame / RunTrip, launcher kDisks / kInfo / labels):

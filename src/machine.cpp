@@ -669,6 +669,19 @@ void Machine::RenderLine(int y) {
     auto ch = [](unsigned v) { return (v << 5) | (v << 2) | (v >> 1); };  // 3 bits -> 8
     pal[i] = 0xFF000000u | ch((c >> 8) & 7) << 16 | ch((c >> 4) & 7) << 8 | ch(c & 7);
   }
+  if (y == 0) frame_res_ = res_ == 1 ? 1 : 0, frame_w_ = frame_res_ ? kMaxFrameW : kScreenW;
+  if (frame_res_ == 1) {  // medium: 2 planes, 640 pixels, colours 0-3
+    uint32_t* out = &frame_[y * kMaxFrameW];
+    for (int g = 0; g < 40; ++g) {
+      uint32_t a = (vbase_latched_ + uint32_t(y * 160 + g * 4)) % kRamSize;
+      uint16_t p0 = Get16(&ram_[a]), p1 = Get16(&ram_[a + 2]);
+      for (int x = 0; x < 16; ++x) {
+        int s = 15 - x;
+        out[g * 16 + x] = pal[((p0 >> s) & 1) | ((p1 >> s) & 1) << 1];
+      }
+    }
+    return;
+  }
   if (calm_) {
     if (y == 0) CalmFrame();
     auto b = [](float v) { return uint32_t(std::clamp(v, 0.0f, 1.0f) * 255 + 0.5f); };
@@ -1272,15 +1285,17 @@ const uint8_t* Glyph(uint8_t c) {
 
 void Machine::ConsoleCell(int col, int row, uint8_t c) {
   const uint8_t* g = Glyph(c);
-  int fg = con_rev_ ? con_bg_ : con_fg_, bg = con_rev_ ? con_fg_ : con_bg_;
+  int mask = res_ == 1 ? 3 : 15;  // medium: 4 colours (the text's 15 is 3 there, as in TOS)
+  int fg = (con_rev_ ? con_bg_ : con_fg_) & mask, bg = (con_rev_ ? con_fg_ : con_bg_) & mask;
   for (int y = 0; y < 8; ++y)
     for (int x = 0; x < 8; ++x) SetPixel(col * 8 + x, row * 8 + y, g && (g[y] >> x & 1) ? fg : bg);
 }
 
 void Machine::ConsoleClear(int col0, int row0, int col1, int row1) {
+  int last = ConsoleCols() - 1, bg = con_bg_ & (res_ == 1 ? 3 : 15);
   for (int r = std::max(0, row0); r <= std::min(24, row1); ++r)
     for (int y = r * 8; y < r * 8 + 8; ++y)
-      for (int x = std::max(0, col0) * 8; x < (std::min(39, col1) + 1) * 8; ++x) SetPixel(x, y, con_bg_);
+      for (int x = std::max(0, col0) * 8; x < (std::min(last, col1) + 1) * 8; ++x) SetPixel(x, y, bg);
 }
 
 void Machine::ConsoleScroll(int top, int dir) {
@@ -1288,10 +1303,10 @@ void Machine::ConsoleScroll(int top, int dir) {
   auto line = [&](int r) { return &ram_[(base + uint32_t(r) * 8 * 160) % kRamSize]; };
   if (dir > 0) {  // rows top+1.. move up, the last row clears
     for (int r = top; r < 24; ++r) std::memmove(line(r), line(r + 1), 8 * 160);
-    ConsoleClear(0, 24, 39, 24);
+    ConsoleClear(0, 24, 79, 24);
   } else {
     for (int r = 24; r > top; --r) std::memmove(line(r), line(r - 1), 8 * 160);
-    ConsoleClear(0, top, 39, top);
+    ConsoleClear(0, top, 79, top);
   }
 }
 
@@ -1306,22 +1321,22 @@ void Machine::ConsoleOut(uint8_t c) {
       switch (c) {
         case 'A': con_y_ = std::max(0, con_y_ - 1); break;
         case 'B': con_y_ = std::min(24, con_y_ + 1); break;
-        case 'C': con_x_ = std::min(39, con_x_ + 1); break;
+        case 'C': con_x_ = std::min(ConsoleCols() - 1, con_x_ + 1); break;
         case 'D': con_x_ = std::max(0, con_x_ - 1); break;
-        case 'E': ConsoleClear(0, 0, 39, 24); con_x_ = con_y_ = 0; break;
+        case 'E': ConsoleClear(0, 0, 79, 24); con_x_ = con_y_ = 0; break;
         case 'H': con_x_ = con_y_ = 0; break;
         case 'I': if (con_y_ > 0) --con_y_; else ConsoleScroll(0, -1); break;
-        case 'J': ConsoleClear(con_x_, con_y_, 39, con_y_), ConsoleClear(0, con_y_ + 1, 39, 24); break;
-        case 'K': ConsoleClear(con_x_, con_y_, 39, con_y_); break;
+        case 'J': ConsoleClear(con_x_, con_y_, 79, con_y_), ConsoleClear(0, con_y_ + 1, 79, 24); break;
+        case 'K': ConsoleClear(con_x_, con_y_, 79, con_y_); break;
         case 'L': ConsoleScroll(con_y_, -1), con_x_ = 0; break;
         case 'M': ConsoleScroll(con_y_, 1), con_x_ = 0; break;
         case 'Y': con_esc_ = 2; break;
         case 'b': con_esc_ = 4; break;
         case 'c': con_esc_ = 5; break;
-        case 'd': ConsoleClear(0, 0, 39, con_y_ - 1), ConsoleClear(0, con_y_, con_x_, con_y_); break;
+        case 'd': ConsoleClear(0, 0, 79, con_y_ - 1), ConsoleClear(0, con_y_, con_x_, con_y_); break;
         case 'j': con_sx_ = con_x_, con_sy_ = con_y_; break;
         case 'k': con_x_ = con_sx_, con_y_ = con_sy_; break;
-        case 'l': ConsoleClear(0, con_y_, 39, con_y_), con_x_ = 0; break;
+        case 'l': ConsoleClear(0, con_y_, 79, con_y_), con_x_ = 0; break;
         case 'o': ConsoleClear(0, con_y_, con_x_, con_y_); break;
         case 'p': con_rev_ = true; break;
         case 'q': con_rev_ = false; break;
@@ -1332,7 +1347,7 @@ void Machine::ConsoleOut(uint8_t c) {
       return;
     case 2: con_row_ = c - 32, con_esc_ = 3; return;
     case 3:
-      con_y_ = std::clamp(con_row_, 0, 24), con_x_ = std::clamp(c - 32, 0, 39);
+      con_y_ = std::clamp(con_row_, 0, 24), con_x_ = std::clamp(c - 32, 0, ConsoleCols() - 1);
       con_esc_ = 0;
       return;
     case 4: con_fg_ = c & 15, con_esc_ = 0; return;
@@ -1343,13 +1358,13 @@ void Machine::ConsoleOut(uint8_t c) {
     case 27: con_esc_ = 1; return;
     case 7: return;  // bell
     case 8: con_x_ = std::max(0, con_x_ - 1); return;
-    case 9: con_x_ = std::min(39, (con_x_ / 8 + 1) * 8); return;
+    case 9: con_x_ = std::min(ConsoleCols() - 1, (con_x_ / 8 + 1) * 8); return;
     case 10: case 11: case 12: down(); return;
     case 13: con_x_ = 0; return;
     default: break;
   }
   if (c < 32) return;
-  if (con_x_ > 39) {
+  if (con_x_ > ConsoleCols() - 1) {
     if (!con_wrap_) return;
     con_x_ = 0, down();
   }
@@ -1360,6 +1375,11 @@ void Machine::ConsoleOut(uint8_t c) {
 // ---- Line-A (low resolution, 4 planes, drawing into the logical screen) ----
 
 int Machine::GetPixel(int x, int y) {
+  if (res_ == 1) {
+    uint32_t a = (logbase_ + uint32_t(y) * 160 + uint32_t(x >> 4) * 4) % kRamSize;
+    int bit = 15 - (x & 15);
+    return ((Get16(&ram_[a]) >> bit) & 1) | ((Get16(&ram_[a + 2]) >> bit) & 1) << 1;
+  }
   uint32_t a = (logbase_ + uint32_t(y) * 160 + uint32_t(x >> 4) * 8) % kRamSize;
   int bit = 15 - (x & 15), c = 0;
   for (int p = 0; p < 4; ++p) c |= ((Get16(&ram_[a + p * 2]) >> bit) & 1) << p;
@@ -1367,7 +1387,16 @@ int Machine::GetPixel(int x, int y) {
 }
 
 void Machine::SetPixel(int x, int y, int c) {
-  if (x < 0 || y < 0 || x >= kScreenW || y >= kScreenH) return;
+  if (x < 0 || y < 0 || x >= (res_ == 1 ? kMaxFrameW : kScreenW) || y >= kScreenH) return;
+  if (res_ == 1) {
+    uint32_t a = (logbase_ + uint32_t(y) * 160 + uint32_t(x >> 4) * 4) % kRamSize;
+    uint16_t bit = uint16_t(0x8000 >> (x & 15));
+    for (int p = 0; p < 2; ++p) {
+      uint16_t w = Get16(&ram_[a + p * 2]);
+      Put16(&ram_[a + p * 2], (c >> p) & 1 ? (w | bit) : (w & ~bit));
+    }
+    return;
+  }
   uint32_t a = (logbase_ + uint32_t(y) * 160 + uint32_t(x >> 4) * 8) % kRamSize;
   uint16_t bit = uint16_t(0x8000 >> (x & 15));
   for (int p = 0; p < 4; ++p) {
@@ -1575,7 +1604,11 @@ bool Machine::Xbios(uint32_t args, uint32_t* d0) {
       if (log != 0xFFFFFFFF) logbase_ = log & 0xFFFFFF, Put32(&ram_[0x44E], logbase_);
       if (phys != 0xFFFFFFFF) vbase_hi_ = uint8_t(phys >> 16), vbase_mid_ = uint8_t(phys >> 8);
       int16_t rez = int16_t(Get16(p + 10));
-      if (rez >= 0) res_ = uint8_t(rez);
+      if (rez >= 0 && rez != res_) {
+        res_ = uint8_t(rez);
+        if (res_ == 1) palette_[3] = 0x000;  // TOS: white, red, green, black (the text) in medium
+        con_x_ = con_y_ = 0;
+      }
       return true;
     }
     case 6: {  // Setpalette(ptr)

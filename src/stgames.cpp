@@ -332,6 +332,11 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
 constexpr uint32_t kHcHook = 0x338BA, kHcPlay = 0x10C82, kHcPaused = 0x11242, kHcX = 0x338C2, kHcY = 0x338C4;
 constexpr int kHcMinX = 0x15, kHcMaxX = 0x101, kHcMinY = 0x16, kHcMaxY = 0xB2;
 float g_hc_x = -1, g_hc_y = -1;  // the pointer as we move it (sub-pixel)
+// Its own strobe switch (the S key, "Toggle Strobes off/on" in Yak's notes): $10D66, 0 = strobes. Set off
+// once when play first starts (setting hc_strobes=1 keeps them); S still toggles.
+constexpr uint32_t kHcStrobesOff = 0x10D66;
+constexpr uint8_t kKeyI = 0x17;
+bool g_hc_strobes = false, g_hc_strobes_done = false;
 
 void HardcoreUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   const pad::State& p = pad::Now();
@@ -343,6 +348,11 @@ void HardcoreUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     else if (hook == kHcPaused) TapKey(m, kKeyO);
   }
   if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) ArmQuit();
+  if (hook == kHcPlay && !g_hc_strobes_done) {
+    g_hc_strobes_done = true;
+    if (!g_hc_strobes) Put16(m, kHcStrobesOff, 1);
+  }
+  if (hook == kHcPlay && pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) TapKey(m, kKeyI);  // puck intelligence
   if (hook == kHcPlay && p.connected) {
     // Where the pointer is now (the PC mouse may have moved it too).
     float cx = float(Get16(*m, kHcX)), cy = float(Get16(*m, kHcY));
@@ -389,6 +399,7 @@ void Start(Game g) {
   g_d2_pwm = 0;
   g_letter = 0, g_letter_repeat = 0;
   g_hc_x = g_hc_y = -1;
+  g_hc_strobes = settings::Get("hc_strobes", 0) != 0, g_hc_strobes_done = false;
   g_d2_50fps = settings::Get("d2_50fps", 1) != 0;
   g_fire_held = false;
   std::fill(std::begin(g_keys), std::end(g_keys), false);
@@ -456,7 +467,6 @@ void CalmStyle(int* hold, float* cap, float* release) {
 
 bool Calm(const st::Machine& m) {
   if (g_game == Game::kRmc) return RmcPlaying(m);
-  if (g_game == Game::kHardcore) return Get32(m, kHcHook) == kHcPlay;  // its colour 0 flash list ($33136)
   // Not Defender 2: its rasters change colour 0 between lines (the smart bomb's white strobe needs a patch).
   return false;
 }

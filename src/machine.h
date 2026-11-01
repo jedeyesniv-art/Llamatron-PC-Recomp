@@ -23,6 +23,7 @@ constexpr uint32_t kRomBase = 0xFC0000;  // our TOS stubs
 constexpr uint32_t kRomSize = 0x1000;
 constexpr double kCpuHz = 8021247.0;     // PAL ST
 constexpr int kScreenW = 320, kScreenH = 200;
+constexpr int kMaxFrameW = 640;  // medium resolution: 640 x 200, 4 colours
 
 // Joystick bits as the IKBD reports them.
 enum : uint8_t { kJoyUp = 1, kJoyDown = 2, kJoyLeft = 4, kJoyRight = 8, kJoyFire = 0x80 };
@@ -55,6 +56,7 @@ class Machine {
 
   // The last finished frame, 320x200 ARGB.
   const uint32_t* Frame() const { return frame_.data(); }
+  int FrameWidth() const { return frame_w_; }  // 320 (low resolution) or 640 (medium), rows FrameWidth() apart
   const uint16_t* Palette() const { return palette_; }  // the shifter's colour registers now
   bool Is60Hz() const { return !(sync_ & 2); }
   double FrameHz() const;
@@ -138,6 +140,7 @@ class Machine {
   void ConsoleScroll(int top, int dir);                        // from row `top` down: up (1) or down (-1)
   int con_x_ = 0, con_y_ = 0, con_esc_ = 0, con_row_ = 0, con_fg_ = 15, con_bg_ = 0, con_sx_ = 0, con_sy_ = 0;
   bool con_rev_ = false, con_wrap_ = true;
+  int ConsoleCols() const { return res_ == 1 ? 80 : 40; }
   void PlotMode(int x, int y, bool on, int colour, int mode);
   uint32_t logbase_ = 0;  // where TOS (Line-A) draws: Setscreen's logical screen
   std::set<int> gem_seen_;  // GEM calls logged once
@@ -166,7 +169,9 @@ class Machine {
   std::vector<uint8_t> ram_ = std::vector<uint8_t>(kRamSize);
   std::map<uint32_t, std::function<void(Machine&)>> hooks_;
   std::array<uint8_t, kRomSize> rom_{};
-  std::array<uint32_t, kScreenW * kScreenH> frame_{};
+  std::array<uint32_t, kMaxFrameW * kScreenH> frame_{};
+  int frame_w_ = kScreenW;
+  uint8_t frame_res_ = 0;  // the resolution of the frame being drawn (taken at its first line)
 
   int speed_ = 1;              // CPU cycles per ST cycle
   int cpu_rem_ = 0;            // CPU cycles run that don't make a whole ST cycle yet

@@ -161,13 +161,17 @@ std::vector<Known> KnownGames() {
   k.back().game.mode = input::Mode::kHardcore;
   k.back().game.help = {"HARDCORE  -  YAK, 1992 (UNFINISHED)", "",
                         "A 5-level evaluation demo, never released.",
-                        "Your blasters ride the four edges of the field.", "",
-                        "LEFT STICK           move the blasters",
+                        "Your four guns ride the edges of the field.",
+                        "The guns fire by themselves; the puck",
+                        "ricochets and kills too.", "",
+                        "LEFT STICK           move the guns",
                         "RIGHT STICK          put them at that spot",
-                        "A OR RT              fire",
+                        "A OR RT              side lasers",
+                        "Y                    puck intelligence on / off",
                         "BACK                 pause",
                         "B TWICE              back to the disks", "",
-                        "Mouse: move, left button fire; P pause, O resume."};
+                        "Mouse: move, left button lasers; P pause, O resume,",
+                        "S strobes (off at the start), N next level."};
   return k;
 }
 

@@ -176,8 +176,8 @@ void SaveRenderShot(SDL_Renderer* r, const std::string& path) {
 }
 
 void SaveShot(const st::Machine& m, const std::string& path) {
-  SDL_Surface* s = SDL_CreateSurfaceFrom(st::kScreenW, st::kScreenH, SDL_PIXELFORMAT_ARGB8888,
-                                         const_cast<uint32_t*>(m.Frame()), st::kScreenW * 4);
+  SDL_Surface* s = SDL_CreateSurfaceFrom(m.FrameWidth(), st::kScreenH, SDL_PIXELFORMAT_ARGB8888,
+                                         const_cast<uint32_t*>(m.Frame()), m.FrameWidth() * 4);
   if (s && SDL_SaveBMP(s, path.c_str())) LOG("screenshot %s", path.c_str());
   SDL_DestroySurface(s);
 }
@@ -276,6 +276,7 @@ struct Context {
   SDL_Window* window = nullptr;
   SDL_Renderer* renderer = nullptr;
   SDL_Texture* texture = nullptr;
+  SDL_Texture* texture_wide = nullptr;  // medium resolution, 640 x 200
   SDL_AudioStream* audio = nullptr;
   int view_h = st::kScreenH;
   std::vector<float> wav;
@@ -644,11 +645,13 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
     samples.clear();
 
     if (renderer) {
-      SDL_UpdateTexture(texture, nullptr, machine.Frame(), st::kScreenW * 4);
+      // Medium resolution (640 wide) has its own texture, drawn into the same picture.
+      SDL_Texture* shown = machine.FrameWidth() > st::kScreenW && c.texture_wide ? c.texture_wide : texture;
+      SDL_UpdateTexture(shown, nullptr, machine.Frame(), machine.FrameWidth() * 4);
       SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
       SDL_RenderClear(renderer);
       SDL_FRect view{0, 0, float(st::kScreenW), float(view_h)};
-      crt::DrawPicture(renderer, texture, view);
+      crt::DrawPicture(renderer, shown, view);
       if (const char* hint = input::Hint(&machine)) {  // 8x8 debug font in the logical space, lines at the bottom
         std::vector<std::string> lines;
         for (const char* p = hint; *p;) {
@@ -865,6 +868,9 @@ int main(int argc, char** argv) {
     c.texture = SDL_CreateTexture(c.renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, st::kScreenW,
                                   st::kScreenH);
     SDL_SetTextureScaleMode(c.texture, SDL_SCALEMODE_PIXELART);  // sharp, and even at non-integer scales
+    c.texture_wide = SDL_CreateTexture(c.renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
+                                       st::kMaxFrameW, st::kScreenH);
+    SDL_SetTextureScaleMode(c.texture_wide, SDL_SCALEMODE_PIXELART);
     SDL_AudioSpec spec{SDL_AUDIO_F32, 1, kRate};
     c.audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
     if (c.audio) SDL_ResumeAudioStreamDevice(c.audio);
@@ -889,6 +895,7 @@ int main(int argc, char** argv) {
   input::Shutdown();
   if (c.audio) SDL_DestroyAudioStream(c.audio);
   if (c.texture) SDL_DestroyTexture(c.texture);
+  if (c.texture_wide) SDL_DestroyTexture(c.texture_wide);
   crt::Shutdown();
   if (c.renderer) SDL_DestroyRenderer(c.renderer);
   if (c.window) SDL_DestroyWindow(c.window);

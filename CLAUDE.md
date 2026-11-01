@@ -180,19 +180,25 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   colour 0 flash list *$33136. Own IKBD handler $16D56 (keys: table $337B2 -> flags $33833, test $16ECE;
   mouse packets -> $16CC6): pointer x $338C2 (21..257), y $338C4 (22..178, mouse up = bigger = up on
   screen) places the blasters on the four edges; left button (bit 1 of $338C6) fires; no right button. Keys
-  in play ($10CB4): p pause ($1938C = 3; $11216 waits for o), h 50/60 Hz, s / i toggles ($10D66 / $17520,
-  unknown), n $1938C = 1 (a cheat?). 15-20 drawn frames/s at 8 MHz in play, x8 -> 50; same score and end
+  in play ($10CB4), from Yak's notes: p pause ($1938C = 3; $11216 waits for o), h 50/60 Hz, s strobes
+  ($10D66: 0 = on; we set 1 at the first play frame, setting hc_strobes=1 keeps them; 0 flash frames then),
+  i puck intelligence ($17520), n next level ($1938C = 1). The guns fire by themselves; the left button =
+  side lasers on all four tracks. The puck ricochets; power-ups come from sheep (notes list them). 15-20 drawn frames/s at 8 MHz in play, x8 -> 50; same score and end
   screen at x1 and x8 (RAM differs only in drawing). Pad (stgames.cpp): left stick moves the pointer (6 px a
-  frame, curve 2), right stick = the pointer at that spot, A / RT fire, Back pause, B twice = disks. Calm
-  background in play with a short hold (4 frames), cap 0.25, release 0.2 (its flashes are single frames;
-  Machine::SetCalmBackground hold / cap / release, stgames::CalmStyle).
+  frame, curve 2), right stick = the pointer at that spot, A / RT side lasers, Y puck intelligence, Back
+  pause, B twice = disks. (Machine::SetCalmBackground has hold / cap / release per game, stgames::CalmStyle;
+  Hardcore no longer uses it: its own strobe switch is better.)
 - Console (2026-11-01, plan A3): Machine::ConsoleOut = TOS's VT52 console (Cconws, Cconout, Crawio
   write, Bconout 2 / 5, Cconin echo) drawn into the logical screen, low resolution 40 x 25, glyphs from
   SDL's debug font header (third_party/SDL/src/render/SDL_render_debug_font.h, public domain VGA font; bit 0 =
   left; c - 33 for 33..126; ST codes >= 128 blank). ESC A B C D E H I J K L M Y b c d j k l o p q v w.
   Boot palette = TOS's low res one (777 ... 000; text colour 15). Shown now: Defender 2's crack prompt,
-  Trip-A-Tron's installer, D-Bug 100's doc menu (DOC100E.PRG). Not: D-Bug 28's DOX.TOS draws its own text
-  in medium resolution (garbled: we only show low), Andes' crack screen (its own drawing, stays white).
+  Trip-A-Tron's installer, D-Bug 100's doc menu (DOC100E.PRG). Andes' crack screen: its own drawing, white.
+- Medium resolution (2026-11-01): $FF8260 / Setscreen rez 1 -> the frame is 640 x 200 from 2 planes
+  (Machine::FrameWidth; taken at line 0), shown through a second 640-wide texture (Context::texture_wide)
+  in the same picture rectangle; Get/SetPixel and the console (80 columns, colour & 3) follow; Setscreen to
+  medium sets colour 3 black (TOS's text). The D-Bug document displayers work: DOX.TOS (D-Bug 28: Yak's
+  Revenge notes) and DOC100E.PRG (D-Bug 100: B = Yak's Hardcore notes for testers: controls, power-ups, keys).
 - TOS added for them (machine.cpp): Pexec 0/3/4/5/6 + Pterm back to the parent, Malloc/Mfree/Mshrink,
   Fsfirst/Fsnext, Fsetdta/Fgetdta, Fdelete, Dfree, Cconin/Bconin wait for a key (trap re-run), GEM trap #2,
   Line-A, a ROM VBL routine (frclock, colorptr, screenpt, vblqueue at $1C00).
