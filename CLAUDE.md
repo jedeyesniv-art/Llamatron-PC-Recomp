@@ -144,10 +144,20 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   options INVINCIBLE / FRIENDLY SPRITES: "" or "t" + y/n + y/n). VBL $4AF1A dispatches on $4B086 (table
   $212A2): 0 play, 2 title, 8 player select. Pointer x/y $62456/$62458 (writable; $294FC a drawn copy).
   Player select: click the figure (75,60) for ONE PLAYER (the words don't work). Play draws 25 frames/s at x1
-  (its design): no boost. Keys: translation $4B300 -> codes, flags $4B381 (test $4A71C); in play ($1B52A):
-  Control up, Left Shift down (ship y $21266), Alt -> $1BCCC (reverse? the demo flips it every 400 frames),
-  # -> $1BCD2 (fire?), Right Shift -> $1BCC2, Tab/Insert -> $1B69C, Caps Lock -> inviso?, Return -> $1B51E
-  (thrust? the demo holds it). Not confirmed; pad not done.
+  (its design): no boost (no simple 2-VBL wait found for a 50 fps mode). Variant $1F7F8: 0 Defender, 1
+  Stargate, 2 Defender II (title boxes (75,143) (243,143) (160,149); Trainer (22,190), Options (160,193),
+  History (298,190)); the title needs Space before a box click works. Control scheme $1BCC4 through the
+  table $1B8BC: 0 mouse ($1B8C8 + $1B400: pointer y = altitude, x = speed / direction, left fire, right
+  $1BCCC), 1 keyboard ($1B520), 2 attract demo; the default is the mouse. Keyboard scheme (verified): Control
+  up / Left Shift down (ship y $21266, 3 px a frame), Return thrust (velocity $1B4B4, world x $2BA2E), Alt
+  reverse (facing $1B4B8: -1 left), # fire (lasers), Right Shift smart bomb (count $2BA44; a white / black
+  strobe on colour 0 every frame - NOT calmed: the rasters change colour 0 between lines, the per-frame
+  filter breaks the picture; needs a patch of the game's flash), Caps Lock inviso (Stargate), Tab ship type
+  (Defender II); no pause key, no hyperspace found. Controls are skipped while $2F2DE (death countdown, 300
+  frames) runs. Pad (stgames.cpp, verified with the test pad): title d-pad + A (Space, then a click 50
+  frames later), player select d-pad + A (figures (75,60) / (190,60)); play: the keyboard scheme is forced,
+  stick up / down pulsed for analog altitude, left / right thrust (reverse first), A fire, Y bomb, X reverse,
+  LT thrust, LB inviso, RB Tab; Back pauses the emulation (stgames::HostPaused); B twice = disks.
 - TOS added for them (machine.cpp): Pexec 0/3/4/5/6 + Pterm back to the parent, Malloc/Mfree/Mshrink,
   Fsfirst/Fsnext, Fsetdta/Fgetdta, Fdelete, Dfree, Cconin/Bconin wait for a key (trap re-run), GEM trap #2,
   Line-A, a ROM VBL routine (frclock, colorptr, screenpt, vblqueue at $1C00).

@@ -115,6 +115,20 @@ std::vector<Known> KnownGames() {
       "Defender, Stargate and Defender II.", {0.16f, 0.16f, 0.18f, 1}, {0.30f, 0.85f, 0.30f, 1});
   // The VBL ($4AF1A) dispatches on $4B086 through the table at $212A2: 0 play, 2 title, 8 player select. No
   // faster CPU: it draws a steady 25 frames/s in play at 8 MHz already (its design, as Gridrunner's).
+  k.back().game.mode = input::Mode::kDefender2;
+  k.back().game.help = {"DEFENDER 2  -  JEFF MINTER, ARCADIA 1990", "",
+                        "Defender, Defender II and Stargate.", "",
+                        "TITLE: D-PAD + A    pick a game; then A = 1 player",
+                        "LEFT STICK UP/DOWN  climb / dive",
+                        "LEFT STICK L/R      thrust (turns round first)",
+                        "A OR RT             fire",
+                        "Y                   smart bomb",
+                        "X / LT              reverse / thrust",
+                        "LB                  inviso (Stargate)",
+                        "BACK                pause",
+                        "B TWICE             back to the disks", "",
+                        "Keyboard: Ctrl up, LShift down, Return thrust,",
+                        "Alt reverse, # fire, RShift smart bomb."};
   // The crack's trainer (The Alien): "T for trainer", then two Y/N questions.
   k.back().game.options = {{"invincible", "INVINCIBLE", {"OFF", "ON"}},
                            {"friendly", "FRIENDLY SPRITES", {"OFF", "ON"}}};

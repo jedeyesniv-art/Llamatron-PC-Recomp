@@ -214,7 +214,7 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
       if (uint8_t code = StScancode(e.key.scancode)) m->KeyEvent(code, e.type == SDL_EVENT_KEY_DOWN);
     return false;
   }
-  if (g_mode == Mode::kRmc || g_mode == Mode::kAndes) {  // the pad is polled (stgames::Update)
+  if (g_mode == Mode::kRmc || g_mode == Mode::kAndes || g_mode == Mode::kDefender2) {  // the pad is polled (stgames::Update)
     if (stgames::HandleKey(e, m)) return true;
     if ((e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) && !e.key.repeat)
       if (uint8_t code = StScancode(e.key.scancode)) m->KeyEvent(code, e.type == SDL_EVENT_KEY_DOWN);
@@ -342,7 +342,7 @@ SDL_Gamepad* FirstPad() { return g_pads.empty() ? nullptr : g_pads[0]; }
 
 const char* Hint(st::Machine* m) {
   if (g_mode == Mode::kTripATron) return trip::Hint(m, !g_pads.empty());
-  if (g_mode == Mode::kRmc || g_mode == Mode::kAndes) return stgames::Hint(m, !g_pads.empty());
+  if (g_mode == Mode::kRmc || g_mode == Mode::kAndes || g_mode == Mode::kDefender2) return stgames::Hint(m, !g_pads.empty());
   if (g_mode == Mode::kGeneric)
     return SDL_GetTicks() < g_quit_armed_ms ? "Press B again to leave the game" : nullptr;
   if (g_gridrunner) return grid::Hint(m, !g_pads.empty());

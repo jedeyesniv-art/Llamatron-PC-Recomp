@@ -99,7 +99,7 @@ void RmcUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
 
 constexpr uint32_t kAndesState = 0x12EEE, kAndesFacing = 0x1C088;
 constexpr int kAndesPlay = 1, kAndesPaused = 3;
-float g_mouse_y = 0;
+float g_mouse_x = 0, g_mouse_y = 0;
 int g_stick_dir = 0;     // left stick pushed left (-1) / right (1): one reverse per push
 int g_reverse_frames = 0;  // the right button held for a few frames (a reverse)
 bool g_fire_held = false;
@@ -148,6 +148,129 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   m->MouseInput(mdx, mdy + dy, buttons);
 }
 
+// ---- Defender 2 ----
+
+constexpr uint32_t kD2State = 0x4B086, kD2PtrX = 0x62456, kD2PtrY = 0x62458, kD2Scheme = 0x1BCC4,
+                   kD2Facing = 0x1B4B8;
+constexpr int kD2Play = 0, kD2Title = 2, kD2Players = 8;
+constexpr uint8_t kD2Up = 0x1D, kD2Down = 0x2A, kD2Thrust = 0x1C, kD2Reverse = 0x38, kD2Fire = 0x2B,
+                  kD2Bomb = 0x36, kD2Inviso = 0x3A, kD2Tab = 0x0F;
+struct Point {
+  int x, y;
+};
+// The title's boxes: Defender, Defender II, Stargate; Trainer, Options, History.
+const Point kD2Boxes[6] = {{75, 143}, {160, 149}, {243, 143}, {22, 190}, {160, 193}, {298, 190}};
+const Point kD2PlayerBoxes[2] = {{75, 60}, {190, 60}};  // the figures (the words don't take clicks)
+int g_d2_sel = 1, g_d2_players = 0;
+int g_d2_click_in = 0, g_d2_click_frames = 0;  // a click due in n frames / held for n more
+Point g_d2_click_at{0, 0};
+bool g_host_paused = false;
+uint8_t g_d2_held[128] = {};  // keys we hold down on the ST
+float g_d2_pwm = 0;           // climb / dive pulses (analog altitude)
+
+void Put16(st::Machine* m, uint32_t a, int v) {
+  m->Ram()[a] = uint8_t(v >> 8);
+  m->Ram()[a + 1] = uint8_t(v);
+}
+
+void Hold(st::Machine* m, uint8_t code, bool down) {
+  if (bool(g_d2_held[code]) == down) return;
+  g_d2_held[code] = down;
+  m->KeyEvent(code, down);
+}
+
+void ReleaseAll(st::Machine* m) {
+  for (int c = 0; c < 128; ++c) Hold(m, uint8_t(c), false);
+}
+
+void D2Click(Point p, int delay) {
+  g_d2_click_at = p;
+  g_d2_click_in = delay;
+}
+
+void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
+  const pad::State& p = pad::Now();
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_BACK)) {
+    g_host_paused = !g_host_paused;
+    if (g_host_paused) ReleaseAll(m);
+  }
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) ArmQuit();
+  if (g_host_paused) return;
+  int state = Get16(*m, kD2State);
+  uint8_t buttons = mbuttons;
+  // A click on its way: the pointer to the spot, the left button held for a few frames.
+  if (g_d2_click_in > 0 && --g_d2_click_in == 0) g_d2_click_frames = 5;
+  if (g_d2_click_frames > 0) {
+    Put16(m, kD2PtrX, g_d2_click_at.x), Put16(m, kD2PtrY, g_d2_click_at.y);
+    if (--g_d2_click_frames < 4) buttons |= 2;
+  }
+  if (state == kD2Play) {
+    if (p.connected && Get16(*m, kD2Scheme) == 0) Put16(m, kD2Scheme, 1);  // the keyboard scheme
+    // Climb / dive: d-pad full; the stick pulses the key in proportion (the game moves a fixed step).
+    float v = std::fabs(p.ly) > 0.2f ? (std::fabs(p.ly) - 0.2f) / 0.8f * (p.ly < 0 ? -1 : 1) : 0.0f;
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_UP)) v = -1;
+    if (p.Held(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) v = 1;
+    bool step = false;
+    if (v != 0) {
+      g_d2_pwm += std::fabs(v);
+      if (g_d2_pwm >= 1) g_d2_pwm -= 1, step = true;
+    } else {
+      g_d2_pwm = 0;
+    }
+    Hold(m, kD2Up, step && v < 0);
+    Hold(m, kD2Down, step && v > 0);
+    // Left / right: thrust that way; against the facing, reverse first.
+    int dir = p.lx > 0.5f || p.Held(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ? 1
+              : p.lx < -0.5f || p.Held(SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? -1
+              : std::fabs(p.lx) < 0.3f ? 0 : g_stick_dir;
+    int facing = Get16(*m, kD2Facing) < 0 ? -1 : 1;
+    if (dir != 0 && dir != g_stick_dir && dir != facing) g_reverse_frames = 3;
+    g_stick_dir = dir;
+    if (pad::Pressed(SDL_GAMEPAD_BUTTON_WEST)) g_reverse_frames = 3;
+    Hold(m, kD2Reverse, g_reverse_frames > 0);
+    if (g_reverse_frames > 0) --g_reverse_frames;
+    Hold(m, kD2Thrust, (dir != 0 && g_reverse_frames == 0) || p.lt > 0.5f);
+    Hold(m, kD2Fire, p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f);
+    Hold(m, kD2Inviso, p.Held(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
+    if (pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) TapKey(m, kD2Bomb);
+    if (pad::Pressed(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) TapKey(m, kD2Tab);
+  } else {
+    ReleaseAll(m);
+    g_stick_dir = 0;
+    if (state == kD2Title) {
+      int sel = g_d2_sel;
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) sel = sel % 3 == 0 ? sel + 2 : sel - 1;
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) sel = sel % 3 == 2 ? sel - 2 : sel + 1;
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_UP) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) sel = (sel + 3) % 6;
+      if (sel != g_d2_sel) {
+        g_d2_sel = sel;
+        Put16(m, kD2PtrX, kD2Boxes[sel].x), Put16(m, kD2PtrY, kD2Boxes[sel].y);
+      }
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START)) {
+        TapKey(m, kKeySpace);  // "press Space" first, then the box can be clicked
+        D2Click(kD2Boxes[g_d2_sel], 50);
+      }
+    } else if (state == kD2Players) {
+      int sel = g_d2_players;
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) sel ^= 1;
+      if (sel != g_d2_players) {
+        g_d2_players = sel;
+        Put16(m, kD2PtrX, kD2PlayerBoxes[sel].x), Put16(m, kD2PtrY, kD2PlayerBoxes[sel].y);
+      }
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START))
+        D2Click(kD2PlayerBoxes[g_d2_players], 1);
+    } else {  // other screens: the pointer
+      if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;
+      if (p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.lt > 0.5f) buttons |= 1;
+      float x = std::fabs(p.lx) > 0.15f ? p.lx : 0, y = std::fabs(p.ly) > 0.15f ? p.ly : 0;
+      g_mouse_x += x * std::fabs(x) * 5, g_mouse_y += y * std::fabs(y) * 5;
+    }
+  }
+  int dx = int(g_mouse_x), dy = int(g_mouse_y);
+  g_mouse_x -= float(dx), g_mouse_y -= float(dy);
+  m->MouseInput(mdx + dx, mdy + dy, buttons);
+}
+
 }  // namespace
 
 void Start(Game g) {
@@ -156,8 +279,13 @@ void Start(Game g) {
   g_quit_armed_ms = 0;
   g_taps.clear();
   g_delay = 0;
-  g_mouse_y = 0;
+  g_mouse_x = g_mouse_y = 0;
   g_stick_dir = g_reverse_frames = 0;
+  g_d2_sel = 1, g_d2_players = 0;
+  g_d2_click_in = g_d2_click_frames = 0;
+  g_host_paused = false;
+  std::fill(std::begin(g_d2_held), std::end(g_d2_held), uint8_t(0));
+  g_d2_pwm = 0;
   g_fire_held = false;
   std::fill(std::begin(g_keys), std::end(g_keys), false);
 }
@@ -165,7 +293,8 @@ void Start(Game g) {
 void Update(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_buttons) {
   RunTaps(m);
   if (g_game == Game::kRmc) RmcUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
-  else AndesUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
+  else if (g_game == Game::kAndes) AndesUpdate(m, mouse_dx, mouse_dy, mouse_buttons);
+  else Defender2Update(m, mouse_dx, mouse_dy, mouse_buttons);
 }
 
 bool HandleKey(const SDL_Event& e, st::Machine* m) {
@@ -192,6 +321,7 @@ bool HandleKey(const SDL_Event& e, st::Machine* m) {
 const char* Hint(st::Machine* m, bool have_pad) {
   if (SDL_GetTicks() < g_quit_armed_ms)
     return have_pad ? "Press B again to leave the game" : "Press Esc again to leave the game";
+  if (g_host_paused) return have_pad ? "PAUSED   Back: resume   B twice: leave" : "PAUSED";
   if (g_game == Game::kRmc && RmcPaused(*m))
     return have_pad ? "Back: resume   B: back to the menu" : "O: resume   Esc: back to the menu";
   if (g_game == Game::kAndes && Get16(*m, kAndesState) == kAndesPaused)
@@ -201,6 +331,12 @@ const char* Hint(st::Machine* m, bool have_pad) {
 
 bool QuitRequested() { return g_quit; }
 
-bool Calm(const st::Machine& m) { return g_game == Game::kRmc && RmcPlaying(m); }
+bool HostPaused() { return g_host_paused; }
+
+bool Calm(const st::Machine& m) {
+  if (g_game == Game::kRmc) return RmcPlaying(m);
+  // Not Defender 2: its rasters change colour 0 between lines (the smart bomb's white strobe needs a patch).
+  return false;
+}
 
 }  // namespace stgames

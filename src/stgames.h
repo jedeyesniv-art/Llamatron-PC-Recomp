@@ -24,7 +24,16 @@
 
 namespace stgames {
 
-enum class Game { kRmc, kAndes };
+// Defender 2 (DEFENDR2.PRG -> DEFENDR2.EXE): VBL $4AF1A dispatches on $4B086 (0 play, 2 title, 8 player
+// select); pointer $62456 / $62458 (written directly for menu clicks; the title wants Space first). Control
+// scheme $1BCC4 (0 mouse, 1 keyboard, 2 demo): forced to the keyboard one while a pad is used. Keys: Control
+// up, Left Shift down, Return thrust, Alt reverse, # fire, Right Shift smart bomb, Caps Lock inviso
+// (Stargate), Tab ship type (Defender II). No pause key: Back pauses the emulation.
+//   title: d-pad picks a box (Defender, Defender II, Stargate / Trainer, Options, History), A opens it;
+//   player select: d-pad left / right, A; other screens: left stick = pointer, A / RT left, X / LT right.
+//   play: left stick up / down = climb / dive (pulsed: analog), left / right = thrust that way (turns round
+//   first), A / RT fire, Y smart bomb, X reverse, LT thrust, LB inviso, RB Tab; Back pause; B twice = disks.
+enum class Game { kRmc, kAndes, kDefender2 };
 
 void Start(Game g);
 // Once per frame, after pad::Poll: pad and keyboard joystick -> the ST; the host mouse's movement and buttons
@@ -36,5 +45,7 @@ const char* Hint(st::Machine* m, bool have_pad);
 bool QuitRequested();
 // The background's flashes toned down (Machine::SetCalmBackground) right now.
 bool Calm(const st::Machine& m);
+// The emulation is paused (Defender 2's Back): don't run frames.
+bool HostPaused();
 
 }  // namespace stgames

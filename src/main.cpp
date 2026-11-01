@@ -352,6 +352,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   pad::Reset();
   if (mode == input::Mode::kRmc) stgames::Start(stgames::Game::kRmc);
   if (mode == input::Mode::kAndes) stgames::Start(stgames::Game::kAndes);
+  if (mode == input::Mode::kDefender2) stgames::Start(stgames::Game::kDefender2);
   if (!opt.music.empty()) music::StartTestFile(opt.music);
   if (opt.trip_music >= 0) trip::SetMusicMode(opt.trip_music);
   grid::SetHideEntryLane(!opt.entry_lane);
@@ -499,7 +500,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         } else if (tripatron) {
           if (test_pad) trip::SetTestPad({tp.lx, tp.ly, tp.rx, tp.ry, tp.lt, tp.rt, tp.buttons});
           trip::Update(&machine, input::FirstPad(), dx, dy, buttons);
-        } else if (mode == input::Mode::kRmc || mode == input::Mode::kAndes) {
+        } else if (mode == input::Mode::kRmc || mode == input::Mode::kAndes || mode == input::Mode::kDefender2) {
           stgames::Update(&machine, dx, dy, buttons);
           machine.SetCalmBackground(stgames::Calm(machine));
         } else {
@@ -559,7 +560,11 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       if (opt.cpu_all) playing = true;
       machine.SetCpuSpeed(opt.cpu_all ? opt.cpu_all : playing ? opt.cpu_speed : 1);
       playing_second &= playing;
-      if (!machine.RunFrame()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
+      if (stgames::HostPaused() && (mode == input::Mode::kDefender2)) {
+        machine.Audio().clear();  // paused: the picture stays, no sound, no frames
+      } else if (!machine.RunFrame()) {
+        running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
+      }
       ++frame;
       ++stats_frames;
       swaps_second += machine.TakeSwaps();

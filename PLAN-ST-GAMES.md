@@ -44,8 +44,9 @@ Shared groundwork first (A), then games from closest to furthest: RMC, Defender 
 - 2026-11-01 (later): owner: all boot except Defender 2; wants Llamatron's frame-rate fix and pad support.
   Done: Defender 2 boots (trainer prompt answered from launcher options); RMC: faster CPU in play (17 -> 50
   frames/s) + pad module; Andes: faster CPU in play + pad module (smart bomb found, shields not). Defender 2:
-  25 frames/s by design, state / pointer / key codes found, pad NOT done (confirm keys first). Hardcore: not
-  looked at yet. Flashes: RMC calmed in play; Andes' smart bomb flash not handled (raster sky).
+  25 frames/s by design, state / pointer / key codes found. Hardcore: not looked at yet.
+- 2026-11-01 (later still): Defender 2 pad done (keyboard scheme forced, menus on the d-pad, Back = our pause).
+  Open: its smart bomb's white strobe (patch the game), a 50 fps mode, hyperspace; Hardcore. Flashes: RMC calmed in play; Andes' smart bomb flash not handled (raster sky).
 
 ### A. Shared groundwork (do once, before the games)
 A1. Game registry instead of hard-coded games (main.cpp RunGame / RunTrip, launcher kDisks / kInfo / labels):
