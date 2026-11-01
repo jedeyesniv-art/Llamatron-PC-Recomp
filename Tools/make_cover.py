@@ -4,8 +4,8 @@ Top and bottom: a tile from each game (crops of screenshots - not in git: pass t
 middle the program's llama (Tools/make_icon.py's own art) on a starfield and the title in the program's 8 x 8
 font (SDL's debug font: the public domain IBM VGA one) with a Llamasoft-style raster gradient.
 usage: make_cover.py <folder with src_<game>.bmp screenshots> [out.png]      (python -P: see dis.py)
-The screenshots: --shot from each game (src_llamatron2, src_gridrunner, src_trip, src_rmc, src_andes,
-src_d2title, src_hctitle, src_pstitle); CROPS below says which 80 x 56 part of each is used."""
+The screenshots: --shot from each game (src_llamatron2, src_gridrunner, src_trip, src_rmc, src_andesship,
+src_d2title, src_hccans, src_pstitle); CROPS below says which 80 x 56 part of each is used."""
 import importlib.util
 import os
 import random
@@ -20,7 +20,7 @@ W, H, SCALE = 320, 200, 4
 # (screenshot, left, top) of each 80 x 56 tile; top row then bottom row.
 CROPS = [
     ('src_llamatron2', 20, 32), ('src_gridrunner', 120, 72), ('src_trip', 120, 60), ('src_rmc', 240, 144),
-    ('src_andes', 132, 114), ('src_d2title', 120, 118), ('src_hctitle', 175, 10), ('src_pstitle', 78, 58),
+    ('src_andesship', 34, 100), ('src_d2title', 120, 118), ('src_hccans', 48, 104), ('src_pstitle', 78, 58),
 ]
 
 
