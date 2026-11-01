@@ -134,7 +134,9 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
   a frame), objects (table $384AC, $80 each: +6 x) move 0.4-0.75 px a frame in sub-pixel steps, 50 distinct
   frames a second, the owner's own log: 50 drawn / 100 presents a second, gaps <= 12.3 ms; the host runs it
   25x faster than real time. Scroll speed 1 << $407BC is fixed per level ($118E0 +1 is in the cheat code).
-  So the pace is the game's own. --watch-step=N logs --watch every N frames. Logic in the VBL, the main loop draws
+  So the pace is the game's own. --watch-step=N logs --watch every N frames. The owner's "jerky camel, smooth
+  text": the camel's sprite (frame and position) changes only every 8th frame (6.25 Hz walk cycle, steps of
+  2-4 px), while the scroll, stars and text move every frame - the game's animation rate; accepted (owner). Logic in the VBL, the main loop draws
   ($4505C hook, $113FE in play): at 8 MHz 13-19 drawn frames/s in play, x8 -> 50; scroll $384A8 identical
   x1 vs x8 (scores differ: random numbers and per-frame collisions). Pad: stick = joystick 1, A/X/RT/Start
   fire, Back pause, B paused = O then X (menu), B twice = disks; calm background in play.
