@@ -53,5 +53,8 @@ void SetAnalogAim(bool on);
 // Forgets the state of the last game (before starting another).
 void Reset();
 bool AnalogAim();
+// Run-ahead (remaster): the hooks' C++ state (the exact shot positions) kept and put back around a copy run ahead.
+void SaveAheadState();
+void RestoreAheadState();
 
 }  // namespace game

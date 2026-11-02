@@ -137,6 +137,11 @@ void Reset() {
   for (Shot& s : g_shots) s.on = false;
 }
 void SetAnalogAim(bool on) { g_analog = on; }
+namespace {
+Shot g_saved_shots[kShotSlots];
+}
+void SaveAheadState() { std::copy(std::begin(g_shots), std::end(g_shots), g_saved_shots); }
+void RestoreAheadState() { std::copy(std::begin(g_saved_shots), std::end(g_saved_shots), g_shots); }
 bool AnalogAim() { return g_analog; }
 
 void ApplyPatches(st::Machine& m, const Options& o) {

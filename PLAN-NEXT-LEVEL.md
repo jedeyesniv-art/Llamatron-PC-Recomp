@@ -27,7 +27,7 @@ Keep it up to date as the work goes, and delete it when done.
   changes), per game. A setting (run_ahead = 0 / 1 / 2) so the owner can compare.
 
 ## Step 2: native remaster renderer, one game at a time - Photon Storm as the pilot
-**Status 2026-11-02: Andes Attack ported too** (src/remaster_andes.cpp; REMASTER.md). Owner played PS: "feels
+**Status 2026-11-02: Llamatron and Andes Attack ported too** (src/remaster_llama.cpp, src/remaster_andes.cpp; REMASTER.md). Owner played PS: "feels
 fantastic", run-ahead 2 the sweet spot (3 "indefinably odd"). Earlier the same day: **proof of concept built** - src/remaster.cpp + the Photon Storm capture in
 stgames.cpp (see CLAUDE.md "Remaster"). Not object tables after all: hooks on the game's draw primitives (one
 sprite routine, three dot plotters, the ship), keyed by caller + a5 (the object). Every moving thing at the

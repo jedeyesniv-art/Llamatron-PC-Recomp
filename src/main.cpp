@@ -27,6 +27,7 @@
 #include "input.h"
 #include "crt.h"
 #include "remaster.h"
+#include "remaster_llama.h"
 #include "launcher.h"
 #include "log.h"
 #include "machine.h"
@@ -361,6 +362,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
     return GameEnd::kError;
   }
   game::Reset();
+  remaster_llama::Start();
   input::Reset();
   grid::Reset();
   game::g_llamatron = llamatron;
@@ -614,6 +616,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       const bool forced = opt.cpu_all && frame >= opt.cpu_all_from;
       if (forced) playing = true;
       machine.SetCpuSpeed(forced ? opt.cpu_all : playing ? opt.cpu_speed : 1);
+      if (llamatron) remaster_llama::Update(&machine);
       playing_second &= playing;
       if (stgames::HostPaused() && (mode == input::Mode::kDefender2)) {
         machine.Audio().clear();  // paused: the picture stays, no sound, no frames

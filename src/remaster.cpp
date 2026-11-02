@@ -336,7 +336,9 @@ void FrameShown(uint32_t screen) {
     g_have = false;
     return;
   }
-  if (g_real.hold) {  // no new picture: nothing moves
+  if (g_real.hold) {  // no new picture: nothing moves; the items drawn into the screen on show
+    if (auto b = g_real.building.find(screen); b != g_real.building.end() && screen != g_cur_screen)
+      g_cur = b->second, g_cur_screen = screen, g_have = true;
     g_prev = g_cur;
     g_match.resize(g_cur.size());
     for (int i = 0; i < int(g_cur.size()); ++i) g_match[i] = i;

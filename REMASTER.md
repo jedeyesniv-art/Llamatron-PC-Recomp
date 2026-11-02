@@ -8,7 +8,8 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
   (`remaster` = 1). F8 switches the remaster off, F7 cycles run-ahead 0..3.
 - **No public push** until all the planned ports are done. Commit on the `remaster` branch as we go.
 - Owner's verdict on the pilot: "REALLY cool". Run-ahead: "really good". After playing it (2026-11-02): "feels
-  fantastic"; run-ahead 2 is "the sweet spot, 3 felt indefinably odd" - keep 2 as the default.
+  fantastic"; run-ahead 2 is "the sweet spot, 3 felt indefinably odd" - keep 2 as the default. Andes Attack: "really
+  good, no notes".
 
 ## What the remaster is (one paragraph)
 The 68000 game runs unchanged. During play, hooks on the game's **draw primitives** (its sprite routine, dot
@@ -88,6 +89,11 @@ the per-game steps 1-6 plus verification.
 9. **Settings**: `remaster` 1 and `remaster_ahead` 2 by default (owner).
 
 ## Verification (all headless, deterministic, fast)
+- **Games whose state depends on CPU speed** (Llamatron: the original alone diverges at x4 or x16 vs x8; random
+  numbers / wave starts timed by drawn frames): skipping draws acts like a CPU speed change, so a long run drifts
+  from the original after the first death or wave change. Verify in windows before that (start at several waves
+  with `--poke`), with RAM identical in the window. After it, compare `--mshot` with `--shot` of the same capture
+  run: outside play they must be equal (no stale items).
 - **Pixel identity** (always with `--remaster-ahead=0`: with run-ahead the composed frame is a later frame than
   the ST screen and every moving thing differs): `--remaster-capture --mshot=N:<bmp>` composes the frame in software (whole pixels, the
   game's x snapping, no rotation) and compares it with `--shot=N:<bmp>` from a run without capture. Same input
@@ -130,6 +136,21 @@ the per-game steps 1-6 plus verification.
   **CLAUDE.md contains raw CR bytes inside lines** (paths like `Private\r...`): edit it only byte-safely (`'rb'`
   / `'wb'`), never in text mode, which turns them into line breaks.
 
+## Pitfalls hit in Llamatron
+- **Compiled sprites**: Llamatron compiles sprites into 68000 code for 8 shifts (x & $E): they land on even x.
+  Record the top-left the routine computes (it centres on d0 / d1) and snap that; draw the sandbox copy at an even
+  top-left, else the image's own offset gets snapped twice.
+- **Hold must show the screen on display**: a hold that starts between a draw and its display kept the previous
+  frame's list. `FrameShown` now takes the list drawn into the shown screen while holding (fixes PS / Andes too).
+- **Frozen phases**: the llama's death sets the VBL handler to an `rts` ($5664) and the game draws nothing: hold,
+  don't stop, or the sprites vanish from the frozen picture.
+- **Leave short-lived effects to the game**: the shaped draws (warp-in, materialising) are a new image every frame;
+  capturing them filled the cache with hundreds of one-use images and some sandbox draws never returned.
+- **Draw order**: items go over the ST picture, so where a sprite the game still draws itself crosses a captured
+  one, the order can differ from the original (a few pixels, seen as 6-14 px in a frame).
+- **Run-ahead state from other files**: game.cpp's analog-aim shot table is C++ state the hooks change: saved and
+  restored too (`game::SaveAheadState`).
+
 ## Open issues from the pilot (fix in passing)
 - An occasional 22-26 ms present gap (about once per 10 s) at 120 Hz: not caused by run-ahead or decodes.
   Suspects: texture uploads, the OS.
@@ -149,9 +170,12 @@ the per-game steps 1-6 plus verification.
   frames pixel-identical (play, pause, death, game over, high scores, title), game RAM identical except the two
   screens with run-ahead 3, 95-99% of items slide (the jumps are new laser dashes), 120 presents/s. Took about a
   third of the pilot's time.
-- **Llamatron** (the flagship): logic in the VBL; the main loop draws (background restore $5C40-$5C80, sprites
-  $76E0-$7720; text offsets, add $10100). Shots have exact positions already (our analog-aim table). Flash
-  list into colour 0 is patched. Self-modifying timer A code at $8AA0 doesn't matter here (it isn't drawing).
+- **Llamatron**: DONE 2026-11-02 (`src/remaster_llama.cpp`, header comment). One sprite routine $5E8A for everything
+  moving (objects, shots through the $58A2 wrapper, the llama), frame $5BFE's `jsr (a3)` at $5C10 / $5C12. Verified:
+  25 frames over waves 1 / 3 / 5 / 7 / 8 identical except the draw-order pixels (one frame 14 px), RAM identical in
+  every window incl. analog aim and run-ahead 3; game over / continue / title with no stale items; 120 presents/s
+  in play; pause (items held under the PAUSE cup) and the Ozric tentacle (ST picture). Idea for later: shots at
+  their exact analog positions (game.cpp keeps them as doubles) for even smoother diagonals.
 - **Gridrunner**: drawing in the main loop ($4BA12, 3 rotating screens, divisor $4D2E4). Snakes are linked
   chains (draw routine $1655E draws a whole snake): key per segment. The entry-lane hiding already hooks $1655E.
 - **Revenge of the Mutant Camels** (three builds, same code at other addresses: one port, three disks): main
