@@ -154,6 +154,12 @@ the per-game steps 1-6 plus verification.
   are cached per colour set.
 - **Capture only inside the play pass**: a game can draw through the same core from other frame routines while
   the capture flag is still set (Gridrunner's held states): bracket it (begin hook on, end hook off).
+- **Colour words in the draw core** (Gridrunner $58054, like PS $57FD0; owner found it: level 4's rising text came
+  out dark): any global the core reads that changes the picture belongs in the image id and the sandbox pokes.
+  List them all with an absolute-operand scan of the core (every `$xxxxx.l` it reads), not by reading a few
+  handlers. The pixel check missed it: a sprite's first sight is drawn by the game, and with run-ahead 0 the decode
+  happened to run while the colour was still right. Also compose with `--remaster-ahead=2` at frames where a new
+  sprite appears, and look at the picture.
 - **Run-ahead state from other files**: game.cpp's analog-aim shot table is C++ state the hooks change: saved and
   restored too (`game::SaveAheadState`).
 

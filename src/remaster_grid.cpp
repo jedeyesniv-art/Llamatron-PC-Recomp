@@ -6,7 +6,7 @@
 // shown ($4D2E8); after the VBL wait, the restore pass (mode 2, $4BC18: last time's list redrawn from the
 // background) and the three screens and lists rotate.
 //   $4BCE4 the draw core: a0 = the sprite (word type 0..4 -> the table $4BCD0; 0 and 2 draw at even x; +2 width in
-//     16-px groups, +4 height), d0 / d1 = top-left, a1 = the screen. Reached through $4BB82 (writes the restore
+//     16-px groups, +4 height), d0 / d1 = top-left, a1 = the screen; $58054 a colour some types draw in. Reached through $4BB82 (writes the restore
 //     entry, then calls it: return $4BBA8, the drawing code's return at sp + 12; with $4CF30 set it draws into the
 //     background and every screen: the HUD, left alone) and $4BBFE (centres first, one word pushed: the drawing
 //     code at sp + 18). Snakes: $1655E walks a chain and draws each segment through $4BBFE (a3 = the segment;
@@ -28,6 +28,7 @@ namespace {
 constexpr uint32_t kBegin = 0x144DA, kEnd = 0x145E2, kScreen = 0x54DC2, kShow = 0x4D2E8;
 constexpr uint32_t kCore = 0x4BCE4, kCoreGo = 0x4BCEA, kCoreTable = 0x4BCD0;
 constexpr uint32_t kMode = 0x4D046, kAllScreens = 0x4CF30;
+constexpr uint32_t kColour = 0x58054;  // the colour some sprite types draw in (the type-4 handler at $4C206; < 0: their own)
 constexpr uint32_t kClipLeft = 0x58044, kClipRight = 0x58046, kClipTop = 0x5804A, kClipBottom = 0x5804C;
 constexpr uint32_t kFromList = 0x4BBA8, kFromCentred = 0x4BC14;
 constexpr uint32_t kHudFrom = 0x4CDBA, kHudTo = 0x4CE04;  // a HUD icon painted into the background and each screen
@@ -90,7 +91,8 @@ void OnCore(st::Machine& m) {
     caller = Get32(m, sp + 12) & 0xFFFFFF;
     if (caller == kFromCentred) caller = Get32(m, sp + 18) & 0xFFFFFF, object = Reg(cpu::A0 + 3);
   }
-  uint64_t id = a0;
+  // The image: the sprite and the colour word (level 4's rising text is drawn in colour 8 through it).
+  uint64_t id = a0 | uint64_t(uint16_t(Get16(m, kColour))) << 32;
   int type = Get16(m, a0);
   if (!remaster::HaveImage(id)) {
     remaster::SandboxCall call;
@@ -99,7 +101,8 @@ void OnCore(st::Machine& m) {
     int h = Get16(m, a0 + 4);
     call.at_x = 128, call.at_y = h > 0 && h <= 180 ? (200 - h) / 2 : 80;
     call.regs[0] = uint32_t(call.at_x), call.regs[1] = uint32_t(call.at_y);
-    call.pokes = {{kMode, 0}, {kClipTop, 0}, {kClipBottom, 199}, {kClipLeft, 0}, {kClipRight, 19}};
+    call.pokes = {{kMode, 0}, {kClipTop, 0}, {kClipBottom, 199}, {kClipLeft, 0}, {kClipRight, 19},
+                  {kColour, uint16_t(Get16(m, kColour))}};
     remaster::QueueImage(id, call);
     return original();  // drawn by the game this once
   }
