@@ -32,7 +32,9 @@ stgames.cpp (see CLAUDE.md "Remaster"). Not object tables after all: hooks on th
 sprite routine, three dot plotters, the ship), keyed by caller + a5 (the object). Every moving thing at the
 display's rate (120 presents/s on the owner's screen), the ship at its exact angle; the composed frame is
 pixel-identical to the original (28 frames over 2.5 min of combat; game RAM identical). Waiting for the owner
-to play it: does it feel worth it? Then: Llamatron, or polish (the 1-frame interpolation delay -> run-ahead).
+to play it (owner 2026-11-02: "REALLY cool"). Run-ahead added inside the remaster (remaster_ahead, default 2:
+~60 ms quicker than without, ~40 ms quicker than the original game). Step 1 for the other games (run-ahead of
+the plain ST picture) is still open: the fork would have to render its frame (sandbox skips RenderLine).
 - What: instead of showing the ST's framebuffer as it is, read the game's object tables each tick and draw the
   moving objects ourselves, moved smoothly between ticks at the display's rate (100 / 120 / 144 Hz). A hybrid:
   the ST picture for backgrounds, HUD and text; the game's own drawing of the moving objects suppressed by

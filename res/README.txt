@@ -81,6 +81,7 @@ LLAMATRON CONTROLS - KEYBOARD
   F11 or Alt+Enter    fullscreen / window
   F9                  CRT look on / off
   F8                  Photon Storm: the remaster (smooth motion, exact ship angle) on / off
+  F7                  Photon Storm remaster: run-ahead 0-3 frames (default 2: quickest response)
 
 
 SUPER GRIDRUNNER CONTROLS - XBOX PAD

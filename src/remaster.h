@@ -14,6 +14,7 @@
 #include <SDL3/SDL.h>
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "machine.h"
@@ -47,9 +48,23 @@ bool Enabled();  // on, and there is a renderer (SetRenderer)
 void SetRenderer(bool have);
 void Toggle();
 void LoadSettings();
+// Run-ahead (setting remaster_ahead 0..3, F7 cycles): how many frames earlier than the ST picture the objects
+// are shown. 0: the list drawn into the screen shown (in step with the ST picture); 1: the list the game
+// finished last (the ST shows it at the next VBL); 2 / 3: plus 1 / 2 frames run in a copy of the machine with
+// the controls held, captured on their own (the game side's C++ state saved / restored around it).
+void CycleAhead();
+int Ahead();
+void SetAhead(int frames);
+void SetAheadState(std::function<void()> save, std::function<void()> restore);
+// After each RunFrame, before FrameShown.
+void RunAhead(st::Machine* m);
+// A line to show for a moment after F7 / F8 (nullptr: none).
+const char* Message();
+void SetProbe(bool on);  // tests: log the rotated item's angle each frame shown
 
 // Capture (from hooks, inside the CPU's run).
 void BeginFrame(uint32_t screen);
+void EndFrame(uint32_t screen);  // the draw pass for `screen` is complete
 void Add(uint32_t screen, Item item);
 bool HaveImage(uint64_t id);
 void SetImage(uint64_t id, Image image);

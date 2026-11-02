@@ -68,7 +68,9 @@ struct Options {
   std::string music;       // --music=<file>: Trip-A-Tron hears this file instead of the PC (tests)
   int trip_music = -1;     // --trip-music=0|1|2: Trip-A-Tron's music mode for this run
   std::map<int, std::string> shots;  // --shot=N:<file.bmp>
-  bool remaster_headless = false;  // --remaster-capture: capture without a renderer (tests: does it change the game?)
+  bool remaster_headless = false;
+  bool remaster_probe = false;  // --remaster-probe: log the ship's angle each frame shown (latency tests)
+  int remaster_ahead = -1;      // --remaster-ahead=N: run-ahead for this run (not saved)  // --remaster-capture: capture without a renderer (tests: does it change the game?)
   float remaster_alpha = -1;  // --remaster-alpha=F: the remaster's in-between position fixed (tests)
   std::map<int, std::string> rshots;
   std::map<int, std::string> mshots;  // --mshot=N:<file.bmp>: the remaster's frame composed in software (tests)  // --rshot=N:<file.bmp>: the screen as shown (CRT look included)
@@ -114,6 +116,8 @@ Options ParseArgs(int argc, char** argv) {
     else if (Arg(a, "wav", &v)) o.wav = v;
     else if (Arg(a, "shot", &v)) o.shots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
     else if (a == "--remaster-capture") o.remaster_headless = true;
+    else if (a == "--remaster-probe") o.remaster_probe = true;
+    else if (Arg(a, "remaster-ahead", &v)) o.remaster_ahead = std::atoi(v.c_str());
     else if (Arg(a, "remaster-alpha", &v)) o.remaster_alpha = float(std::atof(v.c_str()));
     else if (Arg(a, "mshot", &v)) o.mshots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
     else if (Arg(a, "rshot", &v)) o.rshots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
@@ -394,6 +398,8 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   remaster::Stop();
   remaster::LoadSettings();
   remaster::SetRenderer(renderer != nullptr || opt.remaster_headless);
+  remaster::SetProbe(opt.remaster_probe);
+  if (opt.remaster_ahead >= 0) remaster::SetAhead(opt.remaster_ahead);
 
   GameEnd end = GameEnd::kQuitApp;
   uint64_t start = SDL_GetTicksNS();
@@ -437,6 +443,10 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         remaster::Toggle();
         continue;
       }
+      if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.scancode == SDL_SCANCODE_F7) {
+        remaster::CycleAhead();
+        continue;
+      }
       input::HandleEvent(e, &machine);
     }
     if (input::QuitRequested()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
@@ -445,6 +455,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       trip::LoadSettings();
       crt::LoadSettings();
       remaster::LoadSettings();
+      if (opt.remaster_ahead >= 0) remaster::SetAhead(opt.remaster_ahead);
       if (opt.aim < 0) game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
     }
     if (window && SDL_CursorVisible() &&
@@ -609,6 +620,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       } else if (!machine.RunFrame()) {
         running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
       }
+      if (running) remaster::RunAhead(&machine);
       remaster::FrameShown(machine.FrameBase());
       ++frame;
       ++stats_frames;
@@ -708,7 +720,8 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       } else {
         crt::DrawPicture(renderer, shown, view);
       }
-      if (const char* hint = input::Hint(&machine)) {  // 8x8 debug font in the logical space, lines at the bottom
+      const char* hint = remaster::Message() ? remaster::Message() : input::Hint(&machine);
+      if (hint) {  // 8x8 debug font in the logical space, lines at the bottom
         std::vector<std::string> lines;
         for (const char* p = hint; *p;) {
           const char* nl = std::strchr(p, '\n');

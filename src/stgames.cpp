@@ -678,7 +678,8 @@ void PsOnMarker(st::Machine& m) {
 //     restore list (its end marker $FE0C at (a2)); $4630A set = into every screen and the background (the HUD:
 //     left alone); clipped to lines $57FC6..$57FC8 ($25..$C7 in play) and groups $57FC0..$57FC2; $57FD0 a
 //     colour some types use; $46420 = 0 while the main loop draws (another path otherwise). $14F3E..$14F7A
-//     paint a HUD icon once into the background and the three screens in turn: left alone.
+//     paint a HUD icon once into the background and the three screens in turn: left alone. $4620E (after the
+//     draw call): the pass is complete (remaster::EndFrame: run-ahead shows the newest complete list).
 //   the dot plotters $440BA (1 pixel), $44150 (2 wide), $442F2 (2 x 2, above line $C6), colour d2 (planes from
 //     the table $44098, $20 apart), from line $440B8: the stars ($18C2C: 12 at $276B2, $15D70: 16 at $276FE,
 //     x / y / brightness), particles, rings.
@@ -709,11 +710,13 @@ void Rts(st::Machine& m) {
   cpu::Set(cpu::PC, Get32(m, sp & 0xFFFFFF));
   cpu::Set(cpu::A7, sp + 4);
 }
+// The sprite decoder's sandbox (not a run-ahead copy): the hooks do the original's work only.
+bool Decoding(const st::Machine& m) { return m.sandbox && !m.ahead; }
 uint64_t PsKey(uint32_t caller, uint32_t object) { return uint64_t(caller & 0xFFFFFF) << 32 | (object & 0xFFFFFF); }
 
 // $4620C "jsr (a3)": the screen's drawing starts.
 void PsOnDrawCall(st::Machine& m) {
-  if (!m.sandbox) {
+  if (!Decoding(m)) {
     int state = Get16(m, kPsState);
     g_ps_capture = remaster::Enabled() && state == kPsPlay;
     g_ps_capture_screen = Get32(m, kPsScreen) & 0xFFFFFF;
@@ -725,6 +728,13 @@ void PsOnDrawCall(st::Machine& m) {
   Put32(&m, sp & 0xFFFFFF, kPsDrawCall + 2);
   cpu::Set(cpu::A7, sp);
   cpu::Set(cpu::PC, Reg(cpu::A0 + 3));
+}
+
+// $4620E "move.l $4F1B2,$466C2" (after the draw call): the pass is complete.
+void PsOnDrawDone(st::Machine& m) {
+  if (!Decoding(m) && g_ps_capture) remaster::EndFrame(g_ps_capture_screen);
+  Put32(&m, 0x466C2, Get32(m, kPsScreen));
+  cpu::Set(cpu::PC, kPsDrawCall + 12);
 }
 
 // The sprite's image id: the sprite, what it points to, the colour some types take.
@@ -740,7 +750,7 @@ void PsOnSprite(st::Machine& m) {
     if ((Reg(cpu::D0 + 1) & 0xFFFF) == 0xFE0C) SetWord(cpu::Reg(cpu::D0 + 1), 0x1F3);
     cpu::Set(cpu::PC, kPsSpriteGo);
   };
-  if (m.sandbox || !g_ps_capture || Get16(m, kPsAllScreens) || (Reg(cpu::D0 + 1) & 0xFFFF) == 0xFE0C ||
+  if (Decoding(m) || !g_ps_capture || Get16(m, kPsAllScreens) || (Reg(cpu::D0 + 1) & 0xFFFF) == 0xFE0C ||
       (Reg(cpu::A0 + 1) & 0xFFFFFF) != g_ps_capture_screen)
     return original();
   uint32_t a0 = Reg(cpu::A0) & 0xFFFFFF, sp = Reg(cpu::A7) & 0xFFFFFF, ret = Get32(m, sp) & 0xFFFFFF;
@@ -793,7 +803,7 @@ void PsDot(st::Machine& m, int w, int h, int bottom) {
   Rts(m);
 }
 bool PsDotCaught(const st::Machine& m) {
-  return !m.sandbox && g_ps_capture && (Reg(cpu::A0 + 1) & 0xFFFFFF) == g_ps_capture_screen;
+  return !Decoding(m) && g_ps_capture && (Reg(cpu::A0 + 1) & 0xFFFFFF) == g_ps_capture_screen;
 }
 // $440BA "cmp.w $440B8,d1; bpl $440C6; rts".
 void PsOnDot1(st::Machine& m) {
@@ -815,7 +825,7 @@ void PsOnDot4(st::Machine& m) {
 
 // $15C72 "move.l #0,d1": the ship, at its exact heading.
 void PsOnShip(st::Machine& m) {
-  if (m.sandbox || !g_ps_capture) {
+  if (Decoding(m) || !g_ps_capture) {
     cpu::Set(cpu::Reg(cpu::D0 + 1), 0);
     cpu::Set(cpu::PC, kPsShipDraw + 6);
     return;
@@ -863,6 +873,7 @@ void PsInstallRemaster(st::Machine* m) {
   };
   static const H kHooks[] = {
       {kPsDrawCall, {0x4E, 0x93}, PsOnDrawCall},                     // jsr (a3)
+      {kPsDrawCall + 2, {0x23, 0xF9, 0x00, 0x04, 0xF1, 0xB2, 0x00, 0x04, 0x66, 0xC2}, PsOnDrawDone},
       {kPsSprite, {0xB2, 0x7C, 0xFE, 0x0C}, PsOnSprite},              // cmp.w #$FE0C,d1
       {kPsDot1, {0xB2, 0x79, 0x00, 0x04, 0x40, 0xB8}, PsOnDot1},      // cmp.w $440B8,d1
       {kPsDot2, {0x02, 0x40, 0x01, 0xFE}, PsOnDot2},                  // andi.w #$1FE,d0
@@ -881,6 +892,25 @@ void PsInstallRemaster(st::Machine* m) {
   g_ps_capture = false;
   g_ps_decode.clear();
   remaster::Stop();
+  // Run-ahead: what the hooks change in C++ (the analog heading, drift, shots; the capture) comes back after it.
+  struct Saved {
+    bool capture, heading_on;
+    uint32_t screen;
+    double heading, fx, fy;
+    PsShot shots[kPsMaxShots];
+  };
+  static Saved saved;
+  remaster::SetAheadState(
+      [] {
+        saved.capture = g_ps_capture, saved.heading_on = g_ps_heading_on, saved.screen = g_ps_capture_screen;
+        saved.heading = g_ps_heading, saved.fx = g_ps_fx, saved.fy = g_ps_fy;
+        std::copy(std::begin(g_ps_shots), std::end(g_ps_shots), saved.shots);
+      },
+      [] {
+        g_ps_capture = saved.capture, g_ps_heading_on = saved.heading_on, g_ps_capture_screen = saved.screen;
+        g_ps_heading = saved.heading, g_ps_fx = saved.fx, g_ps_fy = saved.fy;
+        std::copy(std::begin(saved.shots), std::end(saved.shots), g_ps_shots);
+      });
   LOG("photon storm: remaster hooks installed");
 }
 

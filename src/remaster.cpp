@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <unordered_map>
 
@@ -19,13 +21,25 @@ constexpr float kTeleport = 40;  // moved further than this between two frames: 
 
 bool g_enabled = true;
 bool g_renderer = false;
-bool g_capturing = false;
-bool g_hold = false;
-std::unordered_map<uint32_t, std::vector<Item>> g_building;  // per screen: what the game drew into it
-std::unordered_map<uint32_t, std::unordered_map<uint64_t, int>> g_counts;  // per screen: keys so far
+// What the game drew: the real machine's, and the run-ahead copy's (g_cap points at the one running).
+struct Capture {
+  bool capturing = false, hold = false;
+  std::unordered_map<uint32_t, std::vector<Item>> building;  // per screen: what the game drew into it
+  std::unordered_map<uint32_t, std::unordered_map<uint64_t, int>> counts;  // per screen: keys so far
+  std::vector<Item> latest;  // the last complete draw pass (EndFrame)
+  bool have_latest = false;
+};
+Capture g_real, g_fork;
+Capture* g_cap = &g_real;
 std::vector<Item> g_prev, g_cur;  // the previous frame shown and this one
 uint32_t g_cur_screen = 0;
 bool g_have = false;
+int g_ahead = 2;  // remaster_ahead
+std::function<void()> g_save, g_restore;  // the game side's C++ state around a run-ahead
+bool g_probe = false;
+int g_shown = 0;  // frames shown (probe log)
+uint64_t g_message_until = 0;
+char g_message[64] = "";
 
 std::unordered_map<uint64_t, Image> g_images;
 struct Texture {
@@ -83,25 +97,54 @@ float LerpAngle(float a, float b, float t) {
 
 bool Enabled() { return g_enabled && g_renderer; }
 void SetRenderer(bool have) { g_renderer = have; }
-void LoadSettings() { g_enabled = settings::Get("remaster", 1) != 0; }
+void LoadSettings() {
+  g_enabled = settings::Get("remaster", 1) != 0;
+  g_ahead = std::clamp(int(settings::Get("remaster_ahead", 2)), 0, 3);
+}
+void ShowMessage() {
+  if (!g_enabled) std::snprintf(g_message, sizeof(g_message), "REMASTER OFF (F8)");
+  else std::snprintf(g_message, sizeof(g_message), "REMASTER ON   RUN-AHEAD %d (F7)", g_ahead);
+  g_message_until = SDL_GetTicks() + 2500;
+  LOG("remaster: %s, run-ahead %d", g_enabled ? "on" : "off", g_ahead);
+}
 void Toggle() {
   g_enabled = !g_enabled;
   settings::Set("remaster", g_enabled ? 1 : 0);
   settings::Save();
-  LOG("remaster: %s", g_enabled ? "on" : "off");
+  ShowMessage();
+}
+void CycleAhead() {
+  g_ahead = (g_ahead + 1) % 4;
+  settings::Set("remaster_ahead", g_ahead);
+  settings::Save();
+  ShowMessage();
+}
+int Ahead() { return g_ahead; }
+void SetAhead(int frames) { g_ahead = std::clamp(frames, 0, 3); }
+const char* Message() { return SDL_GetTicks() < g_message_until ? g_message : nullptr; }
+void SetProbe(bool on) { g_probe = on; }
+void SetAheadState(std::function<void()> save, std::function<void()> restore) {
+  g_save = std::move(save), g_restore = std::move(restore);
 }
 
 void BeginFrame(uint32_t screen) {
-  g_capturing = true;
-  g_hold = false;
-  g_building[screen].clear();
-  g_counts[screen].clear();
+  g_cap->capturing = true;
+  g_cap->hold = false;
+  g_cap->building[screen].clear();
+  g_cap->counts[screen].clear();
+}
+
+void EndFrame(uint32_t screen) {
+  auto b = g_cap->building.find(screen);
+  if (b == g_cap->building.end()) return;
+  g_cap->latest = b->second;
+  g_cap->have_latest = true;
 }
 
 void Add(uint32_t screen, Item item) {
-  int n = g_counts[screen][item.key]++;
+  int n = g_cap->counts[screen][item.key]++;
   item.key ^= uint64_t(n) << 56;
-  g_building[screen].push_back(item);
+  g_cap->building[screen].push_back(item);
 }
 
 bool HaveImage(uint64_t id) { return g_images.count(id) != 0; }
@@ -114,14 +157,35 @@ void SetImage(uint64_t id, Image image) {
 }
 
 void Hold() {
-  if (g_capturing && g_have) g_hold = true;
+  if (g_cap->capturing) g_cap->hold = true;
 }
 
 void Stop() {
-  g_capturing = g_have = g_hold = false;
-  g_building.clear();
-  g_counts.clear();
-  g_prev.clear(), g_cur.clear();
+  *g_cap = Capture{};
+  if (g_cap == &g_real) g_have = false, g_prev.clear(), g_cur.clear(), g_fork = Capture{};
+}
+
+void RunAhead(st::Machine* m) {
+  g_fork.have_latest = false;
+  int frames = g_ahead - 1;
+  if (frames <= 0 || !Enabled() || !g_real.capturing || g_real.hold) return;
+  static std::unique_ptr<st::Machine> fork;
+  if (!fork) fork = std::make_unique<st::Machine>(*m);
+  else *fork = *m;
+  fork->sandbox = fork->ahead = true;
+  if (g_save) g_save();
+  std::vector<uint8_t> context = cpu::SaveContext();
+  cpu::SetMachine(fork.get());
+  g_fork = Capture{};
+  g_fork.capturing = true;
+  g_cap = &g_fork;
+  for (int i = 0; i < frames; ++i)
+    if (!fork->RunFrame()) break;
+  g_cap = &g_real;
+  cpu::SetMachine(m);
+  cpu::RestoreContext(context);
+  if (g_restore) g_restore();
+  if (!g_fork.capturing || g_fork.hold) g_fork.have_latest = false;  // it left play (paused, died...)
 }
 
 Image DecodePlanes(const uint8_t* data, int groups, int rows) {
@@ -191,24 +255,39 @@ bool DrawInSandbox(st::Machine* m, const SandboxCall& call, Image* out) {
 }
 
 void FrameShown(uint32_t screen) {
-  if (!g_capturing) {
+  ++g_shown;
+  if (!g_real.capturing) {
     g_have = false;
     return;
   }
-  if (g_hold || (g_have && screen == g_cur_screen)) {  // no new picture: nothing moves
+  if (g_real.hold) {  // no new picture: nothing moves
     g_prev = g_cur;
     return;
   }
-  auto b = g_building.find(screen);
-  if (b == g_building.end()) {
+  // Which list: the run-ahead copy's, else the last complete draw pass, else (0) the one in the screen shown.
+  const std::vector<Item>* pick = nullptr;
+  if (g_ahead >= 2 && g_fork.have_latest) pick = &g_fork.latest;
+  else if (g_ahead >= 1 && g_real.have_latest) pick = &g_real.latest;
+  else if (g_ahead == 0) {
+    if (g_have && screen == g_cur_screen) {
+      g_prev = g_cur;
+      return;
+    }
+    auto b = g_real.building.find(screen);
+    if (b != g_real.building.end()) pick = &b->second;
+  }
+  if (!pick) {
     g_have = false;
     return;
   }
   g_prev = std::move(g_cur);
-  g_cur = b->second;
+  g_cur = *pick;
   if (!g_have) g_prev = g_cur;
   g_cur_screen = screen;
   g_have = true;
+  if (g_probe)
+    for (const Item& it : g_cur)
+      if (it.rotate) LOG("probe %d: angle %.1f, %zu items", g_shown, it.angle * 57.2958, g_cur.size());
   // Stats (logged every 500 frames shown): items a frame, how many slid from the frame before, how many jumped.
   static int frames = 0, items = 0, slid = 0, jumped = 0, moved = 0;
   std::unordered_map<uint64_t, const Item*> before;
@@ -229,7 +308,7 @@ void FrameShown(uint32_t screen) {
   }
 }
 
-bool Active() { return Enabled() && g_capturing && g_have; }
+bool Active() { return Enabled() && g_real.capturing && g_have; }
 
 void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float alpha, const uint16_t* palette,
           bool ste_colours) {

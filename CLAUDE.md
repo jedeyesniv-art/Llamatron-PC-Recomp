@@ -52,6 +52,15 @@ elease\Llamatron-<ver>-windows.zip (no game
   title / high score animations one VBL apart from the original (game logic unaffected).
 - Gotcha: CLAUDE.md has raw CR characters inside lines (paths like Private\r...): edit it byte-safely (Python
   open(..., 'rb')), never through text mode.
+- Run-ahead (2026-11-02; setting remaster_ahead 0..3, default 2; F7 cycles, a message line for 2.5 s):
+  0 = the list in the screen shown; 1 = the newest complete draw pass (hook $4620E -> remaster::EndFrame; the ST
+  shows it a VBL later); 2 / 3 = a copy of the machine (sandbox + Machine::ahead: hooks still capture, into
+  remaster's g_fork) runs 1 / 2 frames with the controls held after every real frame, its newest complete list
+  shown. stgames saves / restores the hooks' C++ state around it (heading, drift, shots, capture flags:
+  remaster::SetAheadState). Measured (--remaster-probe: the ship's angle per frame shown; stick turned at frame
+  2200): 0 -> seen at 2203, 1 -> 2201, 2 -> 2201 a frame further on, 3 -> two further. 2 = 60 ms quicker than
+  0, ~40 ms quicker than the original game (cancels the interpolation's frame). Cost ~0.3 ms per frame run
+  ahead. Game RAM identical with run-ahead 3 + ps_analog 1 (7000 frames). --remaster-ahead=N for a run.
 
 ## Layout (C:\LlamatronRecomp)
 - Private\              (git-ignored) Llamatron ST.msa (owner's copy), disk\ = its files, tron.bin/.reloc =

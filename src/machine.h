@@ -97,6 +97,8 @@ class Machine {
   bool trace_tos = false;
   // A look-ahead copy (the machine is copyable; run it with cpu::SetMachine): no picture, no sound, no files.
   bool sandbox = false;
+  // A run-ahead copy (remaster.h): a sandbox whose drawing is still captured.
+  bool ahead = false;
 
  private:
   static constexpr uint32_t kBasepage = 0x10000, kTextBase = kBasepage + 0x100;
