@@ -31,6 +31,8 @@ elease\Llamatron-<ver>-windows.zip (no game
   (lower input lag, all games), then a native remaster renderer with Photon Storm as the pilot.
 
 ## Remaster (2026-11-02, branch remaster; PLAN-NEXT-LEVEL.md step 2, pilot Photon Storm)
+- Porting the next game: REMASTER.md (recipe, verification, pitfalls, per-game notes). Owner: run-ahead on
+  by default in every port; no public push until all the ports are done.
 - src/remaster.cpp: generic. The game runs unchanged, but in play its draw calls for moving things are caught by
   hooks and NOT drawn into the ST screen: remaster::Add(screen, item) per object (key = caller + object pointer +
   occurrence). After each RunFrame, FrameShown(Machine::FrameBase()) picks the list drawn into the screen shown;
