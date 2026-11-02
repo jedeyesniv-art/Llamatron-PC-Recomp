@@ -9,7 +9,20 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
 - **No public push** until all the planned ports are done. Commit on the `remaster` branch as we go.
 - Owner's verdict on the pilot: "REALLY cool". Run-ahead: "really good". After playing it (2026-11-02): "feels
   fantastic"; run-ahead 2 is "the sweet spot, 3 felt indefinably odd" - keep 2 as the default. Andes Attack: "really
-  good, no notes".
+  good, no notes". Llamatron: "plays excellently". Gridrunner: "almost perfect" - the one issue (level 4's rising
+  text dark) fixed the same day.
+
+## Where we are (end of 2026-11-02; start here next time)
+- Done, committed on `remaster`, not pushed: Photon Storm, Andes Attack, Llamatron, Gridrunner. Each verified
+  pixel-identical to the original (software compose, run-ahead 0) and with unchanged game RAM.
+- Left: **Revenge of the Mutant Camels** (one port for the three builds: 512K, 1 MB STE, TT Megamix; stgames'
+  SetProgram has their address sets), **Defender 2**, **Hardcore**. Trip-A-Tron doesn't apply. Suggested order:
+  Camels (three disks for one port), then Hardcore, then Defender 2 (rasters on colour 0, 60 Hz mode).
+- Later (owner): Llamatron's shots at their exact analog positions. Then the release: package, smoke test, push
+  (owner decides when).
+- Before porting the next game: scan its draw core for every global it reads (`Tools/absreads.py`: each `$xxxxx.l` operand in
+  the routine) and sort them into clips / mode / colour / internal; check new sprites
+  with run-ahead 2 as well as the run-ahead 0 pixel check.
 
 ## What the remaster is (one paragraph)
 The 68000 game runs unchanged. During play, hooks on the game's **draw primitives** (its sprite routine, dot
@@ -89,6 +102,8 @@ the per-game steps 1-6 plus verification.
 9. **Settings**: `remaster` 1 and `remaster_ahead` 2 by default (owner).
 
 ## Verification (all headless, deterministic, fast)
+- Tools: `Tools/remaster_pix.sh` (the pixel + RAM check below, both runs in one go) and `Tools/absreads.py` (what a
+  draw core reads).
 - **Games whose state depends on CPU speed** (Llamatron: the original alone diverges at x4 or x16 vs x8; random
   numbers / wave starts timed by drawn frames): skipping draws acts like a CPU speed change, so a long run drifts
   from the original after the first death or wave change. Verify in windows before that (start at several waves
@@ -190,7 +205,8 @@ the per-game steps 1-6 plus verification.
   shots at their exact analog positions (game.cpp keeps them as doubles) for even smoother diagonals.
 - **Gridrunner**: DONE 2026-11-02 (`src/remaster_grid.cpp`). The Andes draw core again ($4BCE4), play pass
   $144DA..$145E2; snakes key per segment (a3 through $4BBFE), the entry-lane hook still hides them. HUD icon painter
-  $4CDBA excluded. States 2 (between, e.g. fading into pause) and 11 hold the items; the pause screen (12) is its
+  $4CDBA excluded. Image id includes the colour word $58054 (level 4's rising text). Level 4 from a script: poke the
+  level select's variable, `--poke=N:38ACE:4` for frames 1900-1995 (text offset of $48BCE). States 2 (between, e.g. fading into pause) and 11 hold the items; the pause screen (12) is its
   own picture. Not sensitive to CPU speed: a 12,000-frame run (pause, deaths, restart) 45 / 45 frames identical,
   RAM identical. 120 presents/s in play.
 - **Revenge of the Mutant Camels** (three builds, same code at other addresses: one port, three disks): main

@@ -63,6 +63,8 @@ elease\Llamatron-<ver>-windows.zip (no game
   windows before the first death or wave change (REMASTER.md "Verification").
 - Gridrunner remaster (2026-11-02): src/remaster_grid.cpp (core $4BCE4, pass $144DA..$145E2). Items now take
   each line's palette (Machine::LinePalettes: rasters), all games.
+  Its image id includes the colour word $58054 (level 4's text came out dark: the owner's report). Next session:
+  REMASTER.md "Where we are" (Camels, Hardcore, Defender 2 left).
 - Run-ahead (2026-11-02; setting remaster_ahead 0..3, default 2; F7 cycles, a message line for 2.5 s):
   0 = the list in the screen shown; 1 = the newest complete draw pass (hook $4620E -> remaster::EndFrame; the ST
   shows it a VBL later); 2 / 3 = a copy of the machine (sandbox + Machine::ahead: hooks still capture, into
