@@ -27,6 +27,12 @@ Keep it up to date as the work goes, and delete it when done.
   changes), per game. A setting (run_ahead = 0 / 1 / 2) so the owner can compare.
 
 ## Step 2: native remaster renderer, one game at a time - Photon Storm as the pilot
+**Status 2026-11-02 (branch remaster): proof of concept built** - src/remaster.cpp + the Photon Storm capture in
+stgames.cpp (see CLAUDE.md "Remaster"). Not object tables after all: hooks on the game's draw primitives (one
+sprite routine, three dot plotters, the ship), keyed by caller + a5 (the object). Every moving thing at the
+display's rate (120 presents/s on the owner's screen), the ship at its exact angle; the composed frame is
+pixel-identical to the original (28 frames over 2.5 min of combat; game RAM identical). Waiting for the owner
+to play it: does it feel worth it? Then: Llamatron, or polish (the 1-frame interpolation delay -> run-ahead).
 - What: instead of showing the ST's framebuffer as it is, read the game's object tables each tick and draw the
   moving objects ourselves, moved smoothly between ticks at the display's rate (100 / 120 / 144 Hz). A hybrid:
   the ST picture for backgrounds, HUD and text; the game's own drawing of the moving objects suppressed by

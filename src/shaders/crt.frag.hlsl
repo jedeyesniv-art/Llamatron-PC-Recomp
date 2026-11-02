@@ -10,7 +10,7 @@ cbuffer Params : register(b0, space3) {
   float4 beam;     // scanline strength, beam width min, beam width max, horizontal blur
   float4 glow;     // mask strength, mask colour bleed, halation intensity, halation size
   float4 shape;    // curvature, 0, colour overflow, brightness
-  float4 colour;   // saturation, contrast, temperature, 0
+  float4 colour;   // saturation, contrast, temperature, supersampled (the remaster's 4x picture: 1, else 0)
 };
 
 Texture2D u_texture : register(t0, space2);
@@ -30,13 +30,40 @@ struct PSOutput {
 float3 Fetch(int x, int y) {
   x = clamp(x, 0, int(src.x) - 1);
   y = clamp(y, 0, int(src.y) - 1);
+  if (colour.w > 0) {  // supersampled: the middle of the pixel's block
+    float3 m = u_texture.SampleLevel(u_sampler, float2((x + 0.5) * src.z, (y + 0.5) * src.w), 0).rgb;
+    return m * m * (0.8 + 0.2 * m);
+  }
   float3 c = u_texture.Load(int3(x, y, 0)).rgb;
   return c * c * (0.8 + 0.2 * c);  // ~gamma 2.2 to linear, cheaply
+}
+
+// A supersampled source (src = the ST's size, the texture bigger): x continuous (source pixels), line y as the
+// average of its upper and lower half (bilinear taps): things between pixels stay between them.
+float3 FetchSmooth(float x, int y) {
+  y = clamp(y, 0, int(src.y) - 1);
+  float u = clamp(x, 0.0, src.x) * src.z;
+  float3 c = u_texture.SampleLevel(u_sampler, float2(u, (y + 0.25) * src.w), 0).rgb +
+             u_texture.SampleLevel(u_sampler, float2(u, (y + 0.75) * src.w), 0).rgb;
+  c *= 0.5;
+  return c * c * (0.8 + 0.2 * c);
 }
 
 // One source line through a soft horizontal beam (Gaussian taps; blur 0 = sharp, 1 = very soft).
 float3 Line(float px, int y) {
   float sigma = 0.25 + 0.5 * beam.w;
+  if (colour.w > 0) {  // supersampled: taps at fixed distances from px (motion stays smooth), a narrower
+    float3 s = 0;      // beam (the taps see the pixels' whole width, not their middles)
+    float ws = 0;
+    float ss = max(0.12, sigma * 0.6);
+    [unroll] for (int i = -3; i <= 3; ++i) {
+      float d = i * 0.25;
+      float w = exp(-0.5 * d * d / (ss * ss));
+      s += FetchSmooth(px + d, y) * w;
+      ws += w;
+    }
+    return s / ws;
+  }
   int x0 = int(floor(px - 0.5));
   float3 sum = 0;
   float wsum = 0;

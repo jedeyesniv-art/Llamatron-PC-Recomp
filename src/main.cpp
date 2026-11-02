@@ -26,6 +26,7 @@
 #include "settings.h"
 #include "input.h"
 #include "crt.h"
+#include "remaster.h"
 #include "launcher.h"
 #include "log.h"
 #include "machine.h"
@@ -67,7 +68,10 @@ struct Options {
   std::string music;       // --music=<file>: Trip-A-Tron hears this file instead of the PC (tests)
   int trip_music = -1;     // --trip-music=0|1|2: Trip-A-Tron's music mode for this run
   std::map<int, std::string> shots;  // --shot=N:<file.bmp>
-  std::map<int, std::string> rshots;  // --rshot=N:<file.bmp>: the screen as shown (CRT look included)
+  bool remaster_headless = false;  // --remaster-capture: capture without a renderer (tests: does it change the game?)
+  float remaster_alpha = -1;  // --remaster-alpha=F: the remaster's in-between position fixed (tests)
+  std::map<int, std::string> rshots;
+  std::map<int, std::string> mshots;  // --mshot=N:<file.bmp>: the remaster's frame composed in software (tests)  // --rshot=N:<file.bmp>: the screen as shown (CRT look included)
   // --press=N:<what>[:frames]: from frame N hold a key (SDL scancode name), "j0"/"j1" + fire|up|down|left|right,
   // or "pad" + an SDL gamepad button name (pady, padback...: button events only)
   struct Press {
@@ -109,6 +113,9 @@ Options ParseArgs(int argc, char** argv) {
     else if (Arg(a, "frames", &v)) o.frames = std::atoi(v.c_str());
     else if (Arg(a, "wav", &v)) o.wav = v;
     else if (Arg(a, "shot", &v)) o.shots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
+    else if (a == "--remaster-capture") o.remaster_headless = true;
+    else if (Arg(a, "remaster-alpha", &v)) o.remaster_alpha = float(std::atof(v.c_str()));
+    else if (Arg(a, "mshot", &v)) o.mshots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
     else if (Arg(a, "rshot", &v)) o.rshots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
     else if (Arg(a, "press", &v)) {
       size_t c1 = v.find(':'), c2 = v.find(':', c1 + 1);
@@ -384,6 +391,9 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   const int view_h = c.view_h;
   if (renderer) SDL_SetRenderLogicalPresentation(renderer, st::kScreenW, view_h, SDL_LOGICAL_PRESENTATION_LETTERBOX);
   if (audio) SDL_ClearAudioStream(audio);
+  remaster::Stop();
+  remaster::LoadSettings();
+  remaster::SetRenderer(renderer != nullptr || opt.remaster_headless);
 
   GameEnd end = GameEnd::kQuitApp;
   uint64_t start = SDL_GetTicksNS();
@@ -423,6 +433,10 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         crt::Toggle();
         continue;
       }
+      if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.scancode == SDL_SCANCODE_F8) {
+        remaster::Toggle();
+        continue;
+      }
       input::HandleEvent(e, &machine);
     }
     if (input::QuitRequested()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
@@ -430,6 +444,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       grid::LoadSettings();
       trip::LoadSettings();
       crt::LoadSettings();
+      remaster::LoadSettings();
       if (opt.aim < 0) game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
     }
     if (window && SDL_CursorVisible() &&
@@ -465,7 +480,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         // Present only new frames, and wait for the next one in between: on a variable refresh display
         // (G-Sync / FreeSync) the screen then refreshes at the game's 50 Hz - smooth. On a fixed 60 Hz one each
         // frame waits for the next refresh as before.
-        if (run == 0) {
+        if (run == 0 && !remaster::Active()) {
           double wait = (frames_due + 1 - t * hz) / hz;
           if (wait > 0) SDL_DelayPrecise(uint64_t(std::min(wait, 0.02) * 1e9));
           continue;
@@ -594,6 +609,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       } else if (!machine.RunFrame()) {
         running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
       }
+      remaster::FrameShown(machine.FrameBase());
       ++frame;
       ++stats_frames;
       swaps_second += machine.TakeSwaps();
@@ -648,6 +664,17 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       }
       auto shot = opt.shots.find(frame);
       if (shot != opt.shots.end()) SaveShot(machine, shot->second);
+      if (auto ms = opt.mshots.find(frame); ms != opt.mshots.end() && machine.FrameWidth() == st::kScreenW) {
+        std::vector<uint32_t> px;
+        remaster::LogFrame();
+        remaster::ComposeSoftware(machine.Frame(), machine.Palette(), machine.SteColours(), &px);
+        if (SDL_Surface* s = SDL_CreateSurfaceFrom(st::kScreenW, st::kScreenH, SDL_PIXELFORMAT_ARGB8888, px.data(),
+                                                  st::kScreenW * 4)) {
+          SDL_SaveBMP(s, ms->second.c_str());
+          SDL_DestroySurface(s);
+          LOG("remaster screenshot %s", ms->second.c_str());
+        }
+      }
       if (opt.frames && frame >= opt.frames) running = false, end = GameEnd::kQuitApp;
     }
 
@@ -671,7 +698,16 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
       SDL_RenderClear(renderer);
       SDL_FRect view{0, 0, float(st::kScreenW), float(view_h)};
-      crt::DrawPicture(renderer, shown, view);
+      if (remaster::Active() && shown == texture) {
+        // Between the last two frames: how far the clock (or the vsyncs) is into the frame shown last.
+        float alpha = 1;
+        if (opt.remaster_alpha >= 0) alpha = opt.remaster_alpha;
+        else if (lock_k > 0) alpha = float((vsyncs + lock_k - 1) % lock_k) / float(lock_k);
+        else if (lock_k == 0) alpha = float(double(SDL_GetTicksNS() - start) / 1e9 * machine.FrameHz() - frames_due);
+        remaster::Draw(renderer, shown, view, alpha, machine.Palette(), machine.SteColours());
+      } else {
+        crt::DrawPicture(renderer, shown, view);
+      }
       if (const char* hint = input::Hint(&machine)) {  // 8x8 debug font in the logical space, lines at the bottom
         std::vector<std::string> lines;
         for (const char* p = hint; *p;) {
@@ -975,6 +1011,7 @@ int main(int argc, char** argv) {
   if (!opt.wav.empty()) SaveWav(opt.wav, c.wav, kRate);
   input::Shutdown();
   if (c.audio) SDL_DestroyAudioStream(c.audio);
+  remaster::Shutdown();
   if (c.texture) SDL_DestroyTexture(c.texture);
   if (c.texture_wide) SDL_DestroyTexture(c.texture_wide);
   crt::Shutdown();

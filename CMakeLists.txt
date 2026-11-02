@@ -69,6 +69,7 @@ add_executable(llamatron WIN32
   src/pad.cpp
   src/stgames.cpp
   src/crt.cpp
+  src/remaster.cpp
   src/settings.cpp
   src/log.cpp
   src/crash.cpp)

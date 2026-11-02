@@ -19,7 +19,8 @@ void Toggle();   // and saves the setting
 void LoadSettings();
 
 // Draws the ST picture into view (logical coordinates covering the logical presentation) with the CRT look
-// when it's on, else as it is.
-void DrawPicture(SDL_Renderer* renderer, SDL_Texture* texture, const SDL_FRect& view);
+// when it's on, else as it is. src_w / src_h: the picture's ST resolution when the texture is bigger (the
+// remaster's 4x picture: the scanlines stay the ST's); 0 = the texture's size.
+void DrawPicture(SDL_Renderer* renderer, SDL_Texture* texture, const SDL_FRect& view, float src_w = 0, float src_h = 0);
 
 }  // namespace crt

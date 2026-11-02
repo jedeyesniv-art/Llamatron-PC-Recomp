@@ -80,6 +80,7 @@ LLAMATRON CONTROLS - KEYBOARD
   Esc                 pause screen: quit to title; title screen: quit (press twice)
   F11 or Alt+Enter    fullscreen / window
   F9                  CRT look on / off
+  F8                  Photon Storm: the remaster (smooth motion, exact ship angle) on / off
 
 
 SUPER GRIDRUNNER CONTROLS - XBOX PAD

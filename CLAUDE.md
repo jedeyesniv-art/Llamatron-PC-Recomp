@@ -30,6 +30,29 @@ elease\Llamatron-<ver>-windows.zip (no game
 - NEXT MAJOR STEP (owner 2026-11-01, after bug fixes from the owner's testing): PLAN-NEXT-LEVEL.md - run-ahead
   (lower input lag, all games), then a native remaster renderer with Photon Storm as the pilot.
 
+## Remaster (2026-11-02, branch remaster; PLAN-NEXT-LEVEL.md step 2, pilot Photon Storm)
+- src/remaster.cpp: generic. The game runs unchanged, but in play its draw calls for moving things are caught by
+  hooks and NOT drawn into the ST screen: remaster::Add(screen, item) per object (key = caller + object pointer +
+  occurrence). After each RunFrame, FrameShown(Machine::FrameBase()) picks the list drawn into the screen shown;
+  Draw composes at 4x (1280 x 800 target): the ST frame, then the items lerped between the previous and this frame
+  (alpha from the clock / vsync phase; > 40 px = a jump, not slid), the ship rotated. Then crt::DrawPicture with
+  src 320 x 200 (the shader's supersampled mode: colour.w = 1, continuous taps, lines averaged). Presents every
+  vsync while active (main.cpp pacing). Interpolation = 1 frame (20 ms) of extra delay (run-ahead would offset).
+- Sprite images: the game's own routine run in a sandbox copy of the machine between frames
+  (remaster::DrawInSandbox: cleared screen, ILLEGAL return address past it); the first sight of a sprite is drawn
+  by the game, then cached (~0.5 ms each). Colour indices; a texture is rebuilt only if a colour it uses changes.
+- Photon Storm capture (stgames.cpp, "Photon Storm: the remaster"): $4620C draw call (BeginFrame), sprite routine
+  $44BA8 (sandbox needs $46420 = 0, clips $57FC0/2/6/8, colour $57FD0; types 0/2/5 snap x even: Item::snap,
+  we draw at the exact x), plotters $440BA/$44150/$442F2, ship $15C72 (frames decoded from RAM). Not captured:
+  $4630A set (all screens) and the HUD painter $14F3E..$14F7A. Paused: the last frame held.
+- Setting remaster (1), F8 in a game. Headless runs don't capture unless --remaster-capture. Tests:
+  --mshot=N:<bmp> = the composed frame in software (whole pixels, snap, no rotation: compare with --shot of a run
+  without capture, ps_analog=0), --remaster-alpha=F, log "remaster: N items a frame, % slid / jumped / new"
+  every 500 frames (~96% slid). Outside play (divisor 2) the skipped drawing shifts the main loop's VBL phase:
+  title / high score animations one VBL apart from the original (game logic unaffected).
+- Gotcha: CLAUDE.md has raw CR characters inside lines (paths like Private\r...): edit it byte-safely (Python
+  open(..., 'rb')), never through text mode.
+
 ## Layout (C:\LlamatronRecomp)
 - Private\              (git-ignored) Llamatron ST.msa (owner's copy), disk\ = its files, tron.bin/.reloc =
                         the unpacked game (Tools\depack.py), for the analysis tools.

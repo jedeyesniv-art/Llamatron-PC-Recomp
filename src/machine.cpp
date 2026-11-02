@@ -706,7 +706,7 @@ void Machine::RenderLine(int y) {
     };
     pal[i] = 0xFF000000u | ch((c >> 8) & 15) << 16 | ch((c >> 4) & 15) << 8 | ch(c & 15);
   }
-  if (y == 0) frame_res_ = res_ == 1 ? 1 : 0, frame_w_ = frame_res_ ? kMaxFrameW : kScreenW;
+  if (y == 0) frame_res_ = res_ == 1 ? 1 : 0, frame_w_ = frame_res_ ? kMaxFrameW : kScreenW, frame_base_ = vbase_latched_;
   if (frame_res_ == 1) {  // medium: 2 planes, 640 pixels, colours 0-3
     uint32_t* out = &frame_[y * kMaxFrameW];
     for (int g = 0; g < 40; ++g) {

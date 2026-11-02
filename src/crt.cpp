@@ -125,7 +125,7 @@ void LoadSettings() {
   }
 }
 
-void DrawPicture(SDL_Renderer* renderer, SDL_Texture* texture, const SDL_FRect& view) {
+void DrawPicture(SDL_Renderer* renderer, SDL_Texture* texture, const SDL_FRect& view, float src_w, float src_h) {
   if (!Enabled()) {
     SDL_RenderTexture(renderer, texture, nullptr, &view);
     return;
@@ -134,6 +134,9 @@ void DrawPicture(SDL_Renderer* renderer, SDL_Texture* texture, const SDL_FRect& 
   SDL_GetRenderLogicalPresentationRect(renderer, &out);
   float tw = 0, th = 0;
   SDL_GetTextureSize(texture, &tw, &th);
+  Params& p0 = g_params;
+  p0.colour[3] = 0;
+  if (src_w > 0 && src_h > 0 && (src_w != tw || src_h != th)) tw = src_w, th = src_h, p0.colour[3] = 1;
   Params& p = g_params;
   p.src[0] = tw, p.src[1] = th, p.src[2] = 1 / tw, p.src[3] = 1 / th;
   p.dst[0] = out.w, p.dst[1] = out.h;

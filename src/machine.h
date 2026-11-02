@@ -56,7 +56,9 @@ class Machine {
 
   // The last finished frame, 320x200 ARGB.
   const uint32_t* Frame() const { return frame_.data(); }
-  int FrameWidth() const { return frame_w_; }  // 320 (low resolution) or 640 (medium), rows FrameWidth() apart
+  int FrameWidth() const { return frame_w_; }
+  uint32_t FrameBase() const { return frame_base_; }
+  bool SteColours() const { return ste_colours_; }  // the screen address the last frame was shown from  // 320 (low resolution) or 640 (medium), rows FrameWidth() apart
   const uint16_t* Palette() const { return palette_; }  // the shifter's colour registers now
   bool Is60Hz() const { return !(sync_ & 2); }
   double FrameHz() const;
@@ -239,6 +241,7 @@ class Machine {
   bool ste_ = false;
   std::set<uint32_t> io_logged_;  // I/O addresses we don't handle, logged once
   uint32_t vbase_latched_ = 0;
+  uint32_t frame_base_ = 0;
   bool calm_ = false;
   float calm_rgb_[3] = {};      // colour 0 as shown (0..1)
   uint16_t calm_hist_[16] = {};  // colour 0 in the last frames
