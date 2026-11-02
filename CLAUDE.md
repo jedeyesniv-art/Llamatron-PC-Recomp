@@ -54,6 +54,10 @@ elease\Llamatron-<ver>-windows.zip (no game
   title / high score animations one VBL apart from the original (game logic unaffected).
 - Gotcha: CLAUDE.md has raw CR characters inside lines (paths like Private\r...): edit it byte-safely (Python
   open(..., 'rb')), never through text mode.
+- Andes Attack remaster (2026-11-02): src/remaster_andes.cpp (sprite routine $21D6C, draw pass $18DD2..$18E78,
+  world -> screen $1B50A for matching the landscape tiles). remaster.cpp matches items to the nearest one of
+  the frame before within a key group (Item::world: in world coordinates). Owner on PS: run-ahead 2 is the
+  sweet spot, 3 "indefinably odd". Pixel checks need --remaster-ahead=0.
 - Run-ahead (2026-11-02; setting remaster_ahead 0..3, default 2; F7 cycles, a message line for 2.5 s):
   0 = the list in the screen shown; 1 = the newest complete draw pass (hook $4620E -> remaster::EndFrame; the ST
   shows it a VBL later); 2 / 3 = a copy of the machine (sandbox + Machine::ahead: hooks still capture, into

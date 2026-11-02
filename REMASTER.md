@@ -7,7 +7,8 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
 - Every remastered game gets **run-ahead on by default** (`remaster_ahead` = 2) as well as the remaster itself
   (`remaster` = 1). F8 switches the remaster off, F7 cycles run-ahead 0..3.
 - **No public push** until all the planned ports are done. Commit on the `remaster` branch as we go.
-- Owner's verdict on the pilot: "REALLY cool". Run-ahead: "really good".
+- Owner's verdict on the pilot: "REALLY cool". Run-ahead: "really good". After playing it (2026-11-02): "feels
+  fantastic"; run-ahead 2 is "the sweet spot, 3 felt indefinably odd" - keep 2 as the default.
 
 ## What the remaster is (one paragraph)
 The 68000 game runs unchanged. During play, hooks on the game's **draw primitives** (its sprite routine, dot
@@ -34,9 +35,16 @@ positions and images, and needs no per-type inventory.
   - Run-ahead: copy machine (`sandbox` + `ahead` = true: no picture, sound or files, hooks still capture into a
     separate capture), run N frames with the controls held, show its newest complete pass. The game side registers
     save / restore of its own C++ state with `SetAheadState`.
-- Per game (Photon Storm: `stgames.cpp`, section "Photon Storm: the remaster", ~250 lines): the hooks, the
-  sandbox call set-up, the HUD exclusions, the run-ahead state. **For the next port, first move this into its own
-  file (e.g. `src/remaster_ps.cpp`) and give each game the same shape.**
+- Shared hook helpers (remaster.h): `QueueImage` / `DrawQueued` (sprites seen for the first time, drawn in the sandbox
+  between frames from the game's Update), `Decoding(m)`, `Key(caller, object)`, `Return(m)` (rts).
+- Matching between frames (remaster.cpp `Match`): within a key group (the key without `Add`'s occurrence count),
+  each item takes the nearest item of the previous frame (greedy, closest pairs first; an image change costs 4 px;
+  further than 40 px on the screen = a jump, drawn where it is). `Item::world` + `wx` / `wy` / `wrap_x` match in
+  the game's world coordinates instead: a scrolling landscape of identical tiles 16 px apart matches at any scroll
+  speed. So keys can be coarse (just the caller) when the object isn't in a register.
+- Per game: `src/remaster_<game>.cpp` with `Start()` / `Update(m)` called from the game's controls code (Andes:
+  `remaster_andes.cpp`). Photon Storm's stays in `stgames.cpp` (section "Photon Storm: the remaster"): its ship and
+  shot hooks share the analog controls' state, so moving it out would mean exposing that; not worth it.
 - `main.cpp`: presents every vsync while `remaster::Active()` (clock pacing), alpha = how far into the current game
   frame we are; F7 / F8; `--remaster-*` test options.
 
@@ -55,7 +63,8 @@ the per-game steps 1-6 plus verification.
    ship) read their own frame tables.
 3. **Log the sprite routine** with a temporary hook: return address (and one level up if a centring wrapper sits in
    between: PS $44C42 -> $44BA8, caller at sp+6), a0 (sprite), d0 / d1 (position), a1 (screen), a3..a6. One
-   register will be the object (PS: a5). Log only a few frames every 200 (`frame % 200 < 3`) or the log explodes.
+   register will be the object (PS: a5). If none is, key by the caller only and let the matcher pair them
+   (Andes); give world coordinates if a world -> screen routine sits in between. Log only a few frames every 200 (`frame % 200 < 3`) or the log explodes.
 4. **Write the capture hooks**: replace the first instruction with ILLEGAL (`Machine::AddHook`; check the original
    bytes first; install only once the program has unpacked itself and play has started). In each hook:
    - Not capturing / decoding sandbox (`m.sandbox && !m.ahead`) / drawing into another screen than the one being
@@ -79,7 +88,8 @@ the per-game steps 1-6 plus verification.
 9. **Settings**: `remaster` 1 and `remaster_ahead` 2 by default (owner).
 
 ## Verification (all headless, deterministic, fast)
-- **Pixel identity**: `--remaster-capture --mshot=N:<bmp>` composes the frame in software (whole pixels, the
+- **Pixel identity** (always with `--remaster-ahead=0`: with run-ahead the composed frame is a later frame than
+  the ST screen and every moving thing differs): `--remaster-capture --mshot=N:<bmp>` composes the frame in software (whole pixels, the
   game's x snapping, no rotation) and compares it with `--shot=N:<bmp>` from a run without capture. Same input
   script, same settings (turn off anything we change on purpose, e.g. `ps_analog=0`). Goal: zero pixels different
   over a few minutes of scripted combat (PS: 28 of 28 frames identical). Each difference found a real bug.
@@ -123,18 +133,22 @@ the per-game steps 1-6 plus verification.
 ## Open issues from the pilot (fix in passing)
 - An occasional 22-26 ms present gap (about once per 10 s) at 120 Hz: not caused by run-ahead or decodes.
   Suspects: texture uploads, the OS.
-- Explosion particles keyed by occurrence order: ~8% jump instead of sliding in busy moments. Better: match within
-  a (caller, object) group by nearest position.
+- (Fixed with Andes: nearest-position matching within a key group. PS jumps went from up to 8% to 0.1-1.2%.)
 - The paused picture: ours keeps the last frame's shots, the original drops them.
 - CRT + remaster: a little softer than the plain CRT; tune `ss` in `crt.frag.hlsl`'s supersampled `Line`.
 - Run-ahead only exists inside the remaster. Plain-picture run-ahead for the other games would need the fork to
   render its frame (sandbox skips `RenderLine`).
 
 ## Notes for the next games (from CLAUDE.md and the pilot)
-- **Andes Attack**: the same Arc engine as Photon Storm. Expect the same primitives (a $44BA8-style sprite routine,
-  the three plotters, the restore list, $4630A-style flag) at other addresses: search the dump for the byte
-  patterns of the PS routines first. The likely quickest port. Its sky is a timer B raster (colour 0 per line):
-  stays in the ST picture.
+- **Andes Attack**: DONE 2026-11-02 (`src/remaster_andes.cpp`, its header comment has the addresses). Same engine
+  family as PS but compiled differently: no byte pattern matched; the shape did (one sprite routine with a type
+  table, mode word 0 draw / 2 restore, clip words, a restore list). Differences: the callers write the restore
+  list, and the restore copies background (not XOR), so skipping a draw is safe without touching the list; the
+  landscape is 16 x 16 sprite tiles (smooth scrolling now), matched in world coordinates from the world -> screen
+  routine $1B50A (world 2048 wide). Not captured: the scanner dots (top band) and the HUD. Verified: 13 + 25
+  frames pixel-identical (play, pause, death, game over, high scores, title), game RAM identical except the two
+  screens with run-ahead 3, 95-99% of items slide (the jumps are new laser dashes), 120 presents/s. Took about a
+  third of the pilot's time.
 - **Llamatron** (the flagship): logic in the VBL; the main loop draws (background restore $5C40-$5C80, sprites
   $76E0-$7720; text offsets, add $10100). Shots have exact positions already (our analog-aim table). Flash
   list into colour 0 is patched. Self-modifying timer A code at $8AA0 doesn't matter here (it isn't drawing).

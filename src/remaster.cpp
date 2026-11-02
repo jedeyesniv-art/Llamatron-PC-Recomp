@@ -32,6 +32,8 @@ struct Capture {
 Capture g_real, g_fork;
 Capture* g_cap = &g_real;
 std::vector<Item> g_prev, g_cur;  // the previous frame shown and this one
+std::vector<std::pair<uint64_t, SandboxCall>> g_queue;  // sprite images to draw in the sandbox
+std::vector<int> g_match;  // per item of g_cur: the item of g_prev it was (-1: new / jumped)
 uint32_t g_cur_screen = 0;
 bool g_have = false;
 int g_ahead = 2;  // remaster_ahead
@@ -93,6 +95,50 @@ float LerpAngle(float a, float b, float t) {
   return a + d * t;
 }
 
+
+constexpr uint64_t kCountBits = 0xFF00000000000000ull;  // Add's occurrence count in the key
+
+// Each item of g_cur takes the nearest item of g_prev in its key group (greedy, the closest pairs first; an image
+// change costs a little, the same occurrence wins ties). Further than kTeleport on the screen: no match (a jump).
+void Match() {
+  g_match.assign(g_cur.size(), -1);
+  std::unordered_map<uint64_t, std::vector<int>> groups;
+  for (int j = 0; j < int(g_prev.size()); ++j) groups[(g_prev[j].key & ~kCountBits) ^ g_prev[j].kind].push_back(j);
+  std::unordered_map<uint64_t, std::vector<int>> cur;
+  for (int i = 0; i < int(g_cur.size()); ++i) cur[(g_cur[i].key & ~kCountBits) ^ g_cur[i].kind].push_back(i);
+  struct Pair {
+    float cost;
+    int i, j;
+  };
+  std::vector<Pair> pairs;
+  std::vector<bool> used(g_prev.size());
+  for (auto& [k, is] : cur) {
+    auto g = groups.find(k);
+    if (g == groups.end()) continue;
+    pairs.clear();
+    for (int i : is)
+      for (int j : g->second) {
+        const Item &a = g_cur[i], &b = g_prev[j];
+        if (std::fabs(a.x - b.x) > kTeleport || std::fabs(a.y - b.y) > kTeleport) continue;
+        float dx, dy;
+        if (a.world && b.world) {
+          dx = a.wx - b.wx, dy = a.wy - b.wy;
+          if (a.wrap_x) dx = std::remainder(dx, float(a.wrap_x));
+        } else {
+          dx = a.x - b.x, dy = a.y - b.y;
+        }
+        float cost = std::fabs(dx) + std::fabs(dy) + (a.image != b.image ? 4.0f : 0.0f) + (a.key != b.key ? 0.01f : 0.0f);
+        pairs.push_back({cost, i, j});
+      }
+    if (is.size() == 1 && g->second.size() == 1) {  // the common case
+      if (!pairs.empty()) g_match[pairs[0].i] = pairs[0].j;
+      continue;
+    }
+    std::sort(pairs.begin(), pairs.end(), [](const Pair& a, const Pair& b) { return a.cost < b.cost; });
+    for (const Pair& p : pairs)
+      if (g_match[p.i] < 0 && !used[p.j]) g_match[p.i] = p.j, used[p.j] = true;
+  }
+}
 }  // namespace
 
 bool Enabled() { return g_enabled && g_renderer; }
@@ -162,7 +208,8 @@ void Hold() {
 
 void Stop() {
   *g_cap = Capture{};
-  if (g_cap == &g_real) g_have = false, g_prev.clear(), g_cur.clear(), g_fork = Capture{};
+  if (g_cap == &g_real) g_queue.clear();
+  if (g_cap == &g_real) g_have = false, g_prev.clear(), g_cur.clear(), g_match.clear(), g_fork = Capture{};
 }
 
 void RunAhead(st::Machine* m) {
@@ -254,6 +301,35 @@ bool DrawInSandbox(st::Machine* m, const SandboxCall& call, Image* out) {
   return true;
 }
 
+void QueueImage(uint64_t id, const SandboxCall& call) {
+  for (const auto& q : g_queue)
+    if (q.first == id) return;
+  g_queue.push_back({id, call});
+}
+
+void DrawQueued(st::Machine* m, const char* game) {
+  if (g_queue.empty()) return;
+  uint64_t t0 = SDL_GetTicksNS();
+  static int total = 0;
+  static double ms = 0;
+  for (auto& [id, call] : g_queue) {
+    Image im;
+    if (!DrawInSandbox(m, call, &im)) im = {};
+    SetImage(id, std::move(im));
+  }
+  total += int(g_queue.size()), ms += (SDL_GetTicksNS() - t0) / 1e6;
+  g_queue.clear();
+  if (total % 50 < 1 || total < 2)  // now and then (the first, then about every 50)
+    LOG("%s: %d sprite images drawn in the sandbox so far, %.2f ms each", game, total, ms / total);
+}
+
+void Return(st::Machine& m) {
+  uint32_t sp = cpu::Get(cpu::A7);
+  const uint8_t* r = m.Ram() + (sp & 0xFFFFFF);
+  cpu::Set(cpu::PC, uint32_t(r[0]) << 24 | r[1] << 16 | r[2] << 8 | r[3]);
+  cpu::Set(cpu::A7, sp + 4);
+}
+
 void FrameShown(uint32_t screen) {
   ++g_shown;
   if (!g_real.capturing) {
@@ -262,6 +338,8 @@ void FrameShown(uint32_t screen) {
   }
   if (g_real.hold) {  // no new picture: nothing moves
     g_prev = g_cur;
+    g_match.resize(g_cur.size());
+    for (int i = 0; i < int(g_cur.size()); ++i) g_match[i] = i;
     return;
   }
   // Which list: the run-ahead copy's, else the last complete draw pass, else (0) the one in the screen shown.
@@ -271,6 +349,8 @@ void FrameShown(uint32_t screen) {
   else if (g_ahead == 0) {
     if (g_have && screen == g_cur_screen) {
       g_prev = g_cur;
+      g_match.resize(g_cur.size());
+      for (int i = 0; i < int(g_cur.size()); ++i) g_match[i] = i;
       return;
     }
     auto b = g_real.building.find(screen);
@@ -288,17 +368,21 @@ void FrameShown(uint32_t screen) {
   if (g_probe)
     for (const Item& it : g_cur)
       if (it.rotate) LOG("probe %d: angle %.1f, %zu items", g_shown, it.angle * 57.2958, g_cur.size());
-  // Stats (logged every 500 frames shown): items a frame, how many slid from the frame before, how many jumped.
+  Match();
+  // Stats (logged every 500 frames shown): items a frame, how many slid from the frame before, how many jumped
+  // (the same key there, but too far to slide).
   static int frames = 0, items = 0, slid = 0, jumped = 0, moved = 0;
   std::unordered_map<uint64_t, const Item*> before;
   for (const Item& it : g_prev) before[it.key] = &it;
-  for (const Item& it : g_cur) {
+  for (int i = 0; i < int(g_cur.size()); ++i) {
+    const Item& it = g_cur[i];
     ++items;
-    auto p = before.find(it.key);
-    if (p == before.end()) continue;
-    float dx = std::fabs(it.x - p->second->x), dy = std::fabs(it.y - p->second->y);
-    if (dx > kTeleport || dy > kTeleport) ++jumped;
-    else ++slid, moved += dx + dy > 0;
+    if (g_match[i] >= 0) {
+      const Item& o = g_prev[g_match[i]];
+      ++slid, moved += o.x != it.x || o.y != it.y;
+    } else if (before.count(it.key)) {
+      ++jumped;
+    }
   }
   if (++frames == 500) {
     LOG("remaster: %.1f items a frame: %.1f%% slid from the frame before (%.1f%% moving), %.1f%% jumped, %.1f%% new",
@@ -333,23 +417,20 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
   SDL_FRect full{0, 0, float(W), float(H)};
   SDL_RenderTexture(r, st_texture, nullptr, &full);
 
-  std::unordered_map<uint64_t, const Item*> before;
-  before.reserve(g_prev.size());
-  for (const Item& it : g_prev) before[it.key] = &it;
   alpha = std::clamp(alpha, 0.0f, 1.0f);
-  int clip_top = -1, clip_bottom = -1;
-  for (const Item& it : g_cur) {
+  int clip_top = -1, clip_bottom = -1, clip_left = -1, clip_right = -1;
+  for (int i = 0; i < int(g_cur.size()); ++i) {
+    const Item& it = g_cur[i];
     float x = it.x, y = it.y, angle = it.angle;
-    if (auto p = before.find(it.key); p != before.end() && p->second->kind == it.kind) {
-      const Item& o = *p->second;
-      if (std::fabs(x - o.x) <= kTeleport && std::fabs(y - o.y) <= kTeleport) {
-        x = o.x + (x - o.x) * alpha, y = o.y + (y - o.y) * alpha;
-        if (it.rotate && o.rotate) angle = LerpAngle(o.angle, it.angle, alpha);
-      }
+    if (i < int(g_match.size()) && g_match[i] >= 0) {
+      const Item& o = g_prev[g_match[i]];
+      x = o.x + (x - o.x) * alpha, y = o.y + (y - o.y) * alpha;
+      if (it.rotate && o.rotate) angle = LerpAngle(o.angle, it.angle, alpha);
     }
-    if (it.clip_top != clip_top || it.clip_bottom != clip_bottom) {
-      clip_top = it.clip_top, clip_bottom = it.clip_bottom;
-      SDL_Rect clip{0, clip_top * kScale, W, (clip_bottom - clip_top + 1) * kScale};
+    if (it.clip_top != clip_top || it.clip_bottom != clip_bottom || it.clip_left != clip_left || it.clip_right != clip_right) {
+      clip_top = it.clip_top, clip_bottom = it.clip_bottom, clip_left = it.clip_left, clip_right = it.clip_right;
+      SDL_Rect clip{clip_left * kScale, clip_top * kScale, (clip_right - clip_left + 1) * kScale,
+                    (clip_bottom - clip_top + 1) * kScale};
       SDL_SetRenderClipRect(r, &clip);
     }
     if (it.kind == kDot) {
@@ -388,7 +469,8 @@ void ComposeSoftware(const uint32_t* st, const uint16_t* palette, bool ste_colou
   for (int i = 0; i < 16; ++i) pal[i] = Argb(palette[i], ste_colours);
   for (const Item& it : g_cur) {
     auto put = [&](int x, int y, int c) {
-      if (x >= 0 && x < 320 && y >= std::max<int>(0, it.clip_top) && y <= std::min<int>(199, it.clip_bottom))
+      if (x >= std::max<int>(0, it.clip_left) && x <= std::min<int>(319, it.clip_right) && y >= std::max<int>(0, it.clip_top) &&
+          y <= std::min<int>(199, it.clip_bottom))
         (*out)[size_t(y) * 320 + x] = pal[c & 15];
     };
     int x = int(std::lround(it.x)) & -int(it.snap), y = int(std::lround(it.y));

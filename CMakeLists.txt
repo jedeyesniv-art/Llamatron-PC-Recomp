@@ -70,6 +70,7 @@ add_executable(llamatron WIN32
   src/stgames.cpp
   src/crt.cpp
   src/remaster.cpp
+  src/remaster_andes.cpp
   src/settings.cpp
   src/log.cpp
   src/crash.cpp)

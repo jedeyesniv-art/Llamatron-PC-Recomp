@@ -10,6 +10,7 @@
 #include "log.h"
 #include "pad.h"
 #include "remaster.h"
+#include "remaster_andes.h"
 #include "settings.h"
 
 namespace stgames {
@@ -163,6 +164,7 @@ void NameEntryPad(st::Machine* m, const pad::State& p) {
 
 void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   const pad::State& p = pad::Now();
+  remaster_andes::Update(m);
   int state = Get16(*m, kAndesState);
   bool play = state == kAndesPlay;
   if (AndesNameEntry(*m)) {
@@ -700,19 +702,13 @@ constexpr uint32_t kPsShipBankA = 0x2793E, kPsShipBankB = 0x180BE;
 constexpr uint64_t kPsShipImage = 0x5000000000000000ull;
 bool g_ps_capture = false;  // this frame's drawing goes to remaster
 uint32_t g_ps_capture_screen = 0;
-std::vector<std::pair<uint64_t, remaster::SandboxCall>> g_ps_decode;  // sprites to draw in the sandbox
 
 uint32_t Reg(int r) { return cpu::Get(cpu::Reg(r)); }
 int RegW(int r) { return int16_t(Reg(r)); }
 void Put32(st::Machine* m, uint32_t a, uint32_t v) { Put16(m, a, int(v >> 16)), Put16(m, a + 2, int(v & 0xFFFF)); }
-void Rts(st::Machine& m) {
-  uint32_t sp = Reg(cpu::A7);
-  cpu::Set(cpu::PC, Get32(m, sp & 0xFFFFFF));
-  cpu::Set(cpu::A7, sp + 4);
-}
-// The sprite decoder's sandbox (not a run-ahead copy): the hooks do the original's work only.
-bool Decoding(const st::Machine& m) { return m.sandbox && !m.ahead; }
-uint64_t PsKey(uint32_t caller, uint32_t object) { return uint64_t(caller & 0xFFFFFF) << 32 | (object & 0xFFFFFF); }
+using remaster::Decoding;
+void Rts(st::Machine& m) { remaster::Return(m); }
+uint64_t PsKey(uint32_t caller, uint32_t object) { return remaster::Key(caller, object); }
 
 // $4620C "jsr (a3)": the screen's drawing starts.
 void PsOnDrawCall(st::Machine& m) {
@@ -757,9 +753,7 @@ void PsOnSprite(st::Machine& m) {
   if (ret >= kPsHudPaint && ret < kPsHudPaintEnd) return original();
   uint64_t id = PsSpriteId(m, a0);
   if (!remaster::HaveImage(id)) {
-    bool queued = false;
-    for (const auto& d : g_ps_decode) queued |= d.first == id;
-    if (!queued) {
+    {
       remaster::SandboxCall call;
       call.routine = kPsSprite;
       for (int r = 0; r < 16; ++r) call.regs[r] = Reg(r);
@@ -771,7 +765,7 @@ void PsOnSprite(st::Machine& m) {
       call.pokes = {{kPsAllScreens, 0}, {kPsClipTop, 0}, {kPsClipBottom, 199},
                     {kPsSpriteColour, uint16_t(Get16(m, kPsSpriteColour))}, {kPsDrawMode, uint16_t(Get16(m, kPsDrawMode))},
                     {kPsClipLeft, 0}, {kPsClipRight, 19}};
-      g_ps_decode.push_back({id, call});
+      remaster::QueueImage(id, call);
     }
     return original();
   }
@@ -848,23 +842,6 @@ void PsOnShip(st::Machine& m) {
   cpu::Set(cpu::PC, kPsShipDone);
 }
 
-// Between frames: the sprites seen for the first time get their images.
-void PsDecodeSprites(st::Machine* m) {
-  if (g_ps_decode.empty()) return;
-  uint64_t t0 = SDL_GetTicksNS();
-  static int total = 0;
-  static double ms = 0;
-  for (auto& [id, call] : g_ps_decode) {
-    remaster::Image im;
-    if (!remaster::DrawInSandbox(m, call, &im)) im = {};
-    remaster::SetImage(id, std::move(im));
-  }
-  total += int(g_ps_decode.size()), ms += (SDL_GetTicksNS() - t0) / 1e6;
-  g_ps_decode.clear();
-  if (total % 50 < 1 || total < 2)  // now and then (the first, then about every 50)
-    LOG("photon storm: %d sprite images drawn in the sandbox so far, %.2f ms each", total, ms / total);
-}
-
 void PsInstallRemaster(st::Machine* m) {
   struct H {
     uint32_t at;
@@ -890,7 +867,6 @@ void PsInstallRemaster(st::Machine* m) {
     m->AddHook(h.at, [fn = h.fn](st::Machine& running) { fn(running); });
   }
   g_ps_capture = false;
-  g_ps_decode.clear();
   remaster::Stop();
   // Run-ahead: what the hooks change in C++ (the analog heading, drift, shots; the capture) comes back after it.
   struct Saved {
@@ -951,7 +927,7 @@ int PsCell(const st::Machine& m, int x, int y) {
 void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   const pad::State& p = pad::Now();
   PsInstallHooks(m);
-  PsDecodeSprites(m);
+  remaster::DrawQueued(m, "photon storm");
   g_ps_analog = settings::Get("ps_analog", 1) != 0;
   int state = Get16(*m, kPsState);
   uint8_t buttons = mbuttons;
@@ -1065,6 +1041,7 @@ void Start(Game g) {
   // Off by default (owner: "left and right feel wrong" with it): the game's own thrust and glide.
   g_andes_direct = settings::Get("andes_direct_thrust", 0) != 0;
   g_shield_held = false;
+  remaster_andes::Start();
   std::fill(std::begin(g_keys), std::end(g_keys), false);
 }
 

@@ -35,6 +35,13 @@ struct Item {
   bool rotate = false;  // the image turned by angle - angle_base (radians, clockwise on the screen) about its
   float angle = 0, angle_base = 0;  // middle: angle is what's interpolated, angle_base the image's own
   int16_t clip_top = 0, clip_bottom = 200;  // the game's clipping (lines it may draw into)
+  int16_t clip_left = 0, clip_right = 319;  // and columns
+  // Matching between frames: within a key group (the key without Add's count), each item takes the nearest one
+  // of the frame before. By default by x / y; `world`: by wx / wy (where the game keeps it, before scrolling;
+  // x wraps at wrap_x if not 0), so a scrolling landscape of alike tiles matches whatever the scroll speed.
+  bool world = false;
+  float wx = 0, wy = 0;
+  uint16_t wrap_x = 0;
 };
 
 // A sprite image: colour indices (0 = transparent), ox / oy from where the game was told to draw it.
@@ -83,6 +90,18 @@ struct SandboxCall {
   int at_x = 0, at_y = 0;
 };
 bool DrawInSandbox(st::Machine* m, const SandboxCall& call, Image* out);
+// Helpers for the capture hooks (shared by the games).
+// A sprite seen for the first time: its image drawn in the sandbox between frames (DrawQueued, from the game's
+// Update, never inside the CPU's run: Musashi isn't re-entrant). Queued once per id.
+void QueueImage(uint64_t id, const SandboxCall& call);
+void DrawQueued(st::Machine* m, const char* game);
+// The machine is the sprite decoder's sandbox (not a run-ahead copy): hooks do only the original's work there.
+inline bool Decoding(const st::Machine& m) { return m.sandbox && !m.ahead; }
+// An item key from the drawing code (a return address) and the object (0: none).
+inline uint64_t Key(uint32_t caller, uint32_t object) { return uint64_t(caller & 0xFFFFFF) << 32 | (object & 0xFFFFFF); }
+// Hooks: return from the routine (the 68000's rts).
+void Return(st::Machine& m);
+
 // Colour indices of a 4-plane block in RAM (ST interleaved, `groups` 16-pixel groups wide, `rows` high).
 Image DecodePlanes(const uint8_t* data, int groups, int rows);
 
