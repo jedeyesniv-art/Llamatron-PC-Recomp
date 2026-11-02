@@ -60,6 +60,8 @@ class Machine {
   uint32_t FrameBase() const { return frame_base_; }
   bool SteColours() const { return ste_colours_; }  // the screen address the last frame was shown from  // 320 (low resolution) or 640 (medium), rows FrameWidth() apart
   const uint16_t* Palette() const { return palette_; }  // the shifter's colour registers now
+  // The colour registers as each displayed line of the last frame was drawn (kScreenH x 16; rasters change them).
+  const uint16_t* LinePalettes() const { return line_palette_.data(); }
   bool Is60Hz() const { return !(sync_ & 2); }
   double FrameHz() const;
 
@@ -221,6 +223,7 @@ class Machine {
   // Shifter.
   uint8_t vbase_hi_ = 0, vbase_mid_ = 0, res_ = 0, sync_ = 2;
   uint16_t palette_[16] = {};
+  std::array<uint16_t, kScreenH * 16> line_palette_{};
   // STE DMA sound ($FF8900-$FF8921) and the Microwire ($FF8922 data, $FF8924 mask: reads back what was
   // written, i.e. "sent"); the LMC1992 volume / tone it talks to isn't modelled (full volume).
   uint8_t ste_snd_[0x100] = {};

@@ -27,6 +27,7 @@
 #include "input.h"
 #include "crt.h"
 #include "remaster.h"
+#include "remaster_grid.h"
 #include "remaster_llama.h"
 #include "launcher.h"
 #include "log.h"
@@ -363,6 +364,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   }
   game::Reset();
   remaster_llama::Start();
+  remaster_grid::Start();
   input::Reset();
   grid::Reset();
   game::g_llamatron = llamatron;
@@ -617,6 +619,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       if (forced) playing = true;
       machine.SetCpuSpeed(forced ? opt.cpu_all : playing ? opt.cpu_speed : 1);
       if (llamatron) remaster_llama::Update(&machine);
+      if (gridrunner) remaster_grid::Update(&machine);
       playing_second &= playing;
       if (stgames::HostPaused() && (mode == input::Mode::kDefender2)) {
         machine.Audio().clear();  // paused: the picture stays, no sound, no frames
@@ -682,7 +685,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       if (auto ms = opt.mshots.find(frame); ms != opt.mshots.end() && machine.FrameWidth() == st::kScreenW) {
         std::vector<uint32_t> px;
         remaster::LogFrame();
-        remaster::ComposeSoftware(machine.Frame(), machine.Palette(), machine.SteColours(), &px);
+        remaster::ComposeSoftware(machine.Frame(), machine.LinePalettes(), machine.SteColours(), &px);
         if (SDL_Surface* s = SDL_CreateSurfaceFrom(st::kScreenW, st::kScreenH, SDL_PIXELFORMAT_ARGB8888, px.data(),
                                                   st::kScreenW * 4)) {
           SDL_SaveBMP(s, ms->second.c_str());
@@ -719,7 +722,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         if (opt.remaster_alpha >= 0) alpha = opt.remaster_alpha;
         else if (lock_k > 0) alpha = float((vsyncs + lock_k - 1) % lock_k) / float(lock_k);
         else if (lock_k == 0) alpha = float(double(SDL_GetTicksNS() - start) / 1e9 * machine.FrameHz() - frames_due);
-        remaster::Draw(renderer, shown, view, alpha, machine.Palette(), machine.SteColours());
+        remaster::Draw(renderer, shown, view, alpha, machine.LinePalettes(), machine.SteColours());
       } else {
         crt::DrawPicture(renderer, shown, view);
       }

@@ -697,6 +697,7 @@ void Machine::CalmFrame() {
 
 void Machine::RenderLine(int y) {
   uint32_t pal[16];
+  std::memcpy(&line_palette_[size_t(y) * 16], palette_, sizeof(palette_));
   for (int i = 0; i < 16; ++i) {
     unsigned c = palette_[i];
     auto ch = [&](unsigned v) {

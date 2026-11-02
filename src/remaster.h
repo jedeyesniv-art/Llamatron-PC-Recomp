@@ -110,13 +110,15 @@ void FrameShown(uint32_t screen);
 // Something to draw this frame (capturing, on, a frame shown).
 bool Active();
 // Draws the picture into `view` (logical coordinates) through crt::DrawPicture: the ST frame `st_texture` at 4x
-// with the items over it, positions `alpha` (0..1) of the way from the previous frame shown to this one.
-void Draw(SDL_Renderer* renderer, SDL_Texture* st_texture, const SDL_FRect& view, float alpha, const uint16_t* palette,
-          bool ste_colours);
+// with the items over it, positions `alpha` (0..1) of the way from the previous frame shown to this one. The items
+// take the colours of the lines they are on (`line_palettes`: Machine::LinePalettes, 200 x 16): an image using a
+// colour that rasters change within the frame is drawn row by row.
+void Draw(SDL_Renderer* renderer, SDL_Texture* st_texture, const SDL_FRect& view, float alpha,
+          const uint16_t* line_palettes, bool ste_colours);
 void Shutdown();
 // Tests: this frame composed in software at 1x, whole pixels, no rotation (alpha 1) over the ST frame `st`
 // (320 x 200 ARGB): what the game itself would have drawn, if the capture is right.
 void LogFrame();  // tests: this frame's items
-void ComposeSoftware(const uint32_t* st, const uint16_t* palette, bool ste_colours, std::vector<uint32_t>* out);
+void ComposeSoftware(const uint32_t* st, const uint16_t* line_palettes, bool ste_colours, std::vector<uint32_t>* out);
 
 }  // namespace remaster

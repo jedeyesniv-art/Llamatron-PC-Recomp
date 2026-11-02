@@ -44,11 +44,10 @@ uint64_t g_message_until = 0;
 char g_message[64] = "";
 
 std::unordered_map<uint64_t, Image> g_images;
-struct Texture {
-  SDL_Texture* t = nullptr;
-  uint64_t sig = 0;  // the colours it was made with (only those its image uses)
-};
-std::unordered_map<uint64_t, Texture> g_textures;
+// Per image: a texture per set of colours it was made with (only the colours its image uses count), so an image
+// seen in a few palettes (rasters, flashes) isn't rebuilt every frame.
+constexpr size_t kMaxVariants = 256;
+std::unordered_map<uint64_t, std::unordered_map<uint64_t, SDL_Texture*>> g_textures;
 std::unordered_map<uint64_t, uint16_t> g_used;  // per image: the colours it uses (bit per index)
 SDL_Texture* g_target = nullptr;
 
@@ -61,12 +60,16 @@ uint32_t Argb(uint16_t c, bool ste) {
   return 0xFF000000u | ch((c >> 8) & 15) << 16 | ch((c >> 4) & 15) << 8 | ch(c & 15);
 }
 
+void DropTextures(std::unordered_map<uint64_t, SDL_Texture*>& variants) {
+  for (auto& [sig, t] : variants) SDL_DestroyTexture(t);
+  variants.clear();
+}
 void DropTextures() {
-  for (auto& [id, t] : g_textures) SDL_DestroyTexture(t.t);
+  for (auto& [id, v] : g_textures) DropTextures(v);
   g_textures.clear();
 }
 
-// The image in the current colours: made again only when a colour it uses has changed.
+// The image in the colours `pal` (ARGB): made once per set of the colours it uses.
 SDL_Texture* TextureFor(SDL_Renderer* r, uint64_t id, const uint32_t* pal) {
   auto im = g_images.find(id);
   if (im == g_images.end() || im->second.w <= 0 || im->second.h <= 0) return nullptr;
@@ -75,19 +78,34 @@ SDL_Texture* TextureFor(SDL_Renderer* r, uint64_t id, const uint32_t* pal) {
   uint64_t sig = 1469598103934665603ull;
   for (int i = 1; i < 16; ++i)
     if (used >> i & 1) sig = (sig ^ pal[i]) * 1099511628211ull;
-  Texture& tex = g_textures[id];
-  if (tex.t && tex.sig == sig) return tex.t;
+  auto& variants = g_textures[id];
+  if (auto t = variants.find(sig); t != variants.end()) return t->second;
+  if (variants.size() >= kMaxVariants) DropTextures(variants);
   std::vector<uint32_t> px(size_t(image.w) * size_t(image.h));
   for (size_t i = 0; i < px.size(); ++i) px[i] = image.pixels[i] ? pal[image.pixels[i]] : 0;
-  if (!tex.t) {
-    tex.t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, image.w, image.h);
-    if (!tex.t) return nullptr;
-    SDL_SetTextureBlendMode(tex.t, SDL_BLENDMODE_BLEND);
-    SDL_SetTextureScaleMode(tex.t, SDL_SCALEMODE_NEAREST);
-  }
-  SDL_UpdateTexture(tex.t, nullptr, px.data(), image.w * 4);
-  tex.sig = sig;
-  return tex.t;
+  SDL_Texture* t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, image.w, image.h);
+  if (!t) return nullptr;
+  SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+  SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
+  SDL_UpdateTexture(t, nullptr, px.data(), image.w * 4);
+  variants[sig] = t;
+  return t;
+}
+
+// The frame's colours per line (ARGB), and which colour indices change between lines (rasters).
+struct LineColours {
+  uint32_t pal[200][16];
+  uint16_t varying = 0;
+  const uint32_t* At(int y) const { return pal[std::clamp(y, 0, 199)]; }
+};
+void MakeLineColours(const uint16_t* line_palettes, bool ste, LineColours* out) {
+  out->varying = 0;
+  for (int y = 0; y < 200; ++y)
+    for (int i = 0; i < 16; ++i) {
+      uint16_t c = line_palettes[y * 16 + i];
+      out->pal[y][i] = Argb(c, ste);
+      if (c != line_palettes[i]) out->varying |= uint16_t(1u << i);
+    }
 }
 
 float LerpAngle(float a, float b, float t) {
@@ -199,7 +217,7 @@ void SetImage(uint64_t id, Image image) {
   for (uint8_t c : image.pixels) used |= uint16_t(1u << (c & 15));
   g_used[id] = used;
   g_images[id] = std::move(image);
-  if (auto t = g_textures.find(id); t != g_textures.end()) SDL_DestroyTexture(t->second.t), g_textures.erase(t);
+  if (auto t = g_textures.find(id); t != g_textures.end()) DropTextures(t->second), g_textures.erase(t);
 }
 
 void Hold() {
@@ -396,8 +414,8 @@ void FrameShown(uint32_t screen) {
 
 bool Active() { return Enabled() && g_real.capturing && g_have; }
 
-void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float alpha, const uint16_t* palette,
-          bool ste_colours) {
+void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float alpha,
+          const uint16_t* line_palettes, bool ste_colours) {
   const int W = 320 * kScale, H = 200 * kScale;
   if (!g_target) {
     g_target = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, W, H);
@@ -408,8 +426,8 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
     }
     SDL_SetTextureScaleMode(g_target, SDL_SCALEMODE_LINEAR);
   }
-  uint32_t pal[16];
-  for (int i = 0; i < 16; ++i) pal[i] = Argb(palette[i], ste_colours);
+  static LineColours lines;
+  MakeLineColours(line_palettes, ste_colours, &lines);
 
   int lw = 0, lh = 0;
   SDL_RendererLogicalPresentation mode = SDL_LOGICAL_PRESENTATION_DISABLED;
@@ -436,16 +454,29 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
       SDL_SetRenderClipRect(r, &clip);
     }
     if (it.kind == kDot) {
-      uint32_t c = pal[it.colour & 15];
+      uint32_t c = lines.At(int(std::lround(y)))[it.colour & 15];
       SDL_SetRenderDrawColor(r, uint8_t(c >> 16), uint8_t(c >> 8), uint8_t(c), 255);
       SDL_FRect d{x * kScale, y * kScale, float(it.w * kScale), float(it.h * kScale)};
       SDL_RenderFillRect(r, &d);
       continue;
     }
-    SDL_Texture* t = TextureFor(r, it.image, pal);
+    auto found = g_images.find(it.image);
+    if (found == g_images.end()) continue;
+    const Image& im = found->second;
+    float top = y + im.oy;
+    if (!it.rotate && (g_used[it.image] & lines.varying)) {  // raster colours: each row in its line's colours
+      for (int j = 0; j < im.h; ++j) {
+        SDL_Texture* t = TextureFor(r, it.image, lines.At(int(std::floor(top + j + 0.5f))));
+        if (!t) break;
+        SDL_FRect src{0, float(j), float(im.w), 1};
+        SDL_FRect d{(x + im.ox) * kScale, (top + j) * kScale, float(im.w * kScale), float(kScale)};
+        SDL_RenderTexture(r, t, &src, &d);
+      }
+      continue;
+    }
+    SDL_Texture* t = TextureFor(r, it.image, lines.At(int(top + im.h / 2)));
     if (!t) continue;
-    const Image& im = g_images[it.image];
-    SDL_FRect d{(x + im.ox) * kScale, (y + im.oy) * kScale, float(im.w * kScale), float(im.h * kScale)};
+    SDL_FRect d{(x + im.ox) * kScale, top * kScale, float(im.w * kScale), float(im.h * kScale)};
     if (it.rotate) SDL_RenderTextureRotated(r, t, nullptr, &d, (angle - it.angle_base) * 57.2957795, nullptr, SDL_FLIP_NONE);
     else SDL_RenderTexture(r, t, nullptr, &d);
   }
@@ -465,15 +496,15 @@ void LogFrame() {
   }
 }
 
-void ComposeSoftware(const uint32_t* st, const uint16_t* palette, bool ste_colours, std::vector<uint32_t>* out) {
+void ComposeSoftware(const uint32_t* st, const uint16_t* line_palettes, bool ste_colours, std::vector<uint32_t>* out) {
   out->assign(st, st + 320 * 200);
-  uint32_t pal[16];
-  for (int i = 0; i < 16; ++i) pal[i] = Argb(palette[i], ste_colours);
+  static LineColours lines;
+  MakeLineColours(line_palettes, ste_colours, &lines);
   for (const Item& it : g_cur) {
     auto put = [&](int x, int y, int c) {
       if (x >= std::max<int>(0, it.clip_left) && x <= std::min<int>(319, it.clip_right) && y >= std::max<int>(0, it.clip_top) &&
           y <= std::min<int>(199, it.clip_bottom))
-        (*out)[size_t(y) * 320 + x] = pal[c & 15];
+        (*out)[size_t(y) * 320 + x] = lines.pal[y][c & 15];
     };
     int x = int(std::lround(it.x)) & -int(it.snap), y = int(std::lround(it.y));
     if (it.kind == kDot) {

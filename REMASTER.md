@@ -147,7 +147,13 @@ the per-game steps 1-6 plus verification.
 - **Leave short-lived effects to the game**: the shaped draws (warp-in, materialising) are a new image every frame;
   capturing them filled the cache with hundreds of one-use images and some sandbox draws never returned.
 - **Draw order**: items go over the ST picture, so where a sprite the game still draws itself crosses a captured
-  one, the order can differ from the original (a few pixels, seen as 6-14 px in a frame).
+  one, the order can differ from the original (a few pixels). (Most of the 6-14 px seen were raster colours, fixed.)
+- **Raster colours** (found with Gridrunner; it also explained earlier "draw order" pixels in Llamatron): games
+  change palette entries per line (timer B). Machine records every line's palette (`LinePalettes`); items take the
+  colours of the lines they cover, row by row when an image uses a colour that changes within the frame. Textures
+  are cached per colour set.
+- **Capture only inside the play pass**: a game can draw through the same core from other frame routines while
+  the capture flag is still set (Gridrunner's held states): bracket it (begin hook on, end hook off).
 - **Run-ahead state from other files**: game.cpp's analog-aim shot table is C++ state the hooks change: saved and
   restored too (`game::SaveAheadState`).
 
@@ -174,10 +180,13 @@ the per-game steps 1-6 plus verification.
   moving (objects, shots through the $58A2 wrapper, the llama), frame $5BFE's `jsr (a3)` at $5C10 / $5C12. Verified:
   25 frames over waves 1 / 3 / 5 / 7 / 8 identical except the draw-order pixels (one frame 14 px), RAM identical in
   every window incl. analog aim and run-ahead 3; game over / continue / title with no stale items; 120 presents/s
-  in play; pause (items held under the PAUSE cup) and the Ozric tentacle (ST picture). Idea for later: shots at
-  their exact analog positions (game.cpp keeps them as doubles) for even smoother diagonals.
-- **Gridrunner**: drawing in the main loop ($4BA12, 3 rotating screens, divisor $4D2E4). Snakes are linked
-  chains (draw routine $1655E draws a whole snake): key per segment. The entry-lane hiding already hooks $1655E.
+  in play; pause (items held under the PAUSE cup) and the Ozric tentacle (ST picture). **Owner wants to try later**:
+  shots at their exact analog positions (game.cpp keeps them as doubles) for even smoother diagonals.
+- **Gridrunner**: DONE 2026-11-02 (`src/remaster_grid.cpp`). The Andes draw core again ($4BCE4), play pass
+  $144DA..$145E2; snakes key per segment (a3 through $4BBFE), the entry-lane hook still hides them. HUD icon painter
+  $4CDBA excluded. States 2 (between, e.g. fading into pause) and 11 hold the items; the pause screen (12) is its
+  own picture. Not sensitive to CPU speed: a 12,000-frame run (pause, deaths, restart) 45 / 45 frames identical,
+  RAM identical. 120 presents/s in play.
 - **Revenge of the Mutant Camels** (three builds, same code at other addresses: one port, three disks): main
   loop draws ($4505C hook, $113FE in play). The camel's 6.25 Hz walk cycle is the artwork; interpolating its
   position between frames is still possible (an owner call).
