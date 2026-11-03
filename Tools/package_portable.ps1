@@ -10,15 +10,17 @@
 #   Llamatron ST.msa (Llamatron + Super Gridrunner), Trip-A-Tron\ (TRIP_A_T.RON's files), the Revenge 1 MB STE
 #   .stx, and Andes Attack / Defender 2 / Hardcore .st built by Tools\make_release_disks.py from the downloads.
 #
-# Usage: powershell -ExecutionPolicy Bypass -File Tools\package_portable.ps1 [-SkipBuild] [-Release]
+# Usage: powershell -ExecutionPolicy Bypass -File Tools\package_portable.ps1 [-SkipBuild] [-Release] [-Folder <name>]
+# (-Folder: another folder under dist\ for the portable build, e.g. a test build next to the release one.)
 param(
     [switch]$SkipBuild,
-    [switch]$Release
+    [switch]$Release,
+    [string]$Folder = "LlamasoftOnTheST"
 )
 
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
-$dist = Join-Path $repo "dist\LlamasoftOnTheST"
+$dist = Join-Path $repo "dist\$Folder"
 $symbols = Join-Path $repo "dist\symbols"
 
 if (-not $SkipBuild) {
