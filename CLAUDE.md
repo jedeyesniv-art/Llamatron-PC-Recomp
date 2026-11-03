@@ -562,3 +562,8 @@ for it with DXIL shaders, fallback = default renderer without CRT). Tools/build_
 Lessons: SDL_shadercross names every vertex output TEXCOORDn, so a custom pixel shader's inputs must be
 TEXCOORD0 (colour) / TEXCOORD1 (uv), else D3D12 "Could not create graphics pipeline state" (logged only via
 SDL_GetError, picture black). In-game --rshot=N:<bmp> reads the screen back (CRT included).
+Halation (2026-11-03, owner: the old one "looks fake" - a 5 x 5 grid of point taps gave square grey copies around
+stars): crt.cpp BuildGlow makes the picture as linear light (glow.frag.hlsl) at 320 x 200, then blurred levels
+160 x 100 ... 10 x 7 (float textures; 4 offset quarter copies each); the shader adds their weighted sum after the
+contrast curve (before it, the S-curve drew a rim: "like a sticker"). crt_halation = amount, crt_halation_size
+0..1 = tight halo .. long tail. Owner's values are defaults version 4. The log says "crt: glow levels in float".

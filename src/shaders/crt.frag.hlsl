@@ -15,9 +15,23 @@ cbuffer Params : register(b0, space3) {
 
 Texture2D u_texture : register(t0, space2);
 SamplerState u_sampler : register(s0, space2);
+// The halation's glow (crt.cpp BuildGlow, every frame): the picture as linear light blurred at 160 x 100, 80 x 50,
+// 40 x 25, 20 x 13, 10 x 7.
+Texture2D u_glow1 : register(t1, space2);
+SamplerState u_glow1_sampler : register(s1, space2);
+Texture2D u_glow2 : register(t2, space2);
+SamplerState u_glow2_sampler : register(s2, space2);
+Texture2D u_glow3 : register(t3, space2);
+SamplerState u_glow3_sampler : register(s3, space2);
+Texture2D u_glow4 : register(t4, space2);
+SamplerState u_glow4_sampler : register(s4, space2);
+Texture2D u_glow5 : register(t5, space2);
+SamplerState u_glow5_sampler : register(s5, space2);
 
 // SDL's own shaders are compiled with SDL_shadercross, which names every vertex output TEXCOORDn: the inputs
 // have to match those names or D3D12 rejects the pipeline.
+static const float kGlowGain = 2.0;
+
 struct PSInput {
   float4 v_color : TEXCOORD0;
   float2 v_uv : TEXCOORD1;
@@ -78,6 +92,16 @@ float3 Line(float px, int y) {
 
 float Luma(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
 
+float3 Linear(float3 c) { return c * c * (0.8 + 0.2 * c); }
+
+// A glow level read smoothly: four bilinear taps half a texel apart (a tent), so its texels never show.
+float3 Tent(Texture2D t, SamplerState s, float2 uv, float2 size) {
+  float2 h = 0.5 / size;
+  float3 c = t.SampleLevel(s, uv + float2(-h.x, -h.y), 0).rgb + t.SampleLevel(s, uv + float2(h.x, -h.y), 0).rgb +
+             t.SampleLevel(s, uv + float2(-h.x, h.y), 0).rgb + t.SampleLevel(s, uv + float2(h.x, h.y), 0).rgb;
+  return c * 0.25;  // (the levels hold linear light already)
+}
+
 // The beam's vertical profile: thin for dark lines, wide for bright ones (they bloom into the gap).
 float3 Beam(float3 c, float d) {
   float3 width = lerp(beam.y, beam.z, sqrt(saturate(c)));
@@ -109,21 +133,6 @@ PSOutput main(PSInput input) {
   float3 flat = lerp(a, b, smoothstep(0.0, 1.0, dy));
   float3 c = lerp(flat, lines, beam.x);
 
-  // Halation: a wide, soft glow of the picture around it (a 5 x 5 grid of taps).
-  if (glow.z > 0) {
-    float r = 1.0 + 4.0 * glow.w;
-    float3 h = 0;
-    float hw = 0;
-    [unroll] for (int j = -2; j <= 2; ++j) {
-      [unroll] for (int i = -2; i <= 2; ++i) {
-        float w = exp(-0.5 * (i * i + j * j));
-        h += Fetch(int(floor(p.x + i * r)), int(floor(p.y + j * r))) * w;
-        hw += w;
-      }
-    }
-    c = c * (1.0 - 0.5 * glow.z) + h / hw * glow.z;
-  }
-
   // Aperture grille: R, G, B stripes one screen pixel each; bleed spreads each into its neighbours.
   if (glow.x > 0) {
     int k = int(fmod(floor(pix.x), 3.0));
@@ -131,6 +140,23 @@ PSOutput main(PSInput input) {
     stripe = lerp(stripe, float3(1, 1, 1) * (1.0 / 3.0) + stripe * (2.0 / 3.0), glow.y);
     float3 mask = lerp(float3(1, 1, 1), stripe * 3.0, glow.x * 0.5);
     c *= mask;
+  }
+
+  // Halation: light scattered in the tube's glass - a smooth glow around bright things, over the phosphors (no
+  // mask stripes in it), from the blurred levels: each level a wider blur, their weights spread out with the size
+  // (0: mostly the tight ones; 1: even over all five - a long tail). Added after the colour and contrast curves
+  // (below), as light: the S-curve would steepen its faint edge into a visible rim.
+  float3 halo = 0;
+  if (glow.z > 0) {
+    float t = saturate(glow.w);
+    float w1 = lerp(0.40, 0.14, t), w2 = lerp(0.27, 0.17, t), w3 = lerp(0.17, 0.20, t), w4 = lerp(0.10, 0.23, t),
+          w5 = lerp(0.06, 0.26, t);
+    halo = Tent(u_glow1, u_glow1_sampler, uv, float2(160, 100)) * w1 +
+           Tent(u_glow2, u_glow2_sampler, uv, float2(80, 50)) * w2 +
+           Tent(u_glow3, u_glow3_sampler, uv, float2(40, 25)) * w3 +
+           Tent(u_glow4, u_glow4_sampler, uv, float2(20, 13)) * w4 +
+           Tent(u_glow5, u_glow5_sampler, uv, float2(10, 7)) * w5;
+    halo *= glow.z * kGlowGain * float3(1.0 + 0.08 * colour.z, 1.0, 1.0 - 0.12 * colour.z);  // warm, as the picture
   }
 
   // Colour: overflow (a channel past full spills into the others, towards white), temperature, saturation,
@@ -144,6 +170,7 @@ PSOutput main(PSInput input) {
   float3 g = pow(c, 1.0 / 2.2);  // back to gamma space
   g = saturate(g);
   g = lerp(g, g * g * (3.0 - 2.0 * g), saturate(colour.y)) * (1.0 + shape.w);
+  if (glow.z > 0) g = pow(pow(saturate(g), 2.2) + halo, 1.0 / 2.2);  // the halation, as light
   if (shape.x > 0) g *= edge.x * edge.y;  // the tube's soft edge, with curvature
 
   output.o_color = float4(saturate(g), 1.0) * float4(input.v_color.rgb, 1.0);
