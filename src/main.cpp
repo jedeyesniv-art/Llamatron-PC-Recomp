@@ -188,6 +188,13 @@ void SaveRenderShot(SDL_Renderer* r, const std::string& path) {
   }
 }
 
+// The remaster's colour 0: what the machine shows (calmed flashes) when that isn't the register.
+void SetRemasterColour0(const st::Machine& m) {
+  const float* c = m.CalmColour();
+  auto b = [](float v) { return uint32_t(std::clamp(v, 0.0f, 1.0f) * 255 + 0.5f); };
+  remaster::SetShownColour0(m.CalmBackground(), 0xFF000000u | b(c[0]) << 16 | b(c[1]) << 8 | b(c[2]));
+}
+
 void SaveShot(const st::Machine& m, const std::string& path) {
   SDL_Surface* s = SDL_CreateSurfaceFrom(m.FrameWidth(), st::kScreenH, SDL_PIXELFORMAT_ARGB8888,
                                          const_cast<uint32_t*>(m.Frame()), m.FrameWidth() * 4);
@@ -685,6 +692,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       if (auto ms = opt.mshots.find(frame); ms != opt.mshots.end() && machine.FrameWidth() == st::kScreenW) {
         std::vector<uint32_t> px;
         remaster::LogFrame();
+        SetRemasterColour0(machine);
         remaster::ComposeSoftware(machine.Frame(), machine.LinePalettes(), machine.SteColours(), &px);
         if (SDL_Surface* s = SDL_CreateSurfaceFrom(st::kScreenW, st::kScreenH, SDL_PIXELFORMAT_ARGB8888, px.data(),
                                                   st::kScreenW * 4)) {
@@ -722,6 +730,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         if (opt.remaster_alpha >= 0) alpha = opt.remaster_alpha;
         else if (lock_k > 0) alpha = float((vsyncs + lock_k - 1) % lock_k) / float(lock_k);
         else if (lock_k == 0) alpha = float(double(SDL_GetTicksNS() - start) / 1e9 * machine.FrameHz() - frames_due);
+        SetRemasterColour0(machine);
         remaster::Draw(renderer, shown, view, alpha, machine.LinePalettes(), machine.SteColours());
       } else {
         crt::DrawPicture(renderer, shown, view);

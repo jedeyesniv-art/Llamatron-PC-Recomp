@@ -76,13 +76,13 @@ SDL_Texture* TextureFor(SDL_Renderer* r, uint64_t id, const uint32_t* pal) {
   const Image& image = im->second;
   uint16_t used = g_used[id];
   uint64_t sig = 1469598103934665603ull;
-  for (int i = 1; i < 16; ++i)
+  for (int i = 0; i < 16; ++i)
     if (used >> i & 1) sig = (sig ^ pal[i]) * 1099511628211ull;
   auto& variants = g_textures[id];
   if (auto t = variants.find(sig); t != variants.end()) return t->second;
   if (variants.size() >= kMaxVariants) DropTextures(variants);
   std::vector<uint32_t> px(size_t(image.w) * size_t(image.h));
-  for (size_t i = 0; i < px.size(); ++i) px[i] = image.pixels[i] ? pal[image.pixels[i]] : 0;
+  for (size_t i = 0; i < px.size(); ++i) px[i] = image.pixels[i] ? pal[image.pixels[i] & 15] : 0;
   SDL_Texture* t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, image.w, image.h);
   if (!t) return nullptr;
   SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
@@ -98,6 +98,8 @@ struct LineColours {
   uint16_t varying = 0;
   const uint32_t* At(int y) const { return pal[std::clamp(y, 0, 199)]; }
 };
+bool g_colour0_on = false;
+uint32_t g_colour0 = 0;
 void MakeLineColours(const uint16_t* line_palettes, bool ste, LineColours* out) {
   out->varying = 0;
   for (int y = 0; y < 200; ++y)
@@ -106,6 +108,10 @@ void MakeLineColours(const uint16_t* line_palettes, bool ste, LineColours* out) 
       out->pal[y][i] = Argb(c, ste);
       if (c != line_palettes[i]) out->varying |= uint16_t(1u << i);
     }
+  if (g_colour0_on) {
+    for (int y = 0; y < 200; ++y) out->pal[y][0] = g_colour0;
+    out->varying &= uint16_t(~1u);
+  }
 }
 
 float LerpAngle(float a, float b, float t) {
@@ -213,8 +219,12 @@ void Add(uint32_t screen, Item item) {
 
 bool HaveImage(uint64_t id) { return g_images.count(id) != 0; }
 void SetImage(uint64_t id, Image image) {
-  uint16_t used = 0;
-  for (uint8_t c : image.pixels) used |= uint16_t(1u << (c & 15));
+  if (image.opaque)
+    for (uint8_t& c : image.pixels)
+      if (c == 0) c = kBlack;
+  uint16_t used = 0;  // bit 0: colour 0 drawn (kBlack)
+  for (uint8_t c : image.pixels)
+    if (c) used |= uint16_t(1u << (c & 15));
   g_used[id] = used;
   g_images[id] = std::move(image);
   if (auto t = g_textures.find(id); t != g_textures.end()) DropTextures(t->second), g_textures.erase(t);
@@ -271,14 +281,15 @@ Image DecodePlanes(const uint8_t* data, int groups, int rows) {
   return im;
 }
 
-bool DrawInSandbox(st::Machine* m, const SandboxCall& call, Image* out) {
+namespace {
+// One run of the call onto a screen filled with `fill` (0 or $FF): the screen afterwards (false: it didn't return).
+bool RunInSandbox(st::Machine* m, const SandboxCall& call, uint8_t fill, Image* all) {
   uint32_t screen = call.regs[9] & 0xFFFFFE;
   uint32_t sp = (call.regs[15] & 0xFFFFFE) - 512;
-  if (screen + 32000 + 64 > st::kRamSize || sp < 0x1000) return false;
   auto fork = std::make_unique<st::Machine>(*m);
   fork->sandbox = true;
   uint8_t* ram = fork->Ram();
-  std::memset(ram + screen, 0, 32000);
+  std::memset(ram + screen, fill, 32000);
   for (auto [a, v] : call.pokes) ram[a] = uint8_t(v >> 8), ram[a + 1] = uint8_t(v);
   // Its return lands on an ILLEGAL of ours just past the screen: the end.
   const uint32_t magic = screen + 32000 + 16;
@@ -303,7 +314,23 @@ bool DrawInSandbox(st::Machine* m, const SandboxCall& call, Image* out) {
     LOG("remaster: sandbox call of $%06X didn't return", call.routine);
     return false;
   }
-  Image all = DecodePlanes(ram + screen, 20, 200);
+  *all = DecodePlanes(ram + screen, 20, 200);
+  return true;
+}
+}  // namespace
+
+bool DrawInSandbox(st::Machine* m, const SandboxCall& call, Image* out) {
+  uint32_t screen = call.regs[9] & 0xFFFFFE;
+  uint32_t sp = (call.regs[15] & 0xFFFFFE) - 512;
+  if (screen + 32000 + 64 > st::kRamSize || sp < 0x1000) return false;
+  Image all;
+  if (!RunInSandbox(m, call, 0, &all)) return false;
+  if (call.opaque_black) {  // again onto colour 15: what is the same both times was drawn (black too)
+    Image over15;
+    if (!RunInSandbox(m, call, 0xFF, &over15)) return false;
+    for (size_t i = 0; i < all.pixels.size(); ++i)
+      all.pixels[i] = all.pixels[i] != over15.pixels[i] ? 0 : all.pixels[i] ? all.pixels[i] : kBlack;
+  }
   int x0 = 320, y0 = 200, x1 = -1, y1 = -1;
   for (int y = 0; y < 200; ++y)
     for (int x = 0; x < 320; ++x)
@@ -441,10 +468,13 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
   int clip_top = -1, clip_bottom = -1, clip_left = -1, clip_right = -1;
   for (int i = 0; i < int(g_cur.size()); ++i) {
     const Item& it = g_cur[i];
-    float x = it.x, y = it.y, angle = it.angle;
+    float x = it.x + it.fine_x, y = it.y + it.fine_y, angle = it.angle;
     if (i < int(g_match.size()) && g_match[i] >= 0) {
       const Item& o = g_prev[g_match[i]];
-      x = o.x + (x - o.x) * alpha, y = o.y + (y - o.y) * alpha;
+      float ox = o.x + o.fine_x, oy = o.y + o.fine_y;
+      float dx = x - ox;
+      if (it.period) dx = std::remainder(dx, float(it.period));  // wrapped round: the short way
+      x = ox + dx * alpha, y = oy + (y - oy) * alpha;
       if (it.rotate && o.rotate) angle = LerpAngle(o.angle, it.angle, alpha);
     }
     if (it.clip_top != clip_top || it.clip_bottom != clip_bottom || it.clip_left != clip_left || it.clip_right != clip_right) {
@@ -520,6 +550,8 @@ void ComposeSoftware(const uint32_t* st, const uint16_t* line_palettes, bool ste
         if (uint8_t c = m.pixels[size_t(j) * m.w + i]) put(x + m.ox + i, y + m.oy + j, c);
   }
 }
+
+void SetShownColour0(bool on, uint32_t argb) { g_colour0_on = on, g_colour0 = argb; }
 
 void Shutdown() {
   DropTextures();

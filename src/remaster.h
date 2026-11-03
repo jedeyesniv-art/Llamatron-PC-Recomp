@@ -42,12 +42,21 @@ struct Item {
   bool world = false;
   float wx = 0, wy = 0;
   uint16_t wrap_x = 0;
+  // Shown only (ComposeSoftware ignores them): where it really is between the game's whole pixels, for things the
+  // game moves less than a pixel a frame (it steps every few frames).
+  float fine_x = 0, fine_y = 0;
+  // A repeating pattern (image a whole number of periods wide): x jumps back by `period` when it wraps, so it slides
+  // the short way round.
+  uint16_t period = 0;
 };
 
-// A sprite image: colour indices (0 = transparent), ox / oy from where the game was told to draw it.
+// A sprite image: colour indices (0 = transparent, kBlack = colour 0 drawn), ox / oy from where the game was told to
+// draw it.
+constexpr uint8_t kBlack = 16;
 struct Image {
   int w = 0, h = 0, ox = 0, oy = 0;
   std::vector<uint8_t> pixels;
+  bool opaque = false;  // SetImage: every 0 becomes kBlack (the game writes whole words, black included)
 };
 
 // On / off (setting "remaster", F8 in a game). Off: the hooks let the game draw as always.
@@ -88,6 +97,9 @@ struct SandboxCall {
   uint32_t regs[16] = {};  // d0-d7, a0-a7
   std::vector<std::pair<uint32_t, uint16_t>> pokes;
   int at_x = 0, at_y = 0;
+  // The routine clears what is under it (a mask over a rectangle, not the shape): run it twice, onto colour 0 and
+  // colour 15, and keep what it wrote, black (kBlack) included.
+  bool opaque_black = false;
 };
 bool DrawInSandbox(st::Machine* m, const SandboxCall& call, Image* out);
 // Helpers for the capture hooks (shared by the games).
@@ -116,6 +128,9 @@ bool Active();
 void Draw(SDL_Renderer* renderer, SDL_Texture* st_texture, const SDL_FRect& view, float alpha,
           const uint16_t* line_palettes, bool ste_colours);
 void Shutdown();
+// Colour 0 as the machine shows it, when that isn't the register (Machine::CalmBackground: flashes filtered): used
+// for every line's colour 0 (drawn black). Before Draw / ComposeSoftware.
+void SetShownColour0(bool on, uint32_t argb);
 // Tests: this frame composed in software at 1x, whole pixels, no rotation (alpha 1) over the ST frame `st`
 // (320 x 200 ARGB): what the game itself would have drawn, if the capture is right.
 void LogFrame();  // tests: this frame's items

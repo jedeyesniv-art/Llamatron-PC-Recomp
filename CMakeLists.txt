@@ -73,6 +73,7 @@ add_executable(llamatron WIN32
   src/remaster_andes.cpp
   src/remaster_llama.cpp
   src/remaster_grid.cpp
+  src/remaster_rmc.cpp
   src/settings.cpp
   src/log.cpp
   src/crash.cpp)

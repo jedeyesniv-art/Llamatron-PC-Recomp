@@ -11,6 +11,7 @@
 #include "pad.h"
 #include "remaster.h"
 #include "remaster_andes.h"
+#include "remaster_rmc.h"
 #include "settings.h"
 
 namespace stgames {
@@ -97,6 +98,7 @@ void RmcUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   if (g_rmc_tt && Get16(*m, kTtNagWait) == 0x0C79 && Get16(*m, kTtNagWait + 2) == 0x07D0 &&
       Get32(*m, kTtNagWait + 4) == 0x0003D94E && Get16(*m, kTtNagWait + 8) == 0x6FF6)
     Put16(m, kTtNagWait + 8, 0x4E71);
+  remaster_rmc::Update(m);
   const pad::State& p = pad::Now();
   uint8_t j1 = pad::JoyBits(p);
   if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.Held(SDL_GAMEPAD_BUTTON_START) ||
@@ -1001,6 +1003,7 @@ void Reset() { Start(g_game); }
 
 void SetProgram(const std::string& program) {
   g_rmc_tt = program == "REVTT.TOS";
+  remaster_rmc::Start(program);
   if (program == "REVSTE1M.TOS") kRmcHook = 0x3DD3E, kRmcPlay = 0x111DE, kRmcPause = 0x1056C;
   else if (program == "REVTT.TOS") kRmcHook = 0x3E0CE, kRmcPlay = 0x11206, kRmcPause = 0x10580;
   else kRmcHook = 0x42E18, kRmcPlay = 0x1118E, kRmcPause = 0x10526;

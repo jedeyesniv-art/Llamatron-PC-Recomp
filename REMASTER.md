@@ -12,12 +12,11 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
   good, no notes". Llamatron: "plays excellently". Gridrunner: "almost perfect" - the one issue (level 4's rising
   text dark) fixed the same day.
 
-## Where we are (end of 2026-11-02; start here next time)
-- Done, committed on `remaster`, not pushed: Photon Storm, Andes Attack, Llamatron, Gridrunner. Each verified
-  pixel-identical to the original (software compose, run-ahead 0) and with unchanged game RAM.
-- Left: **Revenge of the Mutant Camels** (one port for the three builds: 512K, 1 MB STE, TT Megamix; stgames'
-  SetProgram has their address sets), **Defender 2**, **Hardcore**. Trip-A-Tron doesn't apply. Suggested order:
-  Camels (three disks for one port), then Hardcore, then Defender 2 (rasters on colour 0, 60 Hz mode).
+## Where we are (2026-11-03; start here next time)
+- Done, committed on `remaster`, not pushed: Photon Storm, Andes Attack, Llamatron, Gridrunner, Revenge of the
+  Mutant Camels (1 MB STE + TT Megamix; not the 512K build, see its notes). Each verified pixel-identical to the
+  original (software compose, run-ahead 0) and with unchanged game RAM.
+- Left: **Hardcore**, then **Defender 2** (rasters on colour 0, 60 Hz mode). Trip-A-Tron doesn't apply.
 - Later (owner): Llamatron's shots at their exact analog positions. Then the release: package, smoke test, push
   (owner decides when).
 - Before porting the next game: scan its draw core for every global it reads (`Tools/absreads.py`: each `$xxxxx.l` operand in
@@ -51,6 +50,9 @@ positions and images, and needs no per-type inventory.
     save / restore of its own C++ state with `SetAheadState`.
 - Shared hook helpers (remaster.h): `QueueImage` / `DrawQueued` (sprites seen for the first time, drawn in the sandbox
   between frames from the game's Update), `Decoding(m)`, `Key(caller, object)`, `Return(m)` (rts).
+- Since the Camels: `kBlack` pixels (colour 0 drawn) with `Image::opaque` / `SandboxCall::opaque_black`;
+  `Item::fine_x / fine_y` (sub-pixel display position) and `Item::period` (a repeating pattern slides the short way
+  when it wraps); `SetShownColour0` (calmed colour 0).
 - Matching between frames (remaster.cpp `Match`): within a key group (the key without `Add`'s occurrence count),
   each item takes the nearest item of the previous frame (greedy, closest pairs first; an image change costs 4 px;
   further than 40 px on the screen = a jump, drawn where it is). `Item::world` + `wx` / `wy` / `wrap_x` match in
@@ -102,7 +104,8 @@ the per-game steps 1-6 plus verification.
 9. **Settings**: `remaster` 1 and `remaster_ahead` 2 by default (owner).
 
 ## Verification (all headless, deterministic, fast)
-- Tools: `Tools/remaster_pix.sh` (the pixel + RAM check below, both runs in one go) and `Tools/absreads.py` (what a
+- Tools: `Tools/remaster_pix.sh` (the pixel + RAM check below, both runs in one go), `Tools/mapaddr.py` (a build's
+  addresses in another build) and `Tools/absreads.py` (what a
   draw core reads).
 - **Games whose state depends on CPU speed** (Llamatron: the original alone diverges at x4 or x16 vs x8; random
   numbers / wave starts timed by drawn frames): skipping draws acts like a CPU speed change, so a long run drifts
@@ -150,6 +153,22 @@ the per-game steps 1-6 plus verification.
   `open(p, 'rb')` patterns need `\r\n` handled. PowerShell `Set-Content -Encoding utf8` adds a BOM: avoid it.
   **CLAUDE.md contains raw CR bytes inside lines** (paths like `Private\r...`): edit it only byte-safely (`'rb'`
   / `'wb'`), never in text mode, which turns them into line breaks.
+
+## Pitfalls hit in the Camels
+- **Opaque drawing**: some routines write whole words (blocks, stripes, the message) or clear a strip before
+  drawing (the buildings): their black covers stars behind them. Images carry it as `kBlack` (colour 0, drawn):
+  `Image::opaque` for decoded data, `SandboxCall::opaque_black` (two sandbox runs, onto colour 0 and 15: what
+  matches was drawn) for routines.
+- **Calm background**: with `Machine::CalmBackground` the ST picture's colour 0 isn't the register; drawn black
+  must use the shown colour (`remaster::SetShownColour0`, from main.cpp before Draw / ComposeSoftware), else a
+  colour-0 flash shows through as a red gradient.
+- **Things that move less than a pixel a frame** (every few frames) look stepped even when interpolated:
+  `Item::fine_x / fine_y` (display only; the pixel check ignores them) from the game's own fractions.
+- **Finding an uncaptured draw**: take `--shot` of a capture run (the ST picture without the items) to see what's
+  left, then trace writes to that screen area per instruction (`cpu::g_profile`) during the pass. Here it was a
+  sprite's first sight (an animated score popup: each new image is drawn by the game once).
+- **First sights in pixel checks**: a frame where a new image appears differs where captured items overlap it
+  (the game drew it under them). Expected; pick another frame.
 
 ## Pitfalls hit in Llamatron
 - **Compiled sprites**: Llamatron compiles sprites into 68000 code for 8 shifts (x & $E): they land on even x.
@@ -209,9 +228,22 @@ the per-game steps 1-6 plus verification.
   level select's variable, `--poke=N:38ACE:4` for frames 1900-1995 (text offset of $48BCE). States 2 (between, e.g. fading into pause) and 11 hold the items; the pause screen (12) is its
   own picture. Not sensitive to CPU speed: a 12,000-frame run (pause, deaths, restart) 45 / 45 frames identical,
   RAM identical. 120 presents/s in play.
-- **Revenge of the Mutant Camels** (three builds, same code at other addresses: one port, three disks): main
-  loop draws ($4505C hook, $113FE in play). The camel's 6.25 Hz walk cycle is the artwork; interpolating its
-  position between frames is still possible (an owner call).
+- **Revenge of the Mutant Camels**: DONE 2026-11-03 (`src/remaster_rmc.cpp`, header comment has the STE addresses;
+  `Addrs kTt` the TT Megamix's, found with `Tools/mapaddr.py` from the STE dump: code bytes with address operands
+  as wildcards, data addresses read from the matched instructions). Double-buffered main loop ($1A842: `jsr (a3)`
+  = BeginFrame, the list's end marker after it = EndFrame); one sprite dispatcher with three handlers hooked at
+  their entries (type 2 pre-shifted / even x, type 1 stretched, type 3 any x; a type 3 sprite can become type 2 at
+  run time, so snap follows the type at each draw). More bespoke drawers than the others, all captured: a 2 x 1
+  dot plotter (stars), falling blocks drawn inline (hooked per block; sub-pixel y from the frame counter:
+  `Item::fine_y`), six ground stripes (16.16 positions: wide repeating lines with `Item::period` and `fine_x`), the
+  buildings (opaque 16-px strips: `SandboxCall::opaque_black`), the level message (opaque band). Pause: not
+  captured (the pause code writes text over the picture; nothing moves). Keys: a6 when it points into the object
+  tables, else the caller alone (some callers leave scratch values in a6). Verified: STE and TT 20 / 20 frames
+  identical over 6000 frames (play, pause, deaths, the message, game over, title), RAM identical except drawing
+  temporaries, also with run-ahead 3; ~99% of items slide. The 512K build (REVENGE.TOS, D-Bug 28): not covered -
+  the launcher runs the STE build for that id, and a scripted run stays on its shareware screen, so its mapped
+  addresses couldn't be checked in play (most map with mapaddr.py from a dump taken there). The camel's 6.25 Hz
+  walk cycle is the artwork (an owner call whether to do more).
 - **Defender 2**: logic in the VBL ($1BCEA), main loop $1B2D8. Rasters change colour 0 between lines: leave the
   background in the ST picture.
 - **Hardcore**: VBL hook $338BA; check whether its puck and blasters go through one sprite routine.
