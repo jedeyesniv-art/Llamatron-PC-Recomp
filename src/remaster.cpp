@@ -6,6 +6,7 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <string>
 #include <unordered_map>
 
 #include "cpu.h"
@@ -197,7 +198,22 @@ void SetAheadState(std::function<void()> save, std::function<void()> restore) {
   g_save = std::move(save), g_restore = std::move(restore);
 }
 
+int g_trace_pass = -1, g_passes = 0;
+uint32_t g_trace_screen = 0;
+std::vector<std::pair<uint32_t, int>> g_writers;
+void WriteWatch(uint32_t a, uint32_t pc) {
+  if (a < g_trace_screen || a >= g_trace_screen + 32000) return;
+  for (auto& w : g_writers)
+    if (w.first == (pc & ~15u)) return void(++w.second);
+  g_writers.push_back({pc & ~15u, 1});
+}
+void TraceWriters(int pass) { g_trace_pass = pass; }
+
 void BeginFrame(uint32_t screen) {
+  if (g_cap == &g_real && g_trace_pass >= 0) {
+    int n = g_passes++;
+    if (n == g_trace_pass || n == g_trace_pass + 1) g_trace_screen = screen, g_writers.clear(), cpu::g_write_watch = WriteWatch;
+  }
   g_cap->capturing = true;
   g_cap->hold = false;
   g_cap->building[screen].clear();
@@ -205,6 +221,13 @@ void BeginFrame(uint32_t screen) {
 }
 
 void EndFrame(uint32_t screen) {
+  if (cpu::g_write_watch == WriteWatch && g_cap == &g_real) {
+    cpu::g_write_watch = nullptr;
+    std::string s;
+    char buf[32];
+    for (auto& w : g_writers) std::snprintf(buf, sizeof(buf), " %d@%06X", w.second, w.first), s += buf;
+    LOG("remaster: pass %d, writes into the screen (count@code):%s", g_passes - 1, s.c_str());
+  }
   auto b = g_cap->building.find(screen);
   if (b == g_cap->building.end()) return;
   g_cap->latest = b->second;
@@ -215,6 +238,28 @@ void Add(uint32_t screen, Item item) {
   int n = g_cap->counts[screen][item.key]++;
   item.key ^= uint64_t(n) << 56;
   g_cap->building[screen].push_back(item);
+}
+
+int IndexAt(const st::Machine& m, uint32_t screen, int x, int y) {
+  if (x < 0 || x > 319 || y < 0 || y > 199) return 0;
+  if (auto b = g_cap->building.find(screen); b != g_cap->building.end())
+    for (auto it = b->second.rbegin(); it != b->second.rend(); ++it) {
+      if (x < std::max<int>(0, it->clip_left) || x > it->clip_right || y < it->clip_top || y > it->clip_bottom) continue;
+      int ix = int(std::lround(it->x)) & -int(it->snap), iy = int(std::lround(it->y));
+      if (it->kind == kDot) {
+        if (x >= ix && x < ix + it->w && y >= iy && y < iy + it->h) return it->colour & 15;
+        continue;
+      }
+      auto im = g_images.find(it->image);
+      if (im == g_images.end()) continue;
+      int px = x - ix - im->second.ox, py = y - iy - im->second.oy;
+      if (px < 0 || py < 0 || px >= im->second.w || py >= im->second.h) continue;
+      if (uint8_t c = im->second.pixels[size_t(py) * size_t(im->second.w) + size_t(px)]) return c & 15;
+    }
+  const uint8_t* p = m.Ram() + ((screen + uint32_t(y) * 160 + uint32_t(x / 16) * 8) & 0xFFFFFF);
+  int s = 15 - x % 16, c = 0;
+  for (int k = 0; k < 4; ++k) c |= (((p[k * 2] << 8 | p[k * 2 + 1]) >> s) & 1) << k;
+  return c;
 }
 
 bool HaveImage(uint64_t id) { return g_images.count(id) != 0; }

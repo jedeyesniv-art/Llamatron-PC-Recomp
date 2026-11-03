@@ -30,7 +30,7 @@ struct Item {
                        // dots: the top-left pixel
   uint64_t image = 0;  // sprites: the image id
   uint8_t colour = 0;  // dots: the colour index
-  uint8_t w = 1, h = 1;  // dots: size
+  uint16_t w = 1, h = 1;  // dots: size
   uint8_t snap = 1;      // the game puts it at x rounded down to this (ComposeSoftware; we draw at x)
   bool rotate = false;  // the image turned by angle - angle_base (radians, clockwise on the screen) about its
   float angle = 0, angle_base = 0;  // middle: angle is what's interpolated, angle_base the image's own
@@ -77,12 +77,18 @@ void RunAhead(st::Machine* m);
 // A line to show for a moment after F7 / F8 (nullptr: none).
 const char* Message();
 void SetProbe(bool on);  // tests: log the rotated item's angle each frame shown
+// Tests (--remaster-writers=N): during captured passes N and N + 1 (counted from the first), log which code writes
+// into the screen being drawn (16-byte blocks of code: count@address) - what is still drawn by the game.
+void TraceWriters(int pass);
 
 // Capture (from hooks, inside the CPU's run).
 void BeginFrame(uint32_t screen);
 void EndFrame(uint32_t screen);  // the draw pass for `screen` is complete
 void Add(uint32_t screen, Item item);
 bool HaveImage(uint64_t id);
+// The colour index at (x, y) of `screen` as drawn so far this pass: the last captured item over it (whole pixels,
+// as ComposeSoftware), else what the game drew into the screen itself. For pixels the game ORs into planes.
+int IndexAt(const st::Machine& m, uint32_t screen, int x, int y);
 void SetImage(uint64_t id, Image image);
 // Not capturing (another screen than play): the next frames are shown as the ST drew them.
 void Stop();

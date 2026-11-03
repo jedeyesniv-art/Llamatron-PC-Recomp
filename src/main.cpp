@@ -71,6 +71,7 @@ struct Options {
   int trip_music = -1;     // --trip-music=0|1|2: Trip-A-Tron's music mode for this run
   std::map<int, std::string> shots;  // --shot=N:<file.bmp>
   bool remaster_headless = false;
+  int remaster_writers = -1;  // --remaster-writers=N: log who writes into the screen in captured passes N, N + 1
   bool remaster_probe = false;  // --remaster-probe: log the ship's angle each frame shown (latency tests)
   int remaster_ahead = -1;      // --remaster-ahead=N: run-ahead for this run (not saved)  // --remaster-capture: capture without a renderer (tests: does it change the game?)
   float remaster_alpha = -1;  // --remaster-alpha=F: the remaster's in-between position fixed (tests)
@@ -119,6 +120,7 @@ Options ParseArgs(int argc, char** argv) {
     else if (Arg(a, "shot", &v)) o.shots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
     else if (a == "--remaster-capture") o.remaster_headless = true;
     else if (a == "--remaster-probe") o.remaster_probe = true;
+    else if (a.rfind("--remaster-writers=", 0) == 0) o.remaster_writers = std::atoi(a.c_str() + 19);
     else if (Arg(a, "remaster-ahead", &v)) o.remaster_ahead = std::atoi(v.c_str());
     else if (Arg(a, "remaster-alpha", &v)) o.remaster_alpha = float(std::atof(v.c_str()));
     else if (Arg(a, "mshot", &v)) o.mshots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
@@ -410,6 +412,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   remaster::LoadSettings();
   remaster::SetRenderer(renderer != nullptr || opt.remaster_headless);
   remaster::SetProbe(opt.remaster_probe);
+  if (opt.remaster_writers >= 0) remaster::TraceWriters(opt.remaster_writers);
   if (opt.remaster_ahead >= 0) remaster::SetAhead(opt.remaster_ahead);
 
   GameEnd end = GameEnd::kQuitApp;

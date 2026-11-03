@@ -14,9 +14,9 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
 
 ## Where we are (2026-11-03; start here next time)
 - Done, committed on `remaster`, not pushed: Photon Storm, Andes Attack, Llamatron, Gridrunner, Revenge of the
-  Mutant Camels (1 MB STE + TT Megamix; not the 512K build, see its notes). Each verified pixel-identical to the
-  original (software compose, run-ahead 0) and with unchanged game RAM.
-- Left: **Hardcore**, then **Defender 2** (rasters on colour 0, 60 Hz mode). Trip-A-Tron doesn't apply.
+  Mutant Camels (1 MB STE + TT Megamix; not the 512K build, see its notes), Defender 2. Each verified
+  pixel-identical to the original (software compose, run-ahead 0) and with unchanged game RAM.
+- Left: **Hardcore**. Trip-A-Tron doesn't apply.
 - Later (owner): Llamatron's shots at their exact analog positions. Then the release: package, smoke test, push
   (owner decides when).
 - Before porting the next game: scan its draw core for every global it reads (`Tools/absreads.py`: each `$xxxxx.l` operand in
@@ -104,8 +104,8 @@ the per-game steps 1-6 plus verification.
 9. **Settings**: `remaster` 1 and `remaster_ahead` 2 by default (owner).
 
 ## Verification (all headless, deterministic, fast)
-- Tools: `Tools/remaster_pix.sh` (the pixel + RAM check below, both runs in one go), `Tools/mapaddr.py` (a build's
-  addresses in another build) and `Tools/absreads.py` (what a
+- Tools: `Tools/remaster_pix.sh` (the pixel + RAM check below, both runs in one go), `--remaster-writers=N` (what
+  still writes into the screen), `Tools/mapaddr.py` (a build's addresses in another build) and `Tools/absreads.py` (what a
   draw core reads).
 - **Games whose state depends on CPU speed** (Llamatron: the original alone diverges at x4 or x16 vs x8; random
   numbers / wave starts timed by drawn frames): skipping draws acts like a CPU speed change, so a long run drifts
@@ -153,6 +153,19 @@ the per-game steps 1-6 plus verification.
   `open(p, 'rb')` patterns need `\r\n` handled. PowerShell `Set-Content -Encoding utf8` adds a BOM: avoid it.
   **CLAUDE.md contains raw CR bytes inside lines** (paths like `Private\r...`): edit it only byte-safely (`'rb'`
   / `'wb'`), never in text mode, which turns them into line breaks.
+
+## Pitfalls hit in Defender 2
+- **Most drawing outside the engine's core**: a dozen small routines. `--remaster-writers=N` (any game: logs the
+  code writing into the screen during captured passes N and N + 1; `cpu::g_write_watch`) lists what is left;
+  repeat until only the HUD remains. Run-time entries the static xrefs miss (`jsr` into a routine's middle): log
+  jumps into the range with `cpu::g_profile`.
+- **OR-ed pixels**: lasers, stars and particles are OR-ed into one plane, so their colour depends on what is
+  under them (a laser over the planet barely shows). `remaster::IndexAt` gives the colour index under a pixel as
+  drawn so far this pass (captured items, else the screen); OR the plane in and emit an ordinary dot. Lasers are
+  several spans OR-ed on one row: gathered per row and handed over as runs of one colour - flushed before the next
+  other item, so they keep their place in the drawing order.
+- **Restore lists written next to the drawing**: where a routine writes a restore pointer and then ORs (stars),
+  keep the pointer write and skip only the OR; a skipped count increment with no pointer would leave garbage.
 
 ## Pitfalls hit in the Camels
 - **Opaque drawing**: some routines write whole words (blocks, stripes, the message) or clear a strip before
@@ -250,7 +263,15 @@ the per-game steps 1-6 plus verification.
   the launcher runs the STE build for that id, and a scripted run stays on its shareware screen, so its mapped
   addresses couldn't be checked in play (most map with mapaddr.py from a dump taken there). The camel's 6.25 Hz
   walk cycle is the artwork (an owner call whether to do more).
-- **Defender 2**: logic in the VBL ($1BCEA), main loop $1B2D8. Rasters change colour 0 between lines: leave the
-  background in the ST picture.
+- **Defender 2**: DONE 2026-11-03 (`src/remaster_d2.cpp`, header comment and one per hook). The Andes engine's
+  frame loop and core ($4CC9A `jsr (a3)` / $4CC9C; core $4B8B0: only the player's ship uses it), but most of play
+  is drawn by its own routines, each hooked: the Camels' "type 3" sprite routine ($1DF2A: enemies), 1-px and 2-px
+  colour plotters, a 3 x 3 cell drawer (enemies materialising), one-plane OR-ed pixels (two star lists,
+  particles, a one-plane shape routine), laser spans, the terrain outline (world matching), the two ground bands
+  (pre-shifted 32-px patterns, `period` 32, sub-pixel from scroll / divisor) and the planet (opaque, drawn after
+  the lasers). Left to the game: the HUD and the radar (its dots go through the plotters' inner entries). Found
+  with `--remaster-writers` (below). Verified: 13 / 13 frames identical over a fight (lasers, explosions,
+  materialising, death), RAM identical except drawing state (restore lists, core temporaries, stack), also with
+  run-ahead 3.
 - **Hardcore**: VBL hook $338BA; check whether its puck and blasters go through one sprite routine.
 - **Trip-A-Tron**: not applicable (no sprites).

@@ -9,6 +9,10 @@ extern "C" {
 
 namespace cpu {
 void (*g_profile)(uint32_t pc, int ipl) = nullptr;
+void (*g_write_watch)(uint32_t a, uint32_t pc) = nullptr;
+}
+static inline void Watch(unsigned int a) {
+  if (cpu::g_write_watch) cpu::g_write_watch(a & 0xFFFFFF, m68k_get_reg(nullptr, M68K_REG_PPC) & 0xFFFFFF);
 }
 
 namespace {
@@ -20,9 +24,10 @@ extern "C" {
 unsigned int m68k_read_memory_8(unsigned int a) { return g_machine->Read8(a); }
 unsigned int m68k_read_memory_16(unsigned int a) { return g_machine->Read16(a); }
 unsigned int m68k_read_memory_32(unsigned int a) { return g_machine->Read16(a) << 16 | g_machine->Read16(a + 2); }
-void m68k_write_memory_8(unsigned int a, unsigned int v) { g_machine->Write8(a, uint8_t(v)); }
-void m68k_write_memory_16(unsigned int a, unsigned int v) { g_machine->Write16(a, uint16_t(v)); }
+void m68k_write_memory_8(unsigned int a, unsigned int v) { Watch(a), g_machine->Write8(a, uint8_t(v)); }
+void m68k_write_memory_16(unsigned int a, unsigned int v) { Watch(a), g_machine->Write16(a, uint16_t(v)); }
 void m68k_write_memory_32(unsigned int a, unsigned int v) {
+  Watch(a);
   g_machine->Write16(a, uint16_t(v >> 16));
   g_machine->Write16(a + 2, uint16_t(v));
 }

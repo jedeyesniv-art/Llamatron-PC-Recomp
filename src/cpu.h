@@ -22,6 +22,8 @@ uint32_t Get(Reg r);
 void Set(Reg r, uint32_t v);
 // If set, called before every instruction with its address and the interrupt mask (profiling; slow).
 extern void (*g_profile)(uint32_t pc, int ipl);
+// If set, called on every write with its address and the writing instruction's address (tests: who draws where).
+extern void (*g_write_watch)(uint32_t a, uint32_t pc);
 
 // The CPU's state, for running a copy of the machine and coming back (look-ahead).
 std::vector<uint8_t> SaveContext();

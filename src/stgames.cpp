@@ -11,6 +11,7 @@
 #include "pad.h"
 #include "remaster.h"
 #include "remaster_andes.h"
+#include "remaster_d2.h"
 #include "remaster_rmc.h"
 #include "settings.h"
 
@@ -301,6 +302,7 @@ void D2Click(Point p, int delay) {
 }
 
 void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
+  remaster_d2::Update(m);
   const pad::State& p = pad::Now();
   if (pad::Pressed(SDL_GAMEPAD_BUTTON_BACK)) {
     g_host_paused = !g_host_paused;
@@ -1047,6 +1049,7 @@ void Start(Game g) {
   g_andes_direct = settings::Get("andes_direct_thrust", 0) != 0;
   g_shield_held = false;
   remaster_andes::Start();
+  remaster_d2::Start();
   std::fill(std::begin(g_keys), std::end(g_keys), false);
 }
 
