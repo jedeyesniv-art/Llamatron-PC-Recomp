@@ -12,7 +12,7 @@
 
 namespace launcher {
 
-enum class Action { kNone, kPlay, kQuit, kDocs };
+enum class Action { kNone, kPlay, kQuit, kDocs, kSettings };  // kSettings: the Settings disk was picked
 
 class Launcher {
  public:

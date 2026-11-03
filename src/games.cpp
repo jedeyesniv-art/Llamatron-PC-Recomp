@@ -21,8 +21,8 @@ const char* const kGenericHelp[] = {
     "LEFT STICK / D-PAD   joystick",
     "A                    fire",
     "RIGHT STICK          mouse   (RT left button, LT right)",
-    "START  Space         BACK  Esc",
-    "B TWICE              back to the disks", "",
+    "START  Space         B  Esc",
+    "BACK                 settings (B there: back to the disks)", "",
     "Keyboard and mouse: as on the ST.",
 };
 
@@ -48,9 +48,9 @@ std::vector<Known> KnownGames() {
             "X AT THE TITLE       start a one-stick game",
             "A IN PLAY            fire / lock the fire angle",
             "RB AT THE TITLE      analog aim on / off",
-            "BACK                 pause    (Y: the tentacle)",
+            "START                pause    (Y: the tentacle)",
             "B ON THE PAUSE SCREEN  quit to the title",
-            "B TWICE AT THE TITLE   back to the disks", "",
+            "BACK                 settings   (B there: back to the disks)", "",
             "Keyboard: WASD + Space, cursors + Enter, P pause"};
   add(g, "TRON1MEG.PRG");
 
@@ -65,10 +65,10 @@ std::vector<Known> KnownGames() {
             "RIGHT STICK FLICK    nosecone shot direction",
             "RB / LB              nosecone shot up / down",
             "Y                    voluntary martyrdom (a life!)",
-            "BACK                 pause",
+            "START                pause",
             "B ON THE PAUSE SCREEN  quit to the title",
             "TITLE: X OPTIONS   Y GAME SECRETS   LB MORE INFO",
-            "B TWICE AT THE TITLE   back to the disks", "",
+            "BACK                 settings   (B there: back to the disks)", "",
             "The mouse works too: the original controls."};
   add(g, "GRIDRUNR.PRG");
 
@@ -128,9 +128,9 @@ std::vector<Known> KnownGames() {
                         "Giant camels against the forces of evil.", "",
                         "LEFT STICK / D-PAD   move the camel",
                         "A, X, RT             fire",
-                        "BACK                 pause",
+                        "START                pause",
                         "B ON THE PAUSE SCREEN  back to the menu",
-                        "B TWICE ELSEWHERE    back to the disks", "",
+                        "BACK                 settings   (B there: back to the disks)", "",
                         "Keyboard: cursor keys + Space, P pause, O resume"};
   // Revenge, TT Megamix (REVTT.TOS in a folder; the .st has 10 sectors a track, its boot sector says 9): 32
   // bullets instead of 8, twice the objects, the STE extras (DMA sound, colours).
@@ -166,9 +166,9 @@ std::vector<Known> KnownGames() {
                         "Y                   smart bomb",
                         "X / LT              reverse / thrust",
                         "LB                  inviso (Stargate)",
-                        "BACK                pause",
+                        "START               pause",
                         "INITIALS            d-pad letter, A fix, X delete",
-                        "B TWICE             back to the disks", "",
+                        "BACK                 settings   (B there: back to the disks)", "",
                         "60 Hz, as the arcade (defender2_60hz=0: 50).",
                         "Keyboard: Ctrl up, LShift down, Return thrust,",
                         "Alt reverse, # fire, RShift smart bomb."};
@@ -187,9 +187,9 @@ std::vector<Known> KnownGames() {
                         "Y                    smart bomb",
                         "LB OR RB (HOLD)      shield (it drains)",
                         "X / LT               reverse / thrust",
-                        "BACK                 pause",
+                        "START                pause",
                         "HIGH SCORE NAME      up/down letter, A enter it",
-                        "B TWICE              back to the disks", "",
+                        "BACK                 settings   (B there: back to the disks)", "",
                         "Mouse: up/down, left thrust, right reverse;",
                         "Left Shift fire, Control smart bomb, Alt shield."};
   // Photon Storm (Arc / Llamasoft 1990), PHOTON.YAK (Automation-packed TOS program) on a compilation disk with
@@ -204,9 +204,9 @@ std::vector<Known> KnownGames() {
                         "RIGHT STICK          fire in any direction",
                         "A OR RT              fire where the ship points",
                         "X OR LT              thrust",
-                        "BACK                 pause",
+                        "START                pause",
                         "B ON THE PAUSE SCREEN  quit to the title",
-                        "B TWICE ELSEWHERE    back to the disks",
+                        "BACK                 settings   (B there: back to the disks)",
                         "TITLE: A = 1 PLAYER, X = 2 PLAYERS,",
                         "Y = 360 TWIN STICK / ORIGINAL CONTROLS", "",
                         "Mouse: where it points from the middle = the",
@@ -227,8 +227,8 @@ std::vector<Known> KnownGames() {
                         "RIGHT STICK          put them at that spot",
                         "A OR RT              side lasers",
                         "Y                    puck intelligence on / off",
-                        "BACK                 pause",
-                        "B TWICE              back to the disks", "",
+                        "START                pause",
+                        "BACK                 settings   (B there: back to the disks)", "",
                         "Mouse: move, left button lasers; P pause, O resume,",
                         "S strobes (off at the start), N next level."};
   return k;
@@ -376,6 +376,20 @@ std::vector<Game> Discover(const std::string& disk) {
   for (Game& u : users) {
     LOG("another disk: %s (%zu programs)", u.source.string().c_str(), u.options[0].values.size());
     out.push_back(std::move(u));
+  }
+  if (!out.empty()) {  // the Settings disk, last (the carousel wraps: next to the first)
+    Game s;
+    s.id = "settings", s.name = "SETTINGS", s.settings = true;
+    s.body = {0.13f, 0.13f, 0.15f, 1}, s.band = {1.0f, 0.78f, 0.35f, 1};
+    s.help = {"SETTINGS", "",
+              "Everything worth changing, for every game: the",
+              "remaster, run-ahead, the CRT look and its sliders,",
+              "and each game's own controls. Saved as you go.", "",
+              "IN A GAME   BACK (F1) suspends it and opens these;",
+              "            BACK again carries on, B leaves the game.", "",
+              "UP/DOWN pick   LEFT/RIGHT change   A toggle",
+              "X default      LB/RB section       B back"};
+    out.push_back(std::move(s));
   }
   return out;
 }

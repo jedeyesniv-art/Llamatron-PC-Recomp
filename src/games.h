@@ -38,6 +38,7 @@ struct Game {
   // e.g. a menu choice), or a plain text file in the save folder that the launcher shows itself.
   std::string docs_program, docs_keys, docs_text;
   bool user = false;    // a disk the player added (not one we know); its "program" option picks what runs
+  bool settings = false;  // the Settings disk: opens the settings panel, nothing runs
   // Choices on the how-to-play page (trainers, a user disk's program), saved as settings <id>_<key>.
   struct Option {
     std::string key, label;

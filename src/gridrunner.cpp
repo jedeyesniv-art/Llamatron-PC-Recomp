@@ -50,10 +50,14 @@ constexpr int64_t kNever = INT64_MAX;
 constexpr uint8_t kRShift = 0x36, kLShift = 0x2A, kCtrl = 0x1D, kAlt = 0x38, kSpace = 0x39, kQ = 0x10;
 
 struct Tuning {
-  double speed = 6.0;      // pointer speed at full deflection, pixels per frame (the screen is 320 x 200)
+  double speed = 6.5;      // pointer speed at full deflection, pixels per frame (the screen is 320 x 200)
   double curve = 2.0;      // response curve exponent: 1 = linear, higher = gentler near the centre
   double deadzone = 0.15;  // stick dead zone (0..1)
   double dpad = 1.0;       // d-pad speed, pixels per frame
+  // A light inertia (owner 2026-11-03: the direct stick felt "brittle"): the speed eases towards the stick's
+  // with these time constants in frames (0 = at once, the old behaviour); stopping quicker than starting.
+  double smooth = 2.0;
+  double stop = 1.0;
   // The fire direction modes ($49130) run 0 up, 1 up and out, 2 sideways, 3 down and out, 4 down; left Shift
   // steps towards 0, Alt towards 4. Right stick up = left Shift (towards up), unless swapped.
   int fire_mode_swap = 0;
@@ -66,10 +70,10 @@ struct Tap {
 };
 std::vector<Tap> g_taps;
 float g_px = 0, g_py = 0;  // pointer movement not applied yet (sub-pixel)
+float g_vx = 0, g_vy = 0;  // the pointer's eased speed, pixels per frame
 uint8_t g_held_keys = 0;   // bit 2 Control (held by the pad)
 int g_flick = 0;           // right stick: -1 up, 1 down, 0 back near the centre (ready for the next flick)
 bool g_lb = false, g_rb = false;  // shoulder buttons last frame (one nosecone step per press)
-uint64_t g_quit_armed_ms = 0;
 bool g_quit = false;
 bool g_running = false;  // the game has unpacked itself and reached its title
 bool g_hide_entry_lane = true;
@@ -85,6 +89,7 @@ TestPad g_test_pad;
 struct Click {
   int x, y;
   uint8_t modifier;
+  bool press;  // false: only move the pointer
 };
 std::deque<Click> g_clicks;
 int g_click_frame = -1;  // the front click's progress (-1: not started)
@@ -117,13 +122,12 @@ void MenuButton(st::Machine* m) {
   if (s == kPause) {
     TapKey(m, kQ);
     LOG("gridrunner: quit to the title");
-  } else if (s == kTitle) {
-    if (SDL_GetTicks() < g_quit_armed_ms) g_quit = true;
-    else g_quit_armed_ms = SDL_GetTicks() + 3000;
   }
 }
 
-void QueueClick(int x, int y, uint8_t modifier = 0) { g_clicks.push_back({x, y, modifier}); }
+void QueueClick(int x, int y, uint8_t modifier = 0) { g_clicks.push_back({x, y, modifier, true}); }
+// The pointer to (x, y) in turn with the clicks, no button.
+void QueueMove(int x, int y) { g_clicks.push_back({x, y, 0, false}); }
 
 // Installed once the game has unpacked itself (its code isn't there before).
 void InstallHooks(st::Machine* m) {
@@ -234,6 +238,13 @@ void OptionsMove(st::Machine* m, int d) {
   Put16(*m, kPointerY, uint16_t(kOptionRows[row]));
 }
 
+// Where the pointer will be once the queued clicks are done.
+void LevelPointer(st::Machine* m, int* x, int* y) {
+  *x = int16_t(Get16(*m, kPointerX)), *y = int16_t(Get16(*m, kPointerY));
+  for (const Click& c : g_clicks)
+    if (c.x >= 0) *x = c.x, *y = c.y;
+}
+
 // Pad buttons on the point-and-click screens. True if used.
 bool MenuShortcut(st::Machine* m, uint8_t button) {
   switch (GameState(*m)) {
@@ -242,11 +253,29 @@ bool MenuShortcut(st::Machine* m, uint8_t button) {
       if (button == SDL_GAMEPAD_BUTTON_NORTH) return QueueClick(-1, 0, kAlt), true;
       if (button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) return QueueClick(-1, 0, kCtrl), true;
       return false;
-    case kLevelSelect:
-      if (button == SDL_GAMEPAD_BUTTON_DPAD_LEFT) return QueueClick(kMinusX, kLevelButtonsY), true;
-      if (button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) return QueueClick(kPlusX, kLevelButtonsY), true;
-      if (button == SDL_GAMEPAD_BUTTON_SOUTH) return QueueClick(kBlastX, kBlastY), true;
-      return false;
+    case kLevelSelect: {
+      // Two rows (owner 2026-11-03): [-] [+] and LET'S BLAST!!; up / down move the pointer between them, A
+      // clicks what it is on. Left / right always change the level; on the bottom row the pointer comes back.
+      int x, y;
+      LevelPointer(m, &x, &y);
+      bool top = y < (kLevelButtonsY + kBlastY) / 2;
+      switch (button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+          QueueClick(button == SDL_GAMEPAD_BUTTON_DPAD_LEFT ? kMinusX : kPlusX, kLevelButtonsY);
+          if (!top) QueueMove(kBlastX, kBlastY);
+          return true;
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+          if (!top) QueueMove(x < kBlastX ? kMinusX : kPlusX, kLevelButtonsY);
+          return true;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return QueueMove(kBlastX, kBlastY), true;
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+          if (top) QueueClick(x < kBlastX ? kMinusX : kPlusX, kLevelButtonsY);
+          else QueueClick(kBlastX, kBlastY);
+          return true;
+        default: return false;
+      }
+    }
     case kNameEntry:
       switch (button) {
         case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return NameMove(m, -1, 0), true;
@@ -284,27 +313,39 @@ void Curve(float x, float y, float* vx, float* vy) {
   *vx = float(x / mag * v), *vy = float(y / mag * v);
 }
 
+// The stick's speed (vx, vy) -> the eased speed. Losing speed along the current direction (letting go,
+// turning back) uses the stop constant, gaining it the smooth one.
+void Ease(float* vx, float* vy) {
+  float along = *vx * g_vx + *vy * g_vy, now = g_vx * g_vx + g_vy * g_vy;
+  double tau = along < now ? g_tune.stop : g_tune.smooth;
+  float k = tau > 0 ? float(1.0 - std::exp(-1.0 / tau)) : 1.0f;
+  g_vx += (*vx - g_vx) * k, g_vy += (*vy - g_vy) * k;
+  if (*vx == 0 && *vy == 0 && g_vx * g_vx + g_vy * g_vy < 0.05f * 0.05f) g_vx = g_vy = 0;
+  *vx = g_vx, *vy = g_vy;
+}
+
 }  // namespace
 
 int GameState(st::Machine& m) { return Get16(m, kStateVar); }
 
 void LoadSettings() {
-  g_tune.speed = settings::Get("grid_stick_speed", 6.0);
+  g_tune.speed = settings::Get("grid_stick_speed", 6.5);
   g_tune.curve = settings::Get("grid_stick_curve", 2.0);
   g_tune.deadzone = std::clamp(settings::Get("grid_stick_deadzone", 0.15), 0.0, 0.9);
   g_tune.dpad = settings::Get("grid_dpad_speed", 1.0);
+  g_tune.smooth = std::max(0.0, settings::Get("grid_stick_smooth", 2.0));
+  g_tune.stop = std::max(0.0, settings::Get("grid_stick_stop", 1.0));
   g_tune.fire_mode_swap = settings::Get("grid_fire_mode_swap", 0.0) != 0;
   g_tune.draw_50 = settings::Get("grid_50fps", 1.0) != 0;
   g_unlock_died = settings::Get("grid_unlock_level_died", 1.0) != 0;
-  LOG("gridrunner stick: speed %.2f, curve %.2f, dead zone %.2f, d-pad %.2f", g_tune.speed, g_tune.curve,
-      g_tune.deadzone, g_tune.dpad);
+  LOG("gridrunner stick: speed %.2f, curve %.2f, dead zone %.2f, d-pad %.2f, smooth %.2f, stop %.2f",
+      g_tune.speed, g_tune.curve, g_tune.deadzone, g_tune.dpad, g_tune.smooth, g_tune.stop);
 }
 
 bool HandleEvent(const SDL_Event& e, st::Machine* m) {
   if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
     if (g_running && MenuShortcut(m, e.gbutton.button)) return true;
     switch (e.gbutton.button) {
-      case SDL_GAMEPAD_BUTTON_BACK:
       case SDL_GAMEPAD_BUTTON_START: PauseButton(m); return true;
       case SDL_GAMEPAD_BUTTON_EAST: MenuButton(m); return true;
       default: return false;
@@ -377,6 +418,7 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
       if (button(SDL_GAMEPAD_BUTTON_DPAD_UP)) vy -= float(g_tune.dpad);
       if (button(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) vy += float(g_tune.dpad);
     }
+    Ease(&vx, &vy);
     if (g_running && (vx != 0 || vy != 0)) {
       g_px += vx, g_py += vy;
       int dx = int(g_px), dy = int(g_py);
@@ -423,9 +465,9 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
       if (c.x >= 0) Put16(*m, kPointerX, uint16_t(c.x)), Put16(*m, kPointerY, uint16_t(c.y));
       if (c.modifier) m->KeyEvent(c.modifier, true);
     }
-    if (g_click_frame >= 1 && g_click_frame <= 4) buttons |= 2;
+    if (g_click_frame >= 1 && g_click_frame <= 4 && c.press) buttons |= 2;
     if (g_click_frame == 5 && c.modifier) m->KeyEvent(c.modifier, false);
-    if (g_click_frame >= 0 && ++g_click_frame > 8) {
+    if (g_click_frame >= 0 && ++g_click_frame > (c.press ? 8 : 1)) {
       g_clicks.pop_front();
       g_click_frame = -1;
     }
@@ -444,14 +486,11 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
 
 const char* Hint(st::Machine* m, bool have_pad) {
   int s = GameState(*m);
-  if (s == kPause) return have_pad ? "Back: resume   B: quit to title" : "Space: resume   Q or Esc: quit to title";
-  if (s == kTitle && SDL_GetTicks() < g_quit_armed_ms)
-    return have_pad ? "Press B again to quit" : "Press Esc again to quit";
+  if (s == kPause) return have_pad ? "Start: resume   B: quit to title" : "Space: resume   Q or Esc: quit to title";
   if (!have_pad) return nullptr;
   switch (s) {
     case kTitle:
-      return SDL_GetTicks() < g_title_hint_ms ? "A: play   X: options   B: quit\nY: game secrets   LB: more info" : nullptr;
-    case kLevelSelect: return "D-pad: level - / +   A: let's blast!";
+      return SDL_GetTicks() < g_title_hint_ms ? "A: play   X: options\nY: game secrets   LB: more info" : nullptr;
     case kNameEntry: return "D-pad: letter   A: pick   B: delete\nStart: done";
     case kOptions: return "D-pad: choose   A: select   B: back";
     default: return nullptr;
@@ -465,10 +504,11 @@ void SetHideEntryLane(bool on) { g_hide_entry_lane = on; }
 void Reset() {
   g_taps.clear();
   g_px = g_py = 0;
+  g_vx = g_vy = 0;
   g_held_keys = 0;
   g_flick = 0;
   g_lb = g_rb = false;
-  g_quit_armed_ms = g_title_hint_ms = 0;
+  g_title_hint_ms = 0;
   g_quit = g_running = g_hooked = g_test = false;
   g_clicks.clear();
   g_click_frame = g_prev_state = -1;

@@ -23,15 +23,19 @@ LABELS = [
     ('hardcore', 'hardcore-photo.jpg', (0, 0, 1, 1), None),
     ('photonstorm', 'photonstorm-photo.jpg', (0, 0, 1, 1), None),
     ('rmctt', 'rmctt-photo.jpg', (0, 0, 1, 1), None),
+    ('settings', 'settings-photo.jpg', (0, 0, 1, 1), None),  # the launcher's Settings disk (2026-11-03)
 ]
 # Every disk uses the Ink Free stand-in (owner 2026-11-01: "replace my handwritten labels so all the disks are
 # consistent"); the photo processing stays for a disk taken off this list.
 STAND_IN = {'llamatron': ['Llamatron'], 'gridrunner': ['Super', 'Gridrunner'], 'tripatron': ['Trip-A-Tron'],
             'rmc': ['Mutant', 'Camels'], 'defender2': ['Defender 2'], 'andes': ['Andes', 'Attack'],
-            'hardcore': ['Hardcore'], 'photonstorm': ['Photon', 'Storm'], 'rmctt': ['Camels', 'TT Megamix']}
+            'hardcore': ['Hardcore'], 'photonstorm': ['Photon', 'Storm'], 'rmctt': ['Camels', 'TT Megamix'],
+            'settings': ['Settings']}
+# The signature at the bottom right ("by Yak"); none on our own Settings disk.
+BYLINE = {'settings': ''}
 
 
-def stand_in(lines):
+def stand_in(lines, byline='by Yak'):
     """A label written in Windows' Ink Free font (felt-pen look), for a disk without a photographed label: a
     wobbly hand-drawn box, the name in the upper middle, "by Yak" at the bottom right, like the owner's."""
     from PIL import ImageFont
@@ -53,9 +57,10 @@ def stand_in(lines):
     for t, b in zip(lines, heights):
         d.text(((W * 2 - (b[2] - b[0])) // 2 - b[0], y - b[1]), t, font=font, fill=0, stroke_width=5, stroke_fill=0)
         y += b[3] - b[1] + 40
-    bb = d.textbbox((0, 0), 'by Yak', font=small, stroke_width=4)
-    d.text((x1 - 50 - (bb[2] - bb[0]) - bb[0], y1 - 40 - (bb[3] - bb[1]) - bb[1]), 'by Yak', font=small, fill=0,
-           stroke_width=4, stroke_fill=0)
+    if byline:
+        bb = d.textbbox((0, 0), byline, font=small, stroke_width=4)
+        d.text((x1 - 50 - (bb[2] - bb[0]) - bb[0], y1 - 40 - (bb[3] - bb[1]) - bb[1]), byline, font=small, fill=0,
+               stroke_width=4, stroke_fill=0)
     big = big.rotate(-2, resample=Image.BICUBIC, fillcolor=255)
     return big.resize((W, H), Image.LANCZOS)
 
@@ -121,7 +126,7 @@ def main():
     for name, photo, box, touch_up in LABELS:
         path = os.path.join(ROOT, 'res', 'labels', photo)
         if name in STAND_IN:
-            img = stand_in(STAND_IN[name])
+            img = stand_in(STAND_IN[name], BYLINE.get(name, 'by Yak'))
         else:
             img = process(path, box, globals()[touch_up] if touch_up else None)
         img.save(os.path.join(ROOT, 'res', 'labels', name + '.png'))

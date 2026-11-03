@@ -11,7 +11,7 @@
 //   d-pad            moves it slowly, for precision (grid_dpad_speed)
 //   RT, A            left button (fire, click)        LT   right button (the nose)
 //   right stick      flick up / down: nosecone shot direction one step (up..down)   RB   Control (martyrdom)
-//   Back, Start      pause / resume                   B    pause: quit to the title; title: quit (twice)
+//   Start            pause / resume                   B    pause: quit to the title
 // The point-and-click screens get shortcuts (virtual clicks: the pointer is put on the target and the left
 // button pressed for a few frames):
 //   title         A play, X options (left Shift + click), Y game secrets (Alt + click), LB more info (Control +

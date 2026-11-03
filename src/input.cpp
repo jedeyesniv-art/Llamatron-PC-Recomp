@@ -30,7 +30,6 @@ struct Tap {
 };
 std::vector<Tap> g_taps;
 int g_quit_to_title = 0;      // frames left waiting for the game to resume before tapping X (quit to title)
-uint64_t g_quit_armed_ms = 0; // B at the title: quit if pressed again before this time
 bool g_quit = false;
 uint64_t g_aim_hint_ms = 0;   // show the analog aim setting until then (title screen)
 bool g_was_title = false;
@@ -40,7 +39,7 @@ void TapKey(st::Machine* m, uint8_t code) {
   g_taps.push_back({code, 3});
 }
 
-// Back: the game's pause (P) / resume (O).
+// Start: the game's pause (P) / resume (O).
 void PauseButton(st::Machine* m) {
   if (game::Playing(*m)) TapKey(m, kKeyP);
   else if (game::Paused(*m)) TapKey(m, kKeyO);
@@ -51,15 +50,12 @@ void TentacleButton(st::Machine* m) {
   if (game::Paused(*m)) TapKey(m, game::Tentacle(*m) ? kKeyG : kKeyT);
 }
 
-// B (Esc): from the pause screen back to the title (the game's X key only works while playing: resume first);
-// at the title, quit (press twice).
+// B (Esc): from the pause screen back to the title (the game's X key only works while playing: resume first).
+// Leaving the game is in the settings panel (Back, then B).
 void MenuButton(st::Machine* m) {
   if (game::Paused(*m)) {
     TapKey(m, kKeyO);
     g_quit_to_title = 50;
-  } else if (game::AtTitle(*m)) {
-    if (SDL_GetTicks() < g_quit_armed_ms) g_quit = true;
-    else g_quit_armed_ms = SDL_GetTicks() + 3000;
   }
 }
 
@@ -220,12 +216,7 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
       if (uint8_t code = StScancode(e.key.scancode)) m->KeyEvent(code, e.type == SDL_EVENT_KEY_DOWN);
     return false;
   }
-  if (g_mode == Mode::kGeneric) {  // every key goes to the ST; pad B twice leaves the game
-    if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
-      if (SDL_GetTicks() < g_quit_armed_ms) g_quit = true;
-      else g_quit_armed_ms = SDL_GetTicks() + 3000;
-      return true;
-    }
+  if (g_mode == Mode::kGeneric) {  // every key goes to the ST; the pad is polled (UpdateGeneric)
     if ((e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) && !e.key.repeat)
       if (uint8_t code = StScancode(e.key.scancode)) m->KeyEvent(code, e.type == SDL_EVENT_KEY_DOWN);
     return false;
@@ -239,7 +230,7 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
   switch (e.type) {
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
     case SDL_EVENT_GAMEPAD_BUTTON_UP:
-      if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) {
+      if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_START) {
         PauseButton(m);
         return true;
       }
@@ -293,7 +284,7 @@ void SetMode(Mode mode) {
 Mode GetMode() { return g_mode; }
 
 // Other programs: pad 1 = joystick 1 (left stick / d-pad, A fire) and the mouse (right stick, RT left button,
-// LT right button); Start = Space, Back = Esc. A second pad = joystick 0. Mouse and buttons from the PC mouse
+// LT right button); Start = Space, B = Esc (Back = the settings panel). A second pad = joystick 0. Mouse and buttons from the PC mouse
 // (and test input) are added in.
 void UpdateGeneric(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_buttons) {
   uint8_t j0 = 0, j1 = 0, buttons = mouse_buttons;
@@ -311,9 +302,9 @@ void UpdateGeneric(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_but
       float k = 6.0f * (mag - 0.15f) / 0.85f * (mag - 0.15f) / 0.85f / mag;
       g_mouse_x += x * k, g_mouse_y += y * k;
     }
-    bool start = button(SDL_GAMEPAD_BUTTON_START), back = button(SDL_GAMEPAD_BUTTON_BACK);
+    bool start = button(SDL_GAMEPAD_BUTTON_START), back = button(SDL_GAMEPAD_BUTTON_EAST);
     if (start != g_start_held) m->KeyEvent(0x39, start);  // Space
-    if (back != g_back_held) m->KeyEvent(0x01, back);     // Esc
+    if (back != g_back_held) m->KeyEvent(0x01, back);     // B: Esc
     g_start_held = start, g_back_held = back;
   }
   if (g_pads.size() >= 2) {
@@ -333,7 +324,7 @@ void Reset() {
   g_a_held = g_a_to_stick0 = false;
   g_taps.clear();
   g_quit_to_title = 0;
-  g_quit_armed_ms = g_aim_hint_ms = 0;
+  g_aim_hint_ms = 0;
   g_quit = g_was_title = false;
   g_mouse_x = g_mouse_y = 0;
   g_start_held = g_back_held = false;
@@ -343,17 +334,14 @@ SDL_Gamepad* FirstPad() { return g_pads.empty() ? nullptr : g_pads[0]; }
 const char* Hint(st::Machine* m) {
   if (g_mode == Mode::kTripATron) return trip::Hint(m, !g_pads.empty());
   if (g_mode == Mode::kRmc || g_mode == Mode::kAndes || g_mode == Mode::kDefender2 || g_mode == Mode::kHardcore || g_mode == Mode::kDocs || g_mode == Mode::kPhotonStorm) return stgames::Hint(m, !g_pads.empty());
-  if (g_mode == Mode::kGeneric)
-    return SDL_GetTicks() < g_quit_armed_ms ? "Press B again to leave the game" : nullptr;
+  if (g_mode == Mode::kGeneric) return nullptr;
   if (g_gridrunner) return grid::Hint(m, !g_pads.empty());
   if (game::Paused(*m))
     return g_pads.empty() ? "O: resume   Esc: quit to title\nT / G: tentacle on / off"
-                          : "Back: resume   B: quit to title\nY: tentacle (left stick plays)";
+                          : "Start: resume   B: quit to title\nY: tentacle (left stick plays)";
   bool title = game::AtTitle(*m);
   if (title && !g_was_title) g_aim_hint_ms = SDL_GetTicks() + 4000;  // shown for a while when the title comes up
   g_was_title = title;
-  if (title && SDL_GetTicks() < g_quit_armed_ms)
-    return g_pads.empty() ? "Press Esc again to quit" : "Press B again to quit";
   if (title && !g_pads.empty() && SDL_GetTicks() < g_aim_hint_ms)
     return game::AnalogAim() ? "RB: analog aim ON" : "RB: analog aim OFF (8 directions)";
   return nullptr;
@@ -400,7 +388,7 @@ void Update(st::Machine* m) {
       float ay = SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
       aim = ax * ax + ay * ay >= 0.35f * 0.35f;  // the same dead zone as the 8-way direction
       if (aim) game::SetAim(true, ax, ay);
-      if (button(SDL_GAMEPAD_BUTTON_START) || (button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) && !game::AtTitle(*m)) ||
+      if ((button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) && !game::AtTitle(*m)) ||
           SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000)
         j0 |= st::kJoyFire;
       // A at the title starts the twin-stick game (fire on stick 2), elsewhere it's stick 1's fire. Decided when
@@ -409,7 +397,7 @@ void Update(st::Machine* m) {
       if (a && !g_a_held) g_a_to_stick0 = game::AtTitle(*m) && game::TwinStickAllowed(*m);
       g_a_held = a;
       if (a) (g_a_to_stick0 ? j0 : j1) |= st::kJoyFire;
-    } else if (button(SDL_GAMEPAD_BUTTON_SOUTH) || button(SDL_GAMEPAD_BUTTON_START)) {
+    } else if (button(SDL_GAMEPAD_BUTTON_SOUTH)) {
       j1 |= st::kJoyFire;
     }
   }

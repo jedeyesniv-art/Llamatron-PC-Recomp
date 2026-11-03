@@ -111,6 +111,7 @@ const BuiltIn kBuiltIn[] = {
     {"hardcore", kLabel_hardcore, sizeof(kLabel_hardcore)},
     {"photonstorm", kLabel_photonstorm, sizeof(kLabel_photonstorm)},
     {"rmctt", kLabel_rmctt, sizeof(kLabel_rmctt)},
+    {"settings", kLabel_settings, sizeof(kLabel_settings)},
 };
 
 }  // namespace
@@ -291,8 +292,10 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
   };
   auto play = [&]() {
     info_ = false;
+    if (g.settings) return Action::kSettings;  // the panel, at once
     want_docs_ = false;
     launching_ = 0;
+    return Action::kNone;
   };
   // X on the how-to-play page: the docs (a reader runs like a game; text comes back as kDocs at once).
   auto docs = [&]() {
@@ -322,7 +325,7 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
       case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: Step(-1); break;
       case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: Step(1); break;
       case SDL_GAMEPAD_BUTTON_SOUTH:
-      case SDL_GAMEPAD_BUTTON_START: play(); break;
+      case SDL_GAMEPAD_BUTTON_START: return play();
       case SDL_GAMEPAD_BUTTON_NORTH: toggle_info(); break;
       case SDL_GAMEPAD_BUTTON_WEST:
         if (info_ && has_docs) return docs();
@@ -338,7 +341,7 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
       case SDL_SCANCODE_RIGHT: case SDL_SCANCODE_D: left_right(1); break;
       case SDL_SCANCODE_UP: case SDL_SCANCODE_W: up_down(-1); break;
       case SDL_SCANCODE_DOWN: case SDL_SCANCODE_S: up_down(1); break;
-      case SDL_SCANCODE_RETURN: case SDL_SCANCODE_SPACE: play(); break;
+      case SDL_SCANCODE_RETURN: case SDL_SCANCODE_SPACE: return play();
       case SDL_SCANCODE_F1: case SDL_SCANCODE_I: case SDL_SCANCODE_H: case SDL_SCANCODE_TAB: toggle_info(); break;
       case SDL_SCANCODE_F9: case SDL_SCANCODE_C: if (crt::Available()) crt::Toggle(); break;
       case SDL_SCANCODE_X: if (info_ && has_docs) return docs(); break;
@@ -353,7 +356,7 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
     float x = e.button.x / float(std::max(1, w));
     if (x < 0.3f) Step(-1);
     else if (x > 0.7f) Step(1);
-    else if (!info_) play();
+    else if (!info_) return play();
   }
   return Action::kNone;
 }
@@ -550,6 +553,7 @@ void Launcher::Render() {
   }
   DrawText("LLAMASOFT ON THE ATARI ST", w / 2, h * 0.06f, s, {120, 120, 135, 255}, true);
   const char* hint = SDL_GetTicks() < quit_armed_ms_ ? "PRESS B AGAIN TO QUIT"
+                     : picked.settings ? "LEFT/RIGHT CHOOSE    A OPEN    Y WHAT'S HERE    B QUIT"
                      : !crt::Available() ? "LEFT/RIGHT CHOOSE    A PLAY    Y HOW TO PLAY    B QUIT"
                      : crt::Enabled() ? "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT: ON   B QUIT"
                                       : "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT: OFF   B QUIT";

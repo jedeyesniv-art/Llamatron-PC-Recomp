@@ -29,7 +29,7 @@ than Llamatron and Gridrunner in a folder of its own there).
 
 More disks: put any Atari ST disk image (.msa, .st or .stx) in the "game" folder and it appears as a disk of
 its own on the start screen, named after the file, with simple pad controls (left stick and A = the
-joystick, right stick = the mouse, RT / LT = its buttons, Start = Space, Back = Esc, B twice = leave). If it
+joystick, right stick = the mouse, RT / LT = its buttons, Start = Space, B = Esc, Back = settings). If it
 has several programs on it, pick one on its how-to-play page. A picture named like the image (.png) next to
 it becomes its label.
 
@@ -43,8 +43,20 @@ The disks on a carousel: pick a game.
   X               on that page: read the game's docs (where the disk has them); elsewhere: CRT look on / off
                   (also F9, here and in the games)
   B, B            quit
-From any game, press B twice to come back to the disks (Llamatron and Gridrunner: on their title screen).
 Keyboard: cursor keys, Enter, H = how to play, C = CRT, Esc twice = quit.
+
+
+SETTINGS
+--------
+The last disk on the carousel, and Back (keyboard F1) in any game: everything worth changing - the remaster,
+run-ahead, the CRT look and its sliders, fullscreen, and each game's own controls. In a game the game waits
+while they're up and the picture behind shows what a change does.
+  Up / down       pick                      Left / right    change (hold for sliders)
+  A               toggle                    X               back to the default
+  LB / RB         the previous / next section
+  Back            carry on with the game    B               leave the game, back to the disks
+Changes are saved at once. A * marks the ones that take effect when the game next starts.
+In every game Start is the game's own pause (Defender 2 has none: Start freezes it).
 
 
 LLAMATRON CONTROLS - XBOX PAD
@@ -55,16 +67,15 @@ Title screen:
   Left / right    choose 1 PLAYER, PLAYER + DROID or TEAM (TEAM: two players, plug in a second pad)
   Up / down       1 or 2
   RB              analog aim on / off (twin-stick shots in any direction instead of 8; off by default)
-  B, B            back to the start screen
 
 In the game:
   Left stick      move
   Right stick     shoot (twin-stick mode)
   A               fire / lock the fire angle (one-stick mode)
-  Back            pause
+  Start           pause
 
 Pause screen:
-  Back            resume
+  Start           resume
   Y               the Ozric tentacle on / off (play with it using the left stick and A)
   B               quit to the title screen
 
@@ -77,7 +88,8 @@ LLAMATRON CONTROLS - KEYBOARD
   Cursor keys, Enter  stick 2 (shoot in twin-stick mode) and its fire
   P / O               pause / resume (and on the pause screen: H 50/60 Hz, S samples on/off, T tentacle, G back)
   X                   (in play) quit to the title screen
-  Esc                 pause screen: quit to title; title screen: quit (press twice)
+  Esc                 pause screen: quit to title
+  F1                  settings (Esc there: back to the disks)
   F11 or Alt+Enter    fullscreen / window
   F9                  CRT look on / off
   F8                  Photon Storm: the remaster (smooth motion, exact ship angle) on / off
@@ -93,15 +105,15 @@ In the game:
   RB / LB         turn the nosecone's shot direction one step up / down
   Right stick     the same: flick up or down
   Y               voluntary martyrdom (costs a life)
-  Back or Start   pause; B on the pause screen quits to the title
+  Start           pause; B on the pause screen quits to the title
 
 Title screen:
-  A               play (on the level select: d-pad left / right picks the level, A blasts off; levels 1-4
+  A               play (on the level select: d-pad left / right picks the level, up / down moves between
+                  the buttons, A presses the one you're on; levels 1-4
                   to begin with, then up to the furthest level you've reached - it unlocks when you die there)
   X               options (d-pad up / down, A changes, B back)
   Y               game secrets
   LB              more info
-  B, B            back to the start screen
 
 Name entry (a high score): d-pad picks a letter, A types it, B deletes, Start is OK. Typing on the keyboard
 works too.
@@ -125,8 +137,7 @@ first time it installs itself into userdata\tripatron (a few seconds). Its READM
 REVENGE OF THE MUTANT CAMELS - XBOX PAD
 ---------------------------------------
   Left stick / d-pad   move the camel             A, X, RT        fire
-  Back                 pause                      B (paused)      back to the menu
-  B, B                 back to the disks
+  Start                pause                      B (paused)      back to the menu
 Keyboard: cursor keys + Space, P pause, O resume. Yak's notes are on the how-to-play page.
 The TT Megamix plays the same way. It was the shareware release: its shareware screen comes first (fire
 goes on).
@@ -136,9 +147,9 @@ ANDES ATTACK - XBOX PAD
 -----------------------
   Left stick up / down   altitude                 Left stick left / right   thrust that way (turns round first)
   A or RT                fire                     Y                         smart bomb
-  X / LT                 reverse / thrust         Back                      pause
+  X / LT                 reverse / thrust         Start                     pause
   LB or RB (hold)        shield (its energy drains while it's up)
-  High score name: up / down picks a letter, A enters it.     B, B: back to the disks
+  High score name: up / down picks a letter, A enters it.
 Mouse and keyboard as the original: mouse up / down, left button thrust, right reverse, Left Shift fire,
 Control smart bomb, Alt (hold) shield, Right Shift pause, Space resume.
 
@@ -149,7 +160,7 @@ DEFENDER 2 - XBOX PAD
   Left stick up / down   climb / dive             Left stick left / right   thrust that way (turns round first)
   A or RT                fire                     Y                         smart bomb
   X / LT                 reverse / thrust         LB                        inviso (Stargate)
-  Back                   pause                    B, B                      back to the disks
+  Start                  pause (freezes it: the game has no pause of its own)
   Initials (a high score): the d-pad picks the letter, A fixes it, X deletes.
 The crack's trainer (invincibility, friendly sprites) is on the how-to-play page, and its notes. It runs in
 its 60 Hz mode (as the arcade did; the game adjusts its speeds), on a 60 / 120 Hz display mode in fullscreen.
@@ -159,8 +170,7 @@ PHOTON STORM - XBOX PAD
 -----------------------
   Left stick       steer the ship (push far: fly)  Right stick     fire in any direction
   A or RT          fire where the ship points      X or LT         thrust
-  Back             pause                           B (paused)      quit to the title
-  B, B             back to the disks
+  Start            pause                           B (paused)      quit to the title
   Title: A = one player, X = two players, Y = controls: 360 twin stick (the default: aim, flight and shots
   at any angle; the ship's picture still has its 16 steps) or the original 16 directions (one stick).
 Mouse as the original: where it points from the middle is the direction; left button fire, right thrust.
@@ -172,7 +182,7 @@ HARDCORE - XBOX PAD
 The guns ride the four edges of the field and fire by themselves; the puck ricochets around.
   Left stick       move the guns                  Right stick     put them at that spot
   A or RT          side lasers                    Y               puck intelligence on / off
-  Back             pause                          B, B            back to the disks
+  Start            pause
 Keyboard: P pause, O resume, S strobes, N next level. Yak's notes for its testers are on the how-to-play page.
 
 
@@ -212,6 +222,8 @@ Written on the first run with every setting and its default. Edit it while the g
   crt_contrast, crt_brightness, crt_saturation, crt_temperature, crt_overflow   colour
   analog_aim              Llamatron's analog aim (also RB on its title screen)
   grid_stick_speed, grid_stick_curve, grid_stick_deadzone, grid_dpad_speed   Gridrunner's ship movement
+  grid_stick_smooth, grid_stick_stop   a light inertia: frames to speed up / to stop (0 = instant)
+  (Most of these are on the Settings disk too.)
   grid_fire_mode_swap     1 = flip which way a right-stick flick turns the nosecone shot
   grid_50fps              1 = Gridrunner at 50 frames a second (0 = the original)
   grid_unlock_level_died  1 = the level select unlocks the level you died on (0 = the original: the one before,

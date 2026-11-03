@@ -20,7 +20,6 @@ namespace {
 
 Game g_game = Game::kRmc;
 bool g_quit = false;
-uint64_t g_quit_armed_ms = 0;
 std::string g_hint;
 bool g_keys[SDL_SCANCODE_COUNT] = {};
 
@@ -61,12 +60,6 @@ void RunTaps(st::Machine* m) {
   }
 }
 
-// B twice (within 3 s): leave the game.
-void ArmQuit() {
-  if (SDL_GetTicks() < g_quit_armed_ms) g_quit = true;
-  else g_quit_armed_ms = SDL_GetTicks() + 3000;
-}
-
 // ---- Revenge of the Mutant Camels ----
 
 // The 512K build's addresses; the 1 MB STE build (REVSTE1M.TOS) has the same code elsewhere.
@@ -90,8 +83,6 @@ void RmcB(st::Machine* m) {
   if (RmcPaused(*m)) {  // resume, then X (it only works in play): back to the menu
     TapKey(m, kKeyO);
     g_delayed_key = kKeyX, g_delay = 10;
-  } else {
-    ArmQuit();
   }
 }
 
@@ -102,9 +93,7 @@ void RmcUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   remaster_rmc::Update(m);
   const pad::State& p = pad::Now();
   uint8_t j1 = pad::JoyBits(p);
-  if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.Held(SDL_GAMEPAD_BUTTON_START) ||
-      p.rt > 0.5f)
-    j1 |= st::kJoyFire;
+  if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.rt > 0.5f) j1 |= st::kJoyFire;
   // The keyboard: cursor keys + Space / Right Ctrl.
   if (g_keys[SDL_SCANCODE_UP]) j1 |= st::kJoyUp;
   if (g_keys[SDL_SCANCODE_DOWN]) j1 |= st::kJoyDown;
@@ -114,7 +103,7 @@ void RmcUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   if ((j1 & st::kJoyUp) && (j1 & st::kJoyDown)) j1 &= uint8_t(~(st::kJoyUp | st::kJoyDown));
   if ((j1 & st::kJoyLeft) && (j1 & st::kJoyRight)) j1 &= uint8_t(~(st::kJoyLeft | st::kJoyRight));
   m->SetJoystick(1, j1);
-  if (pad::Pressed(SDL_GAMEPAD_BUTTON_BACK)) RmcBack(m);
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_START)) RmcBack(m);
   if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) RmcB(m);
   m->MouseInput(mdx, mdy, mbuttons);
 }
@@ -172,7 +161,6 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   bool play = state == kAndesPlay;
   if (AndesNameEntry(*m)) {
     NameEntryPad(m, p);
-    if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) ArmQuit();
     m->MouseInput(mdx, mdy, mbuttons);
     return;
   }
@@ -248,11 +236,10 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     if (p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.lt > 0.5f) buttons |= 1;
     g_stick_dir = 0;
   }
-  if (pad::Pressed(SDL_GAMEPAD_BUTTON_BACK)) {
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_START)) {
     if (play) TapKey(m, kKeyRShift);
     else if (state == kAndesPaused) TapKey(m, kKeySpace);
   }
-  if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) ArmQuit();
   m->MouseInput(mdx, mdy + dy, buttons);
 }
 
@@ -304,13 +291,13 @@ void D2Click(Point p, int delay) {
 void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   remaster_d2::Update(m);
   const pad::State& p = pad::Now();
-  if (pad::Pressed(SDL_GAMEPAD_BUTTON_BACK)) {
+  int state = Get16(*m, kD2State);
+  // Start in play: the emulation paused (the game has no pause of its own); elsewhere Start is A.
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_START) && (g_host_paused || state == kD2Play)) {
     g_host_paused = !g_host_paused;
     if (g_host_paused) ReleaseAll(m);
   }
-  if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) ArmQuit();
   if (g_host_paused) return;
-  int state = Get16(*m, kD2State);
   uint8_t buttons = mbuttons;
   // A click on its way: the pointer to the spot, the left button held for a few frames.
   if (g_d2_click_in > 0 && --g_d2_click_in == 0) g_d2_click_frames = 5;
@@ -417,11 +404,10 @@ void HardcoreUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   uint32_t hook = Get32(*m, kHcHook);
   uint8_t buttons = mbuttons;
   if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;
-  if (pad::Pressed(SDL_GAMEPAD_BUTTON_BACK)) {
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_START)) {
     if (hook == kHcPlay) TapKey(m, kKeyP);
     else if (hook == kHcPaused) TapKey(m, kKeyO);
   }
-  if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) ArmQuit();
   if (hook == kHcPlay && !g_hc_strobes_done) {
     g_hc_strobes_done = true;
     if (!g_hc_strobes) Put16(m, kHcStrobesOff, 1);
@@ -948,14 +934,11 @@ void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     settings::Save();
     LOG("photon storm: %s controls", g_ps_analog ? "360 twin stick" : "original 16-direction");
   }
-  if (pad::Pressed(SDL_GAMEPAD_BUTTON_BACK)) {
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_START)) {
     if (state == kPsPlay) TapKey(m, kKeyRShift);
     else if (state == kPsPaused) TapKey(m, kKeySpace);
   }
-  if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) {
-    if (state == kPsPaused) TapKey(m, kKeyQ);  // quit to the title
-    else ArmQuit();
-  }
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST) && state == kPsPaused) TapKey(m, kKeyQ);  // quit to the title
   int dx = 0, dy = 0;
   g_ps_aim_on = g_ps_steer_on = g_ps_pad = false;
   if (state == kPsPlay && p.connected) {
@@ -1022,7 +1005,6 @@ void StartDocs(const std::string& keys) {
 void Start(Game g) {
   g_game = g;
   g_quit = false;
-  g_quit_armed_ms = 0;
   g_taps.clear();
   g_delay = 0;
   g_mouse_x = g_mouse_y = 0;
@@ -1036,22 +1018,30 @@ void Start(Game g) {
   g_letter = 0, g_letter_repeat = 0;
   g_hc_x = g_hc_y = -1;
   g_ps_mx = g_ps_my = 0;
-  g_ps_50fps = settings::Get("photonstorm_50fps", 1) != 0;
   g_docs_frame = g_docs_repeat = 0;
   g_docs_keys.clear();
-  g_hc_strobes = settings::Get("hc_strobes", 0) != 0, g_hc_strobes_done = false;
-  g_d2_50fps = settings::Get("d2_50fps", 1) != 0;
+  g_hc_strobes_done = false;
   g_fire_held = false;
   g_alt = -1;
-  g_andes_speed = float(settings::Get("andes_stick_speed", 3));
-  g_andes_ease = std::clamp(float(settings::Get("andes_thrust_ease", 0.5)), 0.05f, 19.0f), g_thrust_frac = 0;
-  g_andes_curve = float(settings::Get("andes_stick_curve", 1.5));
-  // Off by default (owner: "left and right feel wrong" with it): the game's own thrust and glide.
-  g_andes_direct = settings::Get("andes_direct_thrust", 0) != 0;
+  g_thrust_frac = 0;
+  LoadSettings();
   g_shield_held = false;
   remaster_andes::Start();
   remaster_d2::Start();
   std::fill(std::begin(g_keys), std::end(g_keys), false);
+}
+
+// The settings read at the start of a game; again when the settings panel changes one (some only matter at the
+// start: the panel says so).
+void LoadSettings() {
+  g_ps_50fps = settings::Get("photonstorm_50fps", 1) != 0;
+  g_hc_strobes = settings::Get("hc_strobes", 0) != 0;
+  g_d2_50fps = settings::Get("d2_50fps", 1) != 0;
+  g_andes_speed = float(settings::Get("andes_stick_speed", 3));
+  g_andes_ease = std::clamp(float(settings::Get("andes_thrust_ease", 0.5)), 0.05f, 19.0f);
+  g_andes_curve = float(settings::Get("andes_stick_curve", 1.5));
+  // Off by default (owner: "left and right feel wrong" with it): the game's own thrust and glide.
+  g_andes_direct = settings::Get("andes_direct_thrust", 0) != 0;
 }
 
 void Update(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_buttons) {
@@ -1069,8 +1059,8 @@ bool HandleKey(const SDL_Event& e, st::Machine* m) {
   bool down = e.type == SDL_EVENT_KEY_DOWN;
   if (e.key.scancode < SDL_SCANCODE_COUNT) g_keys[e.key.scancode] = down;
   if (e.key.repeat) return true;
-  if (e.key.scancode == SDL_SCANCODE_ESCAPE) {
-    if (down) g_game == Game::kRmc ? RmcB(m) : ArmQuit();
+  if (e.key.scancode == SDL_SCANCODE_ESCAPE && g_game == Game::kRmc && RmcPaused(*m)) {  // Esc = B
+    if (down) RmcB(m);
     return true;
   }
   if (g_game == Game::kRmc) {  // the cursor keys and Space are the joystick
@@ -1086,9 +1076,7 @@ bool HandleKey(const SDL_Event& e, st::Machine* m) {
 }
 
 const char* Hint(st::Machine* m, bool have_pad) {
-  if (SDL_GetTicks() < g_quit_armed_ms)
-    return have_pad ? "Press B again to leave the game" : "Press Esc again to leave the game";
-  if (g_host_paused) return have_pad ? "PAUSED   Back: resume   B twice: leave" : "PAUSED";
+  if (g_host_paused) return have_pad ? "PAUSED   Start: resume" : "PAUSED";
   if (g_game == Game::kDocs && have_pad && g_docs_frame < 400)
     return "Up/Down: scroll   LB/RB: page   B: back to the disks";
   if (g_game == Game::kDefender2 && have_pad && Get16(*m, kD2State) == kD2Title) {
@@ -1101,21 +1089,21 @@ const char* Hint(st::Machine* m, bool have_pad) {
   if (g_game == Game::kDefender2 && have_pad && Get16(*m, kD2State) == kD2Screen && Get32(*m, kD2Sub) == kD2SubName)
     return "Left/Right: letter   A: fix it   X: delete";
   if (g_game == Game::kHardcore && Get32(*m, kHcHook) == kHcPaused)
-    return have_pad ? "PAUSED   Back: resume   B twice: leave" : "PAUSED   O: resume";
+    return have_pad ? "PAUSED   Start: resume" : "PAUSED   O: resume";
   if (g_game == Game::kPhotonStorm && Get16(*m, kPsState) == kPsTitle && have_pad)
     return g_ps_analog ? "A: 1 player   X: 2 players\nY: controls < 360 TWIN STICK >"
                        : "A: 1 player   X: 2 players\nY: controls < ORIGINAL 16 DIRECTIONS >";
   if (g_game == Game::kPhotonStorm && Get16(*m, kPsState) == kPsPaused)
-    return have_pad ? "PAUSED   Back: resume   B: quit to the title" : nullptr;
+    return have_pad ? "PAUSED   Start: resume   B: quit to the title" : nullptr;
   if (g_game == Game::kRmc && RmcPaused(*m))
-    return have_pad ? "Back: resume   B: back to the menu" : "O: resume   Esc: back to the menu";
+    return have_pad ? "Start: resume   B: back to the menu" : "O: resume   Esc: back to the menu";
   if (g_game == Game::kAndes && AndesNameEntry(*m) && have_pad) {
     static char buf[64];
     std::snprintf(buf, sizeof(buf), "YOUR NAME:  [%c]   Up/Down: letter   A: enter it", kLetters[g_letter]);
     return buf;
   }
   if (g_game == Game::kAndes && Get16(*m, kAndesState) == kAndesPaused)
-    return have_pad ? "Back: resume   B twice: leave the game" : "Space: resume";
+    return have_pad ? "PAUSED   Start: resume" : "Space: resume";
   return nullptr;
 }
 

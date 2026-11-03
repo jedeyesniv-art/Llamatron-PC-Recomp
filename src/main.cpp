@@ -30,6 +30,7 @@
 #include "remaster_grid.h"
 #include "remaster_llama.h"
 #include "launcher.h"
+#include "settings_menu.h"
 #include "log.h"
 #include "machine.h"
 
@@ -64,6 +65,10 @@ struct Options {
   std::vector<LaunchPress> lpresses;
   std::map<int, std::string> lshots;
   int lframes = 0;
+  // The settings panel (tests): --mpress=N:<pad button> and --menushot=N:<file.bmp> at the panel's Nth frame
+  // (counted while it is open, from 0: in a game its frames don't advance the game's).
+  std::vector<LaunchPress> mpresses;
+  std::map<int, std::string> menushots;
   bool headless = false;   // --headless: no window or audio (tests)
   int frames = 0;          // --frames=N: quit after N frames
   std::string wav;         // --wav=<file>: also write the audio to a WAV file (tests)
@@ -161,6 +166,8 @@ Options ParseArgs(int argc, char** argv) {
     else if (Arg(a, "lpress", &v)) o.lpresses.push_back({std::atoi(v.c_str()), v.substr(v.find(':') + 1)});
     else if (Arg(a, "lshot", &v)) o.lshots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
     else if (Arg(a, "lframes", &v)) o.lframes = std::atoi(v.c_str());
+    else if (Arg(a, "mpress", &v)) o.mpresses.push_back({std::atoi(v.c_str()), v.substr(v.find(':') + 1)});
+    else if (Arg(a, "menushot", &v)) o.menushots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
     else if (Arg(a, "music", &v)) o.music = v;
     else if (Arg(a, "trip-music", &v)) o.trip_music = std::atoi(v.c_str());
     else if (Arg(a, "program", &v)) {
@@ -184,7 +191,14 @@ Options ParseArgs(int argc, char** argv) {
 fs::path ExeDir() { return games::ExeDir(); }
 
 void SaveRenderShot(SDL_Renderer* r, const std::string& path) {
-  if (SDL_Surface* s = SDL_RenderReadPixels(r, nullptr)) {
+  // The whole window (with the logical presentation on, only the picture's rectangle would be read).
+  int lw = 0, lh = 0;
+  SDL_RendererLogicalPresentation mode = SDL_LOGICAL_PRESENTATION_DISABLED;
+  SDL_GetRenderLogicalPresentation(r, &lw, &lh, &mode);
+  SDL_SetRenderLogicalPresentation(r, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+  SDL_Surface* shot = SDL_RenderReadPixels(r, nullptr);
+  SDL_SetRenderLogicalPresentation(r, lw, lh, mode);
+  if (SDL_Surface* s = shot) {
     if (SDL_SaveBMP(s, path.c_str())) LOG("screenshot %s", path.c_str());
     SDL_DestroySurface(s);
   }
@@ -306,6 +320,10 @@ struct Context {
   std::vector<games::Game> games;  // what the launcher offers
   const games::Game* game = nullptr;  // the launcher's game being run (null: --program of an unknown one)
   std::string type_ahead;
+  // The settings panel's picture: the last game's last frame (320 x 200 ARGB; saved as userdata\preview.bmp so
+  // it is there next time), else a test card.
+  std::vector<uint32_t> preview;
+  fs::path preview_path;
   std::string docs_keys;  // typed into a docs reader once it runs  // keys for the program's first console prompts (a crack's trainer questions)
 };
 
@@ -333,6 +351,71 @@ std::map<std::string, disk::Bytes> FilesWithSaves(const Context& c) {
 }
 
 enum class GameEnd { kQuitApp, kToLauncher, kError };
+
+// After the settings panel changed something: every module rereads its settings.
+void ApplySettings(const Options& opt) {
+  grid::LoadSettings();
+  trip::LoadSettings();
+  crt::LoadSettings();
+  remaster::LoadSettings();
+  stgames::LoadSettings();
+  if (opt.remaster_ahead >= 0) remaster::SetAhead(opt.remaster_ahead);
+  if (opt.aim < 0) game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
+}
+
+// The settings panel's picture from the game's screen as last shown (the remaster's sprites drawn in).
+void KeepPreview(Context& c, const st::Machine& m) {
+  if (m.FrameWidth() != st::kScreenW) return;
+  std::vector<uint32_t> px;
+  if (remaster::Active()) {
+    SetRemasterColour0(m);
+    remaster::ComposeSoftware(m.Frame(), m.LinePalettes(), m.SteColours(), &px);
+  }
+  if (px.size() != size_t(st::kScreenW * st::kScreenH))
+    px.assign(m.Frame(), m.Frame() + st::kScreenW * st::kScreenH);
+  c.preview = std::move(px);
+  if (SDL_Surface* s = SDL_CreateSurfaceFrom(st::kScreenW, st::kScreenH, SDL_PIXELFORMAT_ARGB8888, c.preview.data(),
+                                            st::kScreenW * 4)) {
+    SDL_SaveBMP(s, c.preview_path.string().c_str());
+    SDL_DestroySurface(s);
+  }
+}
+
+void LoadPreview(Context& c) {
+  SDL_Surface* s = SDL_LoadBMP(c.preview_path.string().c_str());
+  if (!s) return;
+  if (SDL_Surface* a = SDL_ConvertSurface(s, SDL_PIXELFORMAT_ARGB8888)) {
+    if (a->w == st::kScreenW && a->h == st::kScreenH) {
+      c.preview.resize(size_t(st::kScreenW * st::kScreenH));
+      for (int y = 0; y < a->h; ++y)
+        std::memcpy(&c.preview[size_t(y * st::kScreenW)], static_cast<uint8_t*>(a->pixels) + y * a->pitch,
+                    st::kScreenW * 4);
+    }
+    SDL_DestroySurface(a);
+  }
+  SDL_DestroySurface(s);
+}
+
+// No game played yet: a test card in ST colours (bars, a grid, a ramp, white text): something to see the CRT
+// settings on.
+void TestCard(std::vector<uint32_t>* px) {
+  const int w = st::kScreenW, h = st::kScreenH;
+  px->assign(size_t(w * h), 0xFF000000u);
+  auto st = [](int r, int g, int b) { return 0xFF000000u | uint32_t(r * 255 / 7) << 16 | uint32_t(g * 255 / 7) << 8 | uint32_t(b * 255 / 7); };
+  const uint32_t bars[8] = {st(7, 7, 7), st(7, 7, 0), st(0, 7, 7), st(0, 7, 0), st(7, 0, 7), st(7, 0, 0), st(0, 0, 7), st(0, 0, 0)};
+  for (int y = 0; y < h; ++y)
+    for (int x = 0; x < w; ++x) {
+      uint32_t c = 0xFF000000u;
+      if (y >= 40 && y < 110) c = bars[x * 8 / w];
+      else if (y >= 120 && y < 140) c = st(x * 8 / w, x * 8 / w, x * 8 / w);
+      else if (y >= 150 && y < 170) c = st(x * 8 / w, 0, 7 - x * 8 / w);
+      if ((x % 32 == 0 || y % 32 == 0) && (y < 40 || y >= 175)) c = st(2, 2, 3);
+      (*px)[size_t(y * w + x)] = c;
+    }
+  // A few bright dots and lines (the glow and the beam show best on them).
+  for (int i = 0; i < 12; ++i) (*px)[size_t(185 * w + 20 + i * 25)] = st(7, 7, 7);
+  for (int x = 40; x < 280; ++x) (*px)[size_t(20 * w + x)] = st(7, 7, 7);
+}
 
 // The faster CPU's rule for a game from the registry: its play state in RAM.
 bool PlayRule(const st::Machine& m, const games::Game& g) {
@@ -432,6 +515,47 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   int vbls_second = 0, vbls_missed = 0;  // VBL interrupts the program didn't take (while playing)
   bool playing_second = true;
   bool running = true, at_title = false;
+  // The settings panel (Back / F1; not Trip-A-Tron, which uses every button, nor a docs reader): the
+  // emulation is suspended while it is open; B there leaves the game.
+  const bool menu_allowed = !tripatron && mode != input::Mode::kDocs;
+  bool menu_resync = false;  // closed: the frame clock starts again from now
+  int menu_ticks = 0;
+  uint64_t menu_last = SDL_GetTicksNS();
+  auto open_menu = [&]() {
+    menu::Open(c.game ? c.game->id : "", c.game ? c.game->name : program_name);
+    machine.Audio().clear();
+    if (audio) SDL_ClearAudioStream(audio);
+    menu_ticks = -1;  // the panel's frames, counted from 0 (tests)
+    menu_last = SDL_GetTicksNS();
+  };
+  auto menu_event = [&](const SDL_Event& e) {
+    menu::Result r = menu::HandleEvent(e);
+    if (r == menu::Result::kClose) {
+      menu::Close();
+      menu_resync = true;
+    } else if (r == menu::Result::kQuit) {
+      menu::Close();
+      LOG("left the game from the settings panel");
+      running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
+    }
+  };
+  // Every event in a game: the settings panel first (opening it, or it takes them while open).
+  auto dispatch = [&](const SDL_Event& e) {
+    if (menu::IsOpen()) {
+      // Releases still reach the game (no key left held down on the ST); pads connecting too.
+      if (e.type == SDL_EVENT_KEY_UP || e.type == SDL_EVENT_GAMEPAD_ADDED || e.type == SDL_EVENT_GAMEPAD_REMOVED)
+        input::HandleEvent(e, &machine);
+      else
+        menu_event(e);
+      return;
+    }
+    if (menu_allowed && ((e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) ||
+                         (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.scancode == SDL_SCANCODE_F1))) {
+      open_menu();
+      return;
+    }
+    input::HandleEvent(e, &machine);
+  };
   uint64_t last_mouse_ms = 0;  // the game doesn't use the mouse: its cursor is hidden
   float mouse_x = 0, mouse_y = 0;  // ST mouse movement not sent yet (other programs)
   if (window && !llamatron) SDL_SetWindowRelativeMouseMode(window, true);
@@ -465,7 +589,25 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         remaster::CycleAhead();
         continue;
       }
-      input::HandleEvent(e, &machine);
+      dispatch(e);
+    }
+    if (menu::IsOpen()) {  // the panel's own frame: the pad held, scripted presses (tests)
+      ++menu_ticks;
+      uint64_t now = SDL_GetTicksNS();
+      menu::Update(input::FirstPad(), std::min(0.1, double(now - menu_last) / 1e9));
+      menu_last = now;
+      for (const auto& p : opt.mpresses) {
+        if (p.frame != menu_ticks) continue;
+        SDL_Event be{};
+        be.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+        SDL_GamepadButton pb = SDL_GetGamepadButtonFromString(p.what.c_str());
+        be.gbutton.button = uint8_t(pb);
+        if (pb == SDL_GAMEPAD_BUTTON_INVALID) {  // a key (tests: Down, Right...)
+          be.type = SDL_EVENT_KEY_DOWN;
+          be.key.scancode = SDL_GetScancodeFromName(p.what.c_str());
+        }
+        menu_event(be);
+      }
     }
     if (input::QuitRequested()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
     if (frame % 50 == 0 && settings::Reload()) {  // edited while running
@@ -484,7 +626,9 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
     // vsyncs (presents block on vsync): even motion. Otherwise game frames are due by the wall clock (at most a
     // few at once after a stall), shown on the next refresh.
     int run = 1;
-    if (!opt.headless) {
+    if (menu::IsOpen()) {
+      run = 0;
+    } else if (!opt.headless) {
       double hz = machine.FrameHz();
       // A game at 60 Hz (or back at 50): a display mode that's a multiple of its rate, if there is one.
       if (opt.match_refresh && window && std::fabs(hz - c.mode_hz) > 1) {
@@ -495,6 +639,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       int k = refresh > 0 ? int(std::lround(refresh / hz)) : 0;
       if (k < 1 || std::fabs(refresh / k - hz) > hz * 0.005) k = 0;
       double t = double(SDL_GetTicksNS() - start) / 1e9;
+      if (menu_resync) frames_due = t * hz, vsyncs = 0, menu_resync = false;  // the panel was open
       if (k != lock_k) {
         LOG("pacing: %s (display %.3f Hz, game %.3f Hz)", k ? "locked to vsync" : "by the clock", refresh, hz);
         lock_k = k;
@@ -516,7 +661,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         }
       }
     }
-    for (int i = 0; i < run && running; ++i) {
+    for (int i = 0; i < run && running && !menu::IsOpen(); ++i) {
       frames_due += 1;
       input::Update(&machine);
       if (!llamatron) {
@@ -602,7 +747,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           SDL_Event be{};
           be.type = frame == p.frame ? SDL_EVENT_GAMEPAD_BUTTON_DOWN : SDL_EVENT_GAMEPAD_BUTTON_UP;
           be.gbutton.button = uint8_t(SDL_GetGamepadButtonFromString(p.what.c_str() + 3));
-          input::HandleEvent(be, &machine);
+          dispatch(be);
         } else if (frame == p.frame || frame == p.frame + p.length - 1) {
           SDL_Scancode sc = SDL_GetScancodeFromName(p.what.c_str());
           SDL_Event ke{};
@@ -746,6 +891,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         if (opt.remaster_alpha >= 0) alpha = opt.remaster_alpha;
         else if (lock_k > 0) alpha = float((vsyncs + lock_k - 1) % lock_k) / float(lock_k);
         else if (lock_k == 0) alpha = float(double(SDL_GetTicksNS() - start) / 1e9 * machine.FrameHz() - frames_due);
+        if (menu::IsOpen()) alpha = 1;  // suspended: the last frame, still
         SetRemasterColour0(machine);
         uint64_t t_draw = SDL_GetTicksNS();
         remaster::Draw(renderer, shown, view, alpha, machine.LinePalettes(), machine.SteColours());
@@ -753,7 +899,9 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       } else {
         crt::DrawPicture(renderer, shown, view);
       }
-      const char* hint = remaster::Message() ? remaster::Message() : input::Hint(&machine);
+      const char* hint = menu::IsOpen()       ? nullptr
+                         : remaster::Message() ? remaster::Message()
+                                               : input::Hint(&machine);
       if (hint) {  // 8x8 debug font in the logical space, lines at the bottom
         std::vector<std::string> lines;
         for (const char* p = hint; *p;) {
@@ -772,8 +920,13 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           y += 10;
         }
       }
+      if (menu::IsOpen()) {
+        menu::Render(renderer);
+        auto ms = opt.menushots.find(menu_ticks);
+        if (ms != opt.menushots.end()) SaveRenderShot(renderer, ms->second);
+      }
       auto rshot = opt.rshots.find(frame);
-      if (rshot != opt.rshots.end()) SaveRenderShot(renderer, rshot->second);
+      if (rshot != opt.rshots.end() && !menu::IsOpen()) SaveRenderShot(renderer, rshot->second);
       uint64_t t_present = SDL_GetTicksNS();
       SDL_RenderPresent(renderer);
       uint64_t now = SDL_GetTicksNS();
@@ -798,8 +951,10 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       }
     }
   }
+  menu::Close();
   if (window) SDL_SetWindowRelativeMouseMode(window, false);
   if (audio) SDL_ClearAudioStream(audio);
+  if (renderer && mode != input::Mode::kDocs && frame > 0) KeepPreview(c, machine);
   LOG("%s ended after %d frames", program_name.c_str(), frame);
   return end;
 }
@@ -879,7 +1034,8 @@ launcher::Action RunLauncher(Context& c, launcher::Launcher& l) {
   Options& opt = *c.opt;
   SDL_SetRenderLogicalPresentation(c.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
   uint64_t last = SDL_GetTicksNS(), last_mouse_ms = 0;
-  for (int frame = 0;; ++frame) {
+  static int frame = 0;  // across visits: a scripted press (tests) happens once
+  for (;; ++frame) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
       if (e.type == SDL_EVENT_QUIT) return launcher::Action::kQuit;
@@ -895,7 +1051,7 @@ launcher::Action RunLauncher(Context& c, launcher::Launcher& l) {
       }
       input::HandleEvent(e, nullptr);  // pads connecting
       launcher::Action a = l.HandleEvent(e);
-      if (a == launcher::Action::kQuit || a == launcher::Action::kDocs) return a;
+      if (a == launcher::Action::kQuit || a == launcher::Action::kDocs || a == launcher::Action::kSettings) return a;
     }
     for (const auto& p : opt.lpresses) {  // scripted (tests): pad buttons at launcher frames
       if (p.frame != frame) continue;
@@ -903,7 +1059,10 @@ launcher::Action RunLauncher(Context& c, launcher::Launcher& l) {
       be.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
       be.gbutton.button = uint8_t(SDL_GetGamepadButtonFromString(p.what.c_str()));
       launcher::Action a = l.HandleEvent(be);
-      if (a == launcher::Action::kQuit || a == launcher::Action::kDocs) return a;
+      if (a == launcher::Action::kQuit || a == launcher::Action::kDocs || a == launcher::Action::kSettings) {
+        ++frame;
+        return a;
+      }
     }
     // The cursor: hidden in fullscreen; in a window it shows while the mouse moves, then hides.
     if (c.window && SDL_CursorVisible() &&
@@ -920,6 +1079,58 @@ launcher::Action RunLauncher(Context& c, launcher::Launcher& l) {
     SDL_RenderPresent(c.renderer);
     if (opt.lframes && frame >= opt.lframes) return launcher::Action::kQuit;
   }
+}
+
+// The Settings disk: the panel over the last game's picture (or a test card) through the CRT look, until B.
+// True if the window was closed.
+bool RunSettings(Context& c) {
+  const Options& opt = *c.opt;
+  std::vector<uint32_t> card;
+  if (c.preview.empty()) TestCard(&card);
+  const std::vector<uint32_t>& pic = c.preview.empty() ? card : c.preview;
+  SDL_UpdateTexture(c.texture, nullptr, pic.data(), st::kScreenW * 4);
+  SDL_SetRenderLogicalPresentation(c.renderer, st::kScreenW, c.view_h, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+  menu::Open("", "");
+  bool quit = false;
+  uint64_t last = SDL_GetTicksNS();
+  for (int frame = 0; menu::IsOpen(); ++frame) {
+    SDL_Event e;
+    while (SDL_PollEvent(&e)) {
+      if (e.type == SDL_EVENT_QUIT) quit = true, menu::Close();
+      if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat &&
+          (e.key.scancode == SDL_SCANCODE_F11 ||
+           (e.key.scancode == SDL_SCANCODE_RETURN && (e.key.mod & SDL_KMOD_ALT)))) {
+        SDL_SetWindowFullscreen(c.window, !(SDL_GetWindowFlags(c.window) & SDL_WINDOW_FULLSCREEN));
+        continue;
+      }
+      input::HandleEvent(e, nullptr);  // pads connecting
+      if (menu::HandleEvent(e) != menu::Result::kNone) menu::Close();
+    }
+    for (const auto& p : opt.mpresses) {  // scripted (tests)
+      if (p.frame != frame) continue;
+      SDL_Event be{};
+      be.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+      SDL_GamepadButton pb = SDL_GetGamepadButtonFromString(p.what.c_str());
+      be.gbutton.button = uint8_t(pb);
+      if (pb == SDL_GAMEPAD_BUTTON_INVALID) {
+        be.type = SDL_EVENT_KEY_DOWN;
+        be.key.scancode = SDL_GetScancodeFromName(p.what.c_str());
+      }
+      if (menu::HandleEvent(be) != menu::Result::kNone) menu::Close();
+    }
+    uint64_t now = SDL_GetTicksNS();
+    menu::Update(input::FirstPad(), std::min(0.1, double(now - last) / 1e9));
+    last = now;
+    SDL_SetRenderDrawColor(c.renderer, 0, 0, 0, 255);
+    SDL_RenderClear(c.renderer);
+    crt::DrawPicture(c.renderer, c.texture, SDL_FRect{0, 0, float(st::kScreenW), float(c.view_h)});
+    menu::Render(c.renderer);
+    auto shot = opt.menushots.find(frame);
+    if (shot != opt.menushots.end()) SaveRenderShot(c.renderer, shot->second);
+    SDL_RenderPresent(c.renderer);
+  }
+  SDL_SetRenderLogicalPresentation(c.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+  return quit;
 }
 
 // A text file from an ST (CR LF lines, maybe tabs), as lines for the launcher's viewer (80 columns, wrapped).
@@ -960,7 +1171,8 @@ void RunProgram(Context& c) {
     }
   std::vector<fs::path> sources;
   if (!opt.disk.empty()) sources.push_back(opt.disk);
-  for (const games::Game& g : c.games) sources.push_back(g.source);
+  for (const games::Game& g : c.games)
+    if (!g.settings) sources.push_back(g.source);
   for (const fs::path& src : sources) {
     std::string error;
     std::map<std::string, disk::Bytes> files = games::ReadSource(src, &error);
@@ -996,6 +1208,9 @@ int main(int argc, char** argv) {
   // fullscreen_exclusive=1 switches the display to a refresh rate that is a multiple of the game's instead.
   if (settings::Get("fullscreen_exclusive", 0) == 0) opt.match_refresh = false;
   game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
+  menu::SetApply([&opt]() { ApplySettings(opt); });
+  c.preview_path = c.save_dir / "preview.bmp";
+  LoadPreview(c);
   grid::LoadSettings();
   trip::LoadSettings();
   c.games = games::Discover(opt.disk);
@@ -1022,6 +1237,7 @@ int main(int argc, char** argv) {
     SDL_SetRenderVSync(c.renderer, 1);
     if (opt.match_refresh) ChooseFullscreenMode(c.window, 50.0);
     if (opt.fullscreen) SDL_SetWindowFullscreen(c.window, true);
+    menu::SetWindow(c.window);
     c.texture = SDL_CreateTexture(c.renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, st::kScreenW,
                                   st::kScreenH);
     SDL_SetTextureScaleMode(c.texture, SDL_SCALEMODE_PIXELART);  // sharp, and even at non-integer scales
@@ -1052,6 +1268,10 @@ int main(int argc, char** argv) {
     for (;;) {
       launcher::Action a = RunLauncher(c, l);
       if (a == launcher::Action::kQuit) break;
+      if (a == launcher::Action::kSettings) {
+        if (RunSettings(c)) break;
+        continue;
+      }
       int game = l.Selected();
       const games::Game& g = c.games[size_t(game)];
       if (a == launcher::Action::kDocs && g.docs_program.empty()) {  // a text file: shown by the launcher

@@ -84,6 +84,24 @@ elease\Llamatron-<ver>-windows.zip (no game
   0, ~40 ms quicker than the original game (cancels the interpolation's frame). Cost ~0.3 ms per frame run
   ahead. Game RAM identical with run-ahead 3 + ps_analog 1 (7000 frames). --remaster-ahead=N for a run.
 
+## Settings panel and buttons (2026-11-03; supersedes the "Back = pause", "B twice = disks" notes below)
+- src/settings_menu.cpp: one table of every setting (key, kind toggle / slider / choice, default, range, help,
+  "next start" for ones read at game start); 8x8 font at the output's resolution on the left ~half, picture to
+  the right as the preview. Changes: settings::Set + Save, then main's ApplySettings (every module's
+  LoadSettings; stgames::LoadSettings is new). Defaults in the table must match where each setting is read.
+- Settings disk: games::Game::settings, appended last by Discover (label: make_labels.py STAND_IN, no byline);
+  the launcher returns Action::kSettings, main RunSettings shows the panel over c.preview (the last game's
+  frame, remaster sprites composed in, saved as userdata\preview.bmp) or TestCard through the CRT look.
+- In a game (not Trip-A-Tron, not a docs reader): Back / F1 suspend the emulation (no frames, audio cleared,
+  remaster alpha 1) with the panel (general, the game's section, CRT); Back resumes (pacing resyncs), B / Esc
+  leave to the disks. Key releases still reach the ST while it is open.
+- Start = the game's own pause everywhere (Defender 2 in play: host pause, it has none). "B twice" removed
+  except Trip-A-Tron; Llamatron / Camels no longer fire on Start; user disks: B = Esc.
+- Tests: --mpress=N:<pad button or key name> and --menushot=N:<bmp> at the panel's Nth frame (counted while
+  open). The panel's d-pad is polled (repeat), so scripted moves use key names (Down, Right). The launcher's
+  frame counter now runs across visits. SaveRenderShot reads the whole window.
+- Gotcha: pad events arrive in the background (SDL hint): the owner's pad opened the panel during a test.
+
 ## Layout (C:\LlamatronRecomp)
 - Private\              (git-ignored) Llamatron ST.msa (owner's copy), disk\ = its files, tron.bin/.reloc =
                         the unpacked game (Tools\depack.py), for the analysis tools.
@@ -379,7 +397,9 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   or the shortcut screens; Back/Start
   = pause/resume; B = pause: quit to title (Q), title: quit (twice). Keyboard: every key goes to the ST.
   Tunables in userdata\settings.txt, reread while running (src\settings.cpp): grid_stick_speed (6 px/frame at
-  full deflection), grid_stick_curve (2 = quadratic), grid_stick_deadzone (0.15), grid_dpad_speed (1),
+  full deflection), grid_stick_curve (2 = quadratic), grid_stick_deadzone (0.15), grid_dpad_speed (1), grid_stick_smooth (2) / grid_stick_stop (1) (2026-11-03,
+  owner: the direct stick felt "brittle": the speed eases to the stick's, time constants in frames, 0 = instant;
+  measured full push 2, 4, 5, 6 ... 6.5 px a frame, release 3, 1, 0), grid_stick_speed now 6.5,
   grid_fire_mode_swap (0). Measured: full stick 6 px/frame, half 1.0, inside the dead zone 0.
 - Performance (owner: "fairly severe slowdown"): like Llamatron, all logic is in the VBL ($4B55A: rasters,
   pending screen $4D2E8, then the state machine; play state $1278A moves the objects via $14F7A) and never
@@ -395,7 +415,8 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   play, X = left Shift + click -> GAME OPTIONS (state 10: pause mode demo/freeze, reset power-up message, quit
   rows y 84/104/134/186), Y = Alt + click -> GAME SECRETS (state 7), LB = Control + click -> ADDITIONAL
   INFORMATION (the "may the fleas of 1000 camels infest..." curse on pirates - in a cracked copy). Level
-  select (6): d-pad left/right = [-]/[+] at (115,120)/(200,120), A = LET'S BLAST!! (157,172) (x 101-214, y
+  select (6): d-pad left/right = [-]/[+] at (115,120)/(200,120), up/down = the pointer between the
+  [-] [+] row and LET'S BLAST, A clicks what it is on, no hint line (owner 2026-11-03), LET'S BLAST!! (157,172) (x 101-214, y
   162-182); level variable $48BCE. Name entry (9): keyboard cells a-z ! . ? - / DEL OK ($1096E; ^ = delete,
   _ = done), the pointer jumps cell to cell on the d-pad (starts on "a"), A picks, B = DEL, Start = OK; typed
   letters / Backspace / Return click the cells; clicks wait for the letter animation ($10966/$105BC). Options:
