@@ -1,5 +1,6 @@
-// Revenge of the Mutant Camels: the remaster (remaster.h; REMASTER.md). Runtime addresses of the 1 MB STE build
-// (REVSTE1M.TOS); the TT Megamix is the same code elsewhere (Addrs kTt).
+// Revenge of the Mutant Camels and Hardcore: the remaster (remaster.h; REMASTER.md). Runtime addresses of the
+// Camels' 1 MB STE build (REVSTE1M.TOS); the TT Megamix is the same code elsewhere (Addrs kTt), Hardcore the
+// same library (kHc: the sprites and plotter, plus its compiled sprites and one-plane plotters).
 //
 // The main loop ($1A842) draws a frame with "jsr (a3)" at $1A854 (a3 = *$4036A: play's draw routine $11450) into
 // the screen $3DF54 (double-buffered with $3DF58; a2 = the restore list $3DF62), writes the list's end marker at
@@ -41,13 +42,17 @@ struct Addrs {
   uint32_t block_draw, block_next, block_images, block_scroll, frame_count;
   uint32_t stripes, stripe_patterns, stripe_pos;
   uint32_t banner, banner_y, banner_image, banner_none;  // the level message
+  // (0 above: not in this game - Hardcore has only the sprites and the plotter)
+  int clip_top2, clip_top3;  // the first line types 2 and 1 / 3 draw on
+  const char* name;
+  uint32_t type6, plot2x2, plot2x1;  // Hardcore: compiled sprites (type 6), 2 x 2 / 2 x 1 one-plane plotters
 };
 const Addrs kSte = {0x3DD3E, 0x111DE, 0x1056C, 0x4036A, 0x11450, 0x1A854, 0x3DF54,
                     0x1A3B6, 0x1A580, 0x1B0FA, 0x1AF14, 0x37000, 0x3DF54,
                     0x1A772, 0x1A956,
                     0x11D50, 0x11D78, 0x27C4C, 0x3D5C0, 0x3D5BE,
                     0x1247A, 0x1B700, 0x39384,
-                    0x10BEA, 0x1B286, 0x3CB1A, 0x10BCE};
+                    0x10BEA, 0x1B286, 0x3CB1A, 0x10BCE, 16, 16, "mutant camels", 0, 0, 0};
 // The TT Megamix (REVTT.TOS): found from the STE build's code bytes (32 bullets, twice the objects: the tables
 // after the first are further on).
 const Addrs kTt = {0x3E0CE, 0x11206, 0x10580, 0x426FA, 0x11478, 0x1A88C, 0x3E2E4,
@@ -55,7 +60,16 @@ const Addrs kTt = {0x3E0CE, 0x11206, 0x10580, 0x426FA, 0x11478, 0x1A88C, 0x3E2E4
                    0x1A7AA, 0x1A98E,
                    0x11D78, 0x11DA0, 0x27C8A, 0x3D950, 0x3D94E,
                    0x124A2, 0x1B73E, 0x39686,
-                   0x10BFE, 0x1B2C4, 0x3CEAA, 0x10BE2};
+                   0x10BFE, 0x1B2C4, 0x3CEAA, 0x10BE2, 16, 16, "camels tt", 0, 0, 0};
+// Hardcore (HARDCORE.PRG, Yak 1992): the same library - main loop, dispatcher $171E2 and its types, the plotter -
+// found with Tools/mapaddr.py from the Camels' STE dump. Play's draw routine $10974 (pause $11242). Type 2 clips
+// from line 1 here (the playfield's frame is drawn as part of the background).
+const Addrs kHc = {0x338BA, 0x10C82, 0x11242, 0x37EE6, 0x10974, 0x165C6, 0x33AD0,
+                   0x1612A, 0x162F4, 0x1720E, 0x16EEE, 0x10000, 0x33AD0,
+                   0x164E4, 0,
+                   0, 0, 0, 0, 0,
+                   0, 0, 0,
+                   0, 0, 0, 0, 1, 16, "hardcore", 0x173B0, 0x1710A, 0x170A8};
 // The 512K build (REVENGE.TOS, D-Bug 28) isn't covered: the launcher runs the STE build for that disk id, and a
 // scripted run stays on its shareware screen, so its addresses couldn't be checked in play.
 Addrs A = kSte;
@@ -110,15 +124,23 @@ bool Capture(st::Machine& m, uint32_t routine, uint64_t id, int type) {
   // key by the caller alone (the matcher pairs them by position).
   if (object < A.objects_from || object >= A.objects_to) object = 0;
   int half_w = Get16(m, a0 + 6) >> 1;
+  // Types 2, 3 and 6 centre the image by half its width: placed (and decoded) by that top-left, so an image means
+  // the same whatever the type - a sprite can be converted from type 3 to 2 (Camels) or 6 (Hardcore) between draws.
+  // (Type 1, stretched, centres by its own rule: its image ids are separate.)
+  bool left = type == 2 || type == 3 || type == 6;
   int x = RegW(cpu::D0), y = RegW(cpu::D0 + 1);
   // Placed in the sandbox at (160, 108) - for type 2 its top-left, on an even x.
   constexpr int kAtX = 160, kAtY = 108;
+  // Type 6 runs one of 8 compiled routines by the left edge's x & 14: each is decoded at its own shift (they don't
+  // all draw alike: one decoded at shift 0 came out a group off at others).
+  int shift = type == 6 ? (x - half_w) & 14 : 0;
+  if (type == 6) id |= uint64_t(shift + 1) << 48;
   if (!remaster::HaveImage(id)) {
     remaster::SandboxCall call;
     call.routine = routine;
     for (int r = 0; r < 16; ++r) call.regs[r] = Reg(r);
-    call.at_x = kAtX, call.at_y = kAtY;
-    call.regs[0] = uint32_t(type == 2 ? kAtX + half_w : kAtX), call.regs[1] = uint32_t(kAtY);
+    call.at_x = kAtX + shift, call.at_y = kAtY;
+    call.regs[0] = uint32_t(left ? call.at_x + half_w : call.at_x), call.regs[1] = uint32_t(kAtY);
     remaster::QueueImage(id, call);
     if (!m.ahead) return false;  // drawn by the game this once
   // In the run-ahead copy the item is kept anyway (its image is decoded right after the copy's run): what that copy
@@ -126,10 +148,11 @@ bool Capture(st::Machine& m, uint32_t routine, uint64_t id, int type) {
   }
   remaster::Item it;
   it.key = remaster::Key(caller, object);
-  it.x = float(type == 2 ? x - half_w : x), it.y = float(y);
+  it.x = float(left ? x - half_w : x), it.y = float(y);
   it.image = id;
-  it.snap = type == 2 ? 2 : 1;
-  it.clip_top = 16, it.clip_bottom = 199, it.clip_left = 0, it.clip_right = 319;
+  it.snap = type == 2 || type == 6 ? 2 : 1;
+  it.clip_top = int16_t(type == 2 ? A.clip_top2 : type == 6 ? 0 : A.clip_top3), it.clip_bottom = 199;
+  it.clip_left = 0, it.clip_right = 319;
   remaster::Add(g_screen, it);
   remaster::Return(m);  // not drawn
   return true;
@@ -306,6 +329,41 @@ void OnBanner(st::Machine& m) {
   remaster::Return(m);
 }
 
+// Hardcore $173B0 "move.w 4(a0),d2": type 6, a compiled sprite (8 pre-shifted routines: x even), centred. Type 3
+// sprites are compiled into type 6 at run time ($173F4): same image, the type read at each draw.
+void OnType6(st::Machine& m) {
+  uint32_t a0 = Reg(cpu::A0) & 0xFFFFFF;
+  cpu::Set(cpu::Reg(cpu::D0 + 2), (Reg(cpu::D0 + 2) & 0xFFFF0000) | uint16_t(Get16(m, a0 + 4)));
+  cpu::Set(cpu::PC, A.type6 + 4);
+}
+
+// Hardcore $1710A / $170A8 "tst.w d0; bmi rts": a 2 x 2 / 2 x 1 block (x rounded down to even; up to x 276 and
+// y 198 / 199) set in one plane (d2: its byte offset): stars, sparks. Its colour: that plane OR-ed into what is
+// under it now (remaster::IndexAt).
+void PlotOr(st::Machine& m, uint32_t entry, int rows) {
+  int x = RegW(cpu::D0), y = RegW(cpu::D0 + 1);
+  if (x < 0) return remaster::Return(m);
+  if (!CapturingInto(m)) return cpu::Set(cpu::PC, entry + 6);
+  x &= ~1;
+  if (y >= 0 && y <= 0xC8 - rows && x <= 0x114) {
+    int bit = 1 << ((Reg(cpu::D0 + 2) & 7) >> 1);
+    uint64_t key = remaster::Key(Get32(m, Reg(cpu::A7)) & 0xFFFFFF, ObjectKey());
+    for (int r = 0; r < rows; ++r)
+      for (int c = 0; c < 2; ++c) {
+        remaster::Item it;
+        it.kind = remaster::kDot;
+        it.key = key;
+        it.x = float(x + c), it.y = float(y + r);
+        it.colour = uint8_t((remaster::IndexAt(m, g_screen, x + c, y + r) | bit) & 15);
+        it.clip_top = 0, it.clip_bottom = 199;
+        remaster::Add(g_screen, it);
+      }
+  }
+  remaster::Return(m);
+}
+void OnPlot2x2(st::Machine& m) { PlotOr(m, A.plot2x2, 2); }
+void OnPlot2x1(st::Machine& m) { PlotOr(m, A.plot2x1, 1); }
+
 void Install(st::Machine* m) {
   struct H {
     uint32_t at;
@@ -323,16 +381,20 @@ void Install(st::Machine* m) {
       {A.block_draw, {0x34, 0xFC, 0x00, 0x00}, OnBlock},    // move.w #0,(a2)+
       {A.stripes, {0x47, 0xF9, uint8_t(A.stripe_patterns >> 24), uint8_t(A.stripe_patterns >> 16),
                    uint8_t(A.stripe_patterns >> 8), uint8_t(A.stripe_patterns)}, OnStripes},  // lea patterns,a3
+      {A.type6, {0x34, 0x28, 0x00, 0x04}, OnType6},         // move.w 4(a0),d2
+      {A.plot2x2, {0x4A, 0x40, 0x6B, 0x00}, OnPlot2x2},     // tst.w d0; bmi.w
+      {A.plot2x1, {0x4A, 0x40, 0x6B, 0x00}, OnPlot2x1},     // tst.w d0; bmi.w
       {A.banner, {0x30, 0x39, uint8_t(A.banner_y >> 24), uint8_t(A.banner_y >> 16), uint8_t(A.banner_y >> 8),
                   uint8_t(A.banner_y), 0x67}, OnBanner},  // move.w $1B286,d0; beq.b
   };
   g_installed = true;
   for (const H& h : hooks)
-    if (std::memcmp(m->Ram() + h.at, h.code.data(), h.code.size()) != 0) {
-      LOG("mutant camels: remaster hooks not installed ($%06X differs)", h.at);
+    if (h.at >= 0x10000 && std::memcmp(m->Ram() + h.at, h.code.data(), h.code.size()) != 0) {
+      LOG("%s: remaster hooks not installed ($%06X differs)", A.name, h.at);
       return;
     }
   for (const H& h : hooks) {
+    if (h.at < 0x10000) continue;  // not in this game
     Put16(m, h.at, 0x4AFC);
     m->AddHook(h.at, [fn = h.fn](st::Machine& running) { fn(running); });
   }
@@ -345,14 +407,14 @@ void Install(st::Machine* m) {
   static Saved saved;
   remaster::SetAheadState([] { saved = {g_capture, g_screen}; },
                           [] { g_capture = saved.capture, g_screen = saved.screen; });
-  LOG("mutant camels: remaster hooks installed");
+  LOG("%s: remaster hooks installed", A.name);
 }
 
 }  // namespace
 
 void Start(const std::string& program) {
-  g_supported = program == "REVSTE1M.TOS" || program == "REVTT.TOS";
-  A = program == "REVTT.TOS" ? kTt : kSte;
+  g_supported = program == "REVSTE1M.TOS" || program == "REVTT.TOS" || program == "HARDCORE.PRG";
+  A = program == "REVTT.TOS" ? kTt : program == "HARDCORE.PRG" ? kHc : kSte;
   g_installed = g_capture = false;
 }
 
@@ -360,7 +422,7 @@ void Update(st::Machine* m) {
   if (!g_supported) return;
   if (!g_installed && Get32(*m, A.hook) == A.play) Install(m);
   if (!g_installed) return;
-  remaster::DrawQueued(m, "mutant camels");
+  remaster::DrawQueued(m, A.name);
   if (g_capture && !Playing(*m)) g_capture = false, remaster::Stop();
 }
 

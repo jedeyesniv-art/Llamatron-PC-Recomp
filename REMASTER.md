@@ -14,9 +14,10 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
 
 ## Where we are (2026-11-03; start here next time)
 - Done, committed on `remaster`, not pushed: Photon Storm, Andes Attack, Llamatron, Gridrunner, Revenge of the
-  Mutant Camels (1 MB STE + TT Megamix; not the 512K build, see its notes), Defender 2. Each verified
-  pixel-identical to the original (software compose, run-ahead 0) and with unchanged game RAM.
-- Left: **Hardcore**. Trip-A-Tron doesn't apply.
+  Mutant Camels (1 MB STE + TT Megamix; not the 512K build, see its notes), Defender 2, Hardcore. Each
+  verified pixel-identical to the original (software compose, run-ahead 0) and with unchanged game RAM (Hardcore:
+  but for two cosmetic trail rings, see its notes). All planned ports are done; Trip-A-Tron doesn't apply.
+- Next: Llamatron's shots at their exact analog positions (owner), then the release.
 - Later (owner): Llamatron's shots at their exact analog positions. Then the release: package, smoke test, push
   (owner decides when).
 - Before porting the next game: scan its draw core for every global it reads (`Tools/absreads.py`: each `$xxxxx.l` operand in
@@ -273,5 +274,14 @@ the per-game steps 1-6 plus verification.
   with `--remaster-writers` (below). Verified: 13 / 13 frames identical over a fight (lasers, explosions,
   materialising, death), RAM identical except drawing state (restore lists, core temporaries, stack), also with
   run-ahead 3.
-- **Hardcore**: VBL hook $338BA; check whether its puck and blasters go through one sprite routine.
+- **Hardcore**: DONE 2026-11-03 - the Camels' library again, so it is an address set in `src/remaster_rmc.cpp`
+  (`kHc`, found with `Tools/mapaddr.py` from the Camels' STE dump) plus two things of its own: type 6 = compiled
+  sprites (8 routines by x & 14, generated at run time from type 3: each shift decoded on its own) and 2 x 2 / 2 x 1
+  one-plane plotters (stars, sparks: `IndexAt` colours). Type 2 clips from line 1 here. Left to the game: the
+  playfield's fixed lines and the HUD panel. Verified: 17 / 19 frames identical over 4500 frames; the other two
+  (a level start, an explosion's trail) differ because two objects' trail rings ($1A1F8, $1A4F8: recent
+  positions) advance per drawn frame, and outside play the capture run draws at another pace - in the capture
+  run the game itself draws the trail where the remaster does. Same with run-ahead 3 (closer to the original).
+  The fix found on the way: a sprite converted between types (3 -> 2 Camels, 3 -> 6 Hardcore) must be placed
+  and decoded by one convention - all by their top-left now.
 - **Trip-A-Tron**: not applicable (no sprites).

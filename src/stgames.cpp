@@ -412,6 +412,7 @@ constexpr uint8_t kKeyI = 0x17;
 bool g_hc_strobes = false, g_hc_strobes_done = false;
 
 void HardcoreUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
+  remaster_rmc::Update(m);  // (the Camels' library: remaster_rmc.cpp's Hardcore addresses)
   const pad::State& p = pad::Now();
   uint32_t hook = Get32(*m, kHcHook);
   uint8_t buttons = mbuttons;

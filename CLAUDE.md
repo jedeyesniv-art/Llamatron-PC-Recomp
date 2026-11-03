@@ -64,7 +64,7 @@ elease\Llamatron-<ver>-windows.zip (no game
 - Gridrunner remaster (2026-11-02): src/remaster_grid.cpp (core $4BCE4, pass $144DA..$145E2). Items now take
   each line's palette (Machine::LinePalettes: rasters), all games.
   Its image id includes the colour word $58054 (level 4's text came out dark: the owner's report). Next session:
-  REMASTER.md "Where we are" (Hardcore left).
+  REMASTER.md "Where we are" (all ports done; next: Llamatron exact analog shots, then the release).
 - Camels remaster (2026-11-03): src/remaster_rmc.cpp, STE + TT builds (TT addresses via Tools/mapaddr.py; the 512K
   build not covered). Captures sprites, stars, falling blocks, ground stripes, buildings, the level message;
   not in pause. Generic additions: remaster::kBlack (opaque black pixels), Item::fine_x/fine_y/period,
@@ -72,6 +72,8 @@ elease\Llamatron-<ver>-windows.zip (no game
 - Defender 2 remaster (2026-11-03): src/remaster_d2.cpp - many small draw routines hooked (sprites, plotters,
   OR-ed stars / particles / lasers via remaster::IndexAt, ground bands, terrain, planet); HUD and radar left.
   --remaster-writers=N logs what still writes into the screen (any game).
+- Hardcore remaster (2026-11-03): the Camels port with Hardcore addresses (remaster_rmc.cpp kHc) + compiled
+  sprites (type 6) and one-plane plotters. Trail rings $1A1F8/$1A4F8 advance per drawn frame (cosmetic).
 - Run-ahead (2026-11-02; setting remaster_ahead 0..3, default 2; F7 cycles, a message line for 2.5 s):
   0 = the list in the screen shown; 1 = the newest complete draw pass (hook $4620E -> remaster::EndFrame; the ST
   shows it a VBL later); 2 / 3 = a copy of the machine (sandbox + Machine::ahead: hooks still capture, into
