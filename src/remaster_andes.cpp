@@ -103,7 +103,9 @@ void OnSprite(st::Machine& m) {
     call.regs[0] = uint32_t(call.at_x), call.regs[1] = uint32_t(call.at_y);
     call.pokes = {{kMode, 0}, {kClipTop, 0}, {kClipBottom, 199}, {kClipLeft, 0}, {kClipRight, 19}};
     remaster::QueueImage(id, call);
-    return original();  // drawn by the game this once
+    if (!m.ahead) return original();  // drawn by the game this once
+  // In the run-ahead copy the item is kept anyway (its image is decoded right after the copy's run): what that copy
+  // draws is never shown, so letting it draw there would lose the sprite for a frame (a flicker).
   }
   remaster::Item it;
   uint32_t caller = ret;

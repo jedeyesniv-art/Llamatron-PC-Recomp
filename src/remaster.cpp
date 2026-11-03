@@ -261,6 +261,9 @@ void RunAhead(st::Machine* m) {
   cpu::RestoreContext(context);
   if (g_restore) g_restore();
   if (!g_fork.capturing || g_fork.hold) g_fork.have_latest = false;  // it left play (paused, died...)
+  // Images the copy met first (its items are kept): decoded now, from its state, so this frame shows them.
+  DrawQueued(fork.get(), "run-ahead");
+  cpu::SetMachine(m);  // (the sandbox puts the CPU back on the machine it was given: the copy)
 }
 
 Image DecodePlanes(const uint8_t* data, int groups, int rows) {
@@ -288,6 +291,7 @@ bool RunInSandbox(st::Machine* m, const SandboxCall& call, uint8_t fill, Image* 
   uint32_t sp = (call.regs[15] & 0xFFFFFE) - 512;
   auto fork = std::make_unique<st::Machine>(*m);
   fork->sandbox = true;
+  fork->ahead = false;  // (from a run-ahead copy: the hooks must only draw here)
   uint8_t* ram = fork->Ram();
   std::memset(ram + screen, fill, 32000);
   for (auto [a, v] : call.pokes) ram[a] = uint8_t(v >> 8), ram[a + 1] = uint8_t(v);

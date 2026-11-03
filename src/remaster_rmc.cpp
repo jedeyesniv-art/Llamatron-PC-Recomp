@@ -120,7 +120,9 @@ bool Capture(st::Machine& m, uint32_t routine, uint64_t id, int type) {
     call.at_x = kAtX, call.at_y = kAtY;
     call.regs[0] = uint32_t(type == 2 ? kAtX + half_w : kAtX), call.regs[1] = uint32_t(kAtY);
     remaster::QueueImage(id, call);
-    return false;  // drawn by the game this once
+    if (!m.ahead) return false;  // drawn by the game this once
+  // In the run-ahead copy the item is kept anyway (its image is decoded right after the copy's run): what that copy
+  // draws is never shown, so letting it draw there would lose the sprite for a frame (a flicker).
   }
   remaster::Item it;
   it.key = remaster::Key(caller, object);
@@ -193,7 +195,16 @@ void OnPosts(st::Machine& m) {
     uint32_t a0 = Reg(cpu::A0) & 0xFFFFFF;
     uint64_t id = a0 | uint64_t(uint16_t(RegW(cpu::D0 + 2))) << 32 | uint64_t(1) << 61;
     int x = RegW(cpu::D0), y = RegW(cpu::D0 + 1);
-    if (remaster::HaveImage(id)) {
+    if (!remaster::HaveImage(id)) {
+      remaster::SandboxCall call;
+      call.routine = A.posts;
+      for (int r = 0; r < 16; ++r) call.regs[r] = Reg(r);
+      call.at_x = 160, call.at_y = y;
+      call.regs[0] = 160;
+      call.opaque_black = true;  // each row clears a 16-px strip, then draws: black there covers the stars
+      remaster::QueueImage(id, call);  // drawn by the game this once (kept in the run-ahead copy: see Capture)
+    }
+    if (remaster::HaveImage(id) || m.ahead) {
       remaster::Item it;
       it.key = remaster::Key(Get32(m, Reg(cpu::A7)) & 0xFFFFFF, 0);
       it.x = float(x), it.y = float(y);
@@ -202,13 +213,6 @@ void OnPosts(st::Machine& m) {
       remaster::Add(g_screen, it);
       return remaster::Return(m);
     }
-    remaster::SandboxCall call;
-    call.routine = A.posts;
-    for (int r = 0; r < 16; ++r) call.regs[r] = Reg(r);
-    call.at_x = 160, call.at_y = y;
-    call.regs[0] = 160;
-    call.opaque_black = true;  // each row clears a 16-px strip, then draws: black there covers the stars
-    remaster::QueueImage(id, call);  // drawn by the game this once
   }
   cpu::Set(cpu::Reg(cpu::D0 + 1), (Reg(cpu::D0 + 1) & 0xFFFF0000) | uint16_t(RegW(cpu::D0 + 1) << 2));
   cpu::Set(cpu::PC, A.posts + 2);

@@ -100,7 +100,9 @@ void OnSprite(st::Machine& m) {
     call.regs[0] = uint32_t(160 + (half_w & 1)), call.regs[1] = 100;
     call.at_x = 160 + (half_w & 1) - half_w, call.at_y = 100 - half_h;
     remaster::QueueImage(id, call);
-    return original();  // drawn by the game this once
+    if (!m.ahead) return original();  // drawn by the game this once
+  // In the run-ahead copy the item is kept anyway (its image is decoded right after the copy's run): what that copy
+  // draws is never shown, so letting it draw there would lose the sprite for a frame (a flicker).
   }
   remaster::Item it;
   it.key = remaster::Key(caller, object);

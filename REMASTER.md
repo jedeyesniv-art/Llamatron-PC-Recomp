@@ -167,6 +167,12 @@ the per-game steps 1-6 plus verification.
 - **Finding an uncaptured draw**: take `--shot` of a capture run (the ST picture without the items) to see what's
   left, then trace writes to that screen area per instruction (`cpu::g_profile`) during the pass. Here it was a
   sprite's first sight (an animated score popup: each new image is drawn by the game once).
+- **First sights in the run-ahead copy** (owner 2026-11-03: the camel flickered at level starts, in the attract
+  demo and on the first duck): the copy meets a new image before the real machine; letting the game draw it there
+  lost the sprite for a frame (the copy's screen is never shown). Now hooks keep the item in the copy
+  (`if (!m.ahead) return original();` after `QueueImage`), and `RunAhead` decodes the queue right after the copy's
+  run, from its state (all five ports). Checked: the camel in every frame shown at level starts and in the demo;
+  RAM with run-ahead 3 byte-identical to before in the other four games.
 - **First sights in pixel checks**: a frame where a new image appears differs where captured items overlap it
   (the game drew it under them). Expected; pick another frame.
 
