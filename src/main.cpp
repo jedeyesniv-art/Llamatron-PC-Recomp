@@ -422,6 +422,10 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   // Timing stats, logged every 10 s: game frames and presents per second, longest gap between presents.
   uint64_t stats_start = SDL_GetTicksNS(), last_present = 0, worst_gap = 0;
   int stats_frames = 0, stats_presents = 0;
+  // A present more than 40 ms after the one before: where the time went since then (logged as "slow present").
+  uint64_t slow_update = 0, slow_run = 0, slow_ahead = 0, slow_draw = 0;
+  int slow_frames = 0;
+  auto since = [](uint64_t t0) { return SDL_GetTicksNS() - t0; };
   // Screen swaps (frames the game finished drawing) per second of ST time, counting only seconds spent playing.
   // Every 10 s: average and the worst second.
   int swaps_second = 0, swaps_total = 0, swaps_worst = 1 << 30, swaps_seconds = 0;
@@ -566,7 +570,9 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         } else if (mode == input::Mode::kRmc || mode == input::Mode::kAndes || mode == input::Mode::kDefender2 ||
                    mode == input::Mode::kHardcore || mode == input::Mode::kDocs ||
                    mode == input::Mode::kPhotonStorm) {
+          uint64_t t_upd = SDL_GetTicksNS();
           stgames::Update(&machine, dx, dy, buttons);
+          slow_update += since(t_upd);
           int hold;
           float cap, release;
           stgames::CalmStyle(&hold, &cap, &release);
@@ -628,15 +634,22 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       const bool forced = opt.cpu_all && frame >= opt.cpu_all_from;
       if (forced) playing = true;
       machine.SetCpuSpeed(forced ? opt.cpu_all : playing ? opt.cpu_speed : 1);
+      uint64_t t_upd = SDL_GetTicksNS();
       if (llamatron) remaster_llama::Update(&machine);
       if (gridrunner) remaster_grid::Update(&machine);
+      slow_update += since(t_upd);
+      uint64_t t_run = SDL_GetTicksNS();
       playing_second &= playing;
       if (stgames::HostPaused() && (mode == input::Mode::kDefender2)) {
         machine.Audio().clear();  // paused: the picture stays, no sound, no frames
       } else if (!machine.RunFrame()) {
         running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
       }
+      slow_run += since(t_run);
+      uint64_t t_ahead = SDL_GetTicksNS();
       if (running) remaster::RunAhead(&machine);
+      slow_ahead += since(t_ahead);
+      ++slow_frames;
       remaster::FrameShown(machine.FrameBase());
       ++frame;
       ++stats_frames;
@@ -734,7 +747,9 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         else if (lock_k > 0) alpha = float((vsyncs + lock_k - 1) % lock_k) / float(lock_k);
         else if (lock_k == 0) alpha = float(double(SDL_GetTicksNS() - start) / 1e9 * machine.FrameHz() - frames_due);
         SetRemasterColour0(machine);
+        uint64_t t_draw = SDL_GetTicksNS();
         remaster::Draw(renderer, shown, view, alpha, machine.LinePalettes(), machine.SteColours());
+        slow_draw += since(t_draw);
       } else {
         crt::DrawPicture(renderer, shown, view);
       }
@@ -759,9 +774,20 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       }
       auto rshot = opt.rshots.find(frame);
       if (rshot != opt.rshots.end()) SaveRenderShot(renderer, rshot->second);
+      uint64_t t_present = SDL_GetTicksNS();
       SDL_RenderPresent(renderer);
       uint64_t now = SDL_GetTicksNS();
       if (last_present) worst_gap = std::max(worst_gap, now - last_present);
+      {
+        int decoded = 0, textures = 0;
+        remaster::TakeCounts(&decoded, &textures);
+        if (last_present && now - last_present > 40'000'000ull)
+          LOG("slow present at frame %d: %.1f ms since the last (%d game frames; update %.1f, emulation %.1f, "
+              "run-ahead %.1f, remaster draw %.1f, present %.1f ms; %d sprite images decoded, %d textures made)",
+              frame, (now - last_present) / 1e6, slow_frames, slow_update / 1e6, slow_run / 1e6, slow_ahead / 1e6,
+              slow_draw / 1e6, (now - t_present) / 1e6, decoded, textures);
+        slow_update = slow_run = slow_ahead = slow_draw = 0, slow_frames = 0;
+      }
       last_present = now;
       ++stats_presents;
       if (now - stats_start >= 10'000'000'000ull) {

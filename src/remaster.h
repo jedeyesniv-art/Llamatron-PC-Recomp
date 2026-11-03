@@ -80,6 +80,8 @@ void SetProbe(bool on);  // tests: log the rotated item's angle each frame shown
 // Tests (--remaster-writers=N): during captured passes N and N + 1 (counted from the first), log which code writes
 // into the screen being drawn (16-byte blocks of code: count@address) - what is still drawn by the game.
 void TraceWriters(int pass);
+// Diagnostics (main.cpp's slow-present line): sprite images decoded and textures made since the last call.
+void TakeCounts(int* decoded, int* textures);
 
 // Capture (from hooks, inside the CPU's run).
 void BeginFrame(uint32_t screen);

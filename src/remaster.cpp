@@ -71,6 +71,7 @@ void DropTextures() {
 }
 
 // The image in the colours `pal` (ARGB): made once per set of the colours it uses.
+int g_count_decoded = 0, g_count_textures = 0;
 SDL_Texture* TextureFor(SDL_Renderer* r, uint64_t id, const uint32_t* pal) {
   auto im = g_images.find(id);
   if (im == g_images.end() || im->second.w <= 0 || im->second.h <= 0) return nullptr;
@@ -84,6 +85,7 @@ SDL_Texture* TextureFor(SDL_Renderer* r, uint64_t id, const uint32_t* pal) {
   if (variants.size() >= kMaxVariants) DropTextures(variants);
   std::vector<uint32_t> px(size_t(image.w) * size_t(image.h));
   for (size_t i = 0; i < px.size(); ++i) px[i] = image.pixels[i] ? pal[image.pixels[i] & 15] : 0;
+  ++g_count_textures;
   SDL_Texture* t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, image.w, image.h);
   if (!t) return nullptr;
   SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
@@ -208,6 +210,10 @@ void WriteWatch(uint32_t a, uint32_t pc) {
   g_writers.push_back({pc & ~15u, 1});
 }
 void TraceWriters(int pass) { g_trace_pass = pass; }
+void TakeCounts(int* decoded, int* textures) {
+  *decoded = g_count_decoded, *textures = g_count_textures;
+  g_count_decoded = g_count_textures = 0;
+}
 
 void BeginFrame(uint32_t screen) {
   if (g_cap == &g_real && g_trace_pass >= 0) {
@@ -412,6 +418,7 @@ void DrawQueued(st::Machine* m, const char* game) {
     SetImage(id, std::move(im));
   }
   total += int(g_queue.size()), ms += (SDL_GetTicksNS() - t0) / 1e6;
+  g_count_decoded += int(g_queue.size());
   g_queue.clear();
   if (total % 50 < 1 || total < 2)  // now and then (the first, then about every 50)
     LOG("%s: %d sprite images drawn in the sandbox so far, %.2f ms each", game, total, ms / total);
