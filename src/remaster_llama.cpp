@@ -110,6 +110,12 @@ void OnSprite(st::Machine& m) {
   // made by $7696 for 8 shifts, x & $E) land on even x.
   it.x = float(RegW(cpu::D0) - (Get16(m, a0 + 6) >> 1)), it.y = float(RegW(cpu::D0 + 1) - (Get16(m, a0 + 4) >> 1));
   it.snap = Get16(m, a0) == 0 ? 2 : 1;
+  // Analog shots (game.cpp keeps their exact positions; the game moves them in whole pixels): shown where they
+  // really are, so diagonals at any angle glide instead of stepping.
+  if (caller == kShotsCaller) {
+    float fx, fy;
+    if (game::ShotFraction(m, object & 0xFFFFFF, &fx, &fy)) it.fine_x = fx, it.fine_y = fy;
+  }
   it.image = id;
   it.clip_top = 0, it.clip_bottom = 198;
   remaster::Add(g_screen, it);

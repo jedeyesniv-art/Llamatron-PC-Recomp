@@ -143,6 +143,15 @@ Shot g_saved_shots[kShotSlots];
 void SaveAheadState() { std::copy(std::begin(g_shots), std::end(g_shots), g_saved_shots); }
 void RestoreAheadState() { std::copy(std::begin(g_saved_shots), std::end(g_saved_shots), g_shots); }
 bool AnalogAim() { return g_analog; }
+bool ShotFraction(const st::Machine& m, uint32_t slot, float* fx, float* fy) {
+  uint32_t base = m.TextBase() + kShots, i = (slot - base) / 16;
+  if (slot < base || i >= kShotSlots || (slot - base) % 16) return false;
+  const Shot& s = g_shots[i];
+  const uint8_t* r = m.Ram() + slot;
+  if (!s.on || int16_t(r[0] << 8 | r[1]) != s.x || int16_t(r[2] << 8 | r[3]) != s.y) return false;
+  *fx = float(s.fx - s.x), *fy = float(s.fy - s.y);
+  return true;
+}
 
 void ApplyPatches(st::Machine& m, const Options& o) {
   if (!o.flashes) {

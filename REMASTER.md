@@ -17,7 +17,7 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
   Mutant Camels (1 MB STE + TT Megamix; not the 512K build, see its notes), Defender 2, Hardcore. Each
   verified pixel-identical to the original (software compose, run-ahead 0) and with unchanged game RAM (Hardcore:
   but for two cosmetic trail rings, see its notes). All planned ports are done; Trip-A-Tron doesn't apply.
-- Next: Llamatron's shots at their exact analog positions (owner), then the release.
+- Llamatron's analog shots at their exact positions: done 2026-11-03 (below). Next: the release.
 - Later (owner): Llamatron's shots at their exact analog positions. Then the release: package, smoke test, push
   (owner decides when).
 - Before porting the next game: scan its draw core for every global it reads (`Tools/absreads.py`: each `$xxxxx.l` operand in
@@ -240,8 +240,9 @@ the per-game steps 1-6 plus verification.
   moving (objects, shots through the $58A2 wrapper, the llama), frame $5BFE's `jsr (a3)` at $5C10 / $5C12. Verified:
   25 frames over waves 1 / 3 / 5 / 7 / 8 identical except the draw-order pixels (one frame 14 px), RAM identical in
   every window incl. analog aim and run-ahead 3; game over / continue / title with no stale items; 120 presents/s
-  in play; pause (items held under the PAUSE cup) and the Ozric tentacle (ST picture). **Owner wants to try later**:
-  shots at their exact analog positions (game.cpp keeps them as doubles) for even smoother diagonals.
+  in play; pause (items held under the PAUSE cup) and the Ozric tentacle (ST picture). Analog shots (2026-11-03,
+  owner): shown at their exact positions - game.cpp keeps them as doubles (`game::ShotFraction`), the item gets the
+  rest beyond the game's whole pixels as `fine_x / fine_y`; pixel check unchanged (20 deg shots: fine y up to 0.5).
 - **Gridrunner**: DONE 2026-11-02 (`src/remaster_grid.cpp`). The Andes draw core again ($4BCE4), play pass
   $144DA..$145E2; snakes key per segment (a3 through $4BBFE), the entry-lane hook still hides them. HUD icon painter
   $4CDBA excluded. Image id includes the colour word $58054 (level 4's rising text). Level 4 from a script: poke the

@@ -56,5 +56,8 @@ bool AnalogAim();
 // Run-ahead (remaster): the hooks' C++ state (the exact shot positions) kept and put back around a copy run ahead.
 void SaveAheadState();
 void RestoreAheadState();
+// Remaster: the shot in the slot at `slot` (runtime address) is an analog one, where the game has it now: how far
+// its exact position is from the whole pixels the game moved it to (false: not ours, or moved by something else).
+bool ShotFraction(const st::Machine& m, uint32_t slot, float* fx, float* fy);
 
 }  // namespace game

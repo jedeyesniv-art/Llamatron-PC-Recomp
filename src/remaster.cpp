@@ -569,9 +569,11 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
 void LogFrame() {
   for (const Item& it : g_cur) {
     const Image* im = g_images.count(it.image) ? &g_images[it.image] : nullptr;
-    LOG("remaster item %016llX %s at %.0f,%.0f clip %d..%d image %016llX %dx%d%+d%+d colour %d", (unsigned long long)it.key,
+    char fine[48] = "";
+    if (it.fine_x != 0 || it.fine_y != 0) std::snprintf(fine, sizeof(fine), " fine %+.2f,%+.2f", it.fine_x, it.fine_y);
+    LOG("remaster item %016llX %s at %.0f,%.0f clip %d..%d image %016llX %dx%d%+d%+d colour %d%s", (unsigned long long)it.key,
         it.kind == kDot ? "dot" : "sprite", it.x, it.y, it.clip_top, it.clip_bottom, (unsigned long long)it.image,
-        im ? im->w : -1, im ? im->h : -1, im ? im->ox : 0, im ? im->oy : 0, it.colour);
+        im ? im->w : -1, im ? im->h : -1, im ? im->ox : 0, im ? im->oy : 0, it.colour, fine);
   }
 }
 
