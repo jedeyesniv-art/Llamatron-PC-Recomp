@@ -64,7 +64,7 @@ elease\Llamatron-<ver>-windows.zip (no game
 - Gridrunner remaster (2026-11-02): src/remaster_grid.cpp (core $4BCE4, pass $144DA..$145E2). Items now take
   each line's palette (Machine::LinePalettes: rasters), all games.
   Its image id includes the colour word $58054 (level 4's text came out dark: the owner's report). Next session:
-  REMASTER.md "Where we are" (all ports done, Llamatron analog shots at exact positions too; next: the release).
+  REMASTER.md "Where we are" (all ports done; its "Polish to-do" list is the plan; no push until the owner says).
 - Camels remaster (2026-11-03): src/remaster_rmc.cpp, STE + TT builds (TT addresses via Tools/mapaddr.py; the 512K
   build not covered). Captures sprites, stars, falling blocks, ground stripes, buildings, the level message;
   not in pause. Generic additions: remaster::kBlack (opaque black pixels), Item::fine_x/fine_y/period,

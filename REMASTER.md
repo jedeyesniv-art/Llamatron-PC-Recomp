@@ -17,9 +17,36 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
   Mutant Camels (1 MB STE + TT Megamix; not the 512K build, see its notes), Defender 2, Hardcore. Each
   verified pixel-identical to the original (software compose, run-ahead 0) and with unchanged game RAM (Hardcore:
   but for two cosmetic trail rings, see its notes). All planned ports are done; Trip-A-Tron doesn't apply.
-- Llamatron's analog shots at their exact positions: done 2026-11-03 (below). Next: the release.
-- Later (owner): Llamatron's shots at their exact analog positions. Then the release: package, smoke test, push
-  (owner decides when).
+- Also done 2026-11-03: Llamatron's analog shots at their exact positions; the CRT's halation redone (crt.cpp /
+  glow.frag.hlsl: a smooth glow from blurred linear-light levels, the owner's tuning = CRT defaults version 4); a
+  "slow present" log line (any frame over 40 ms, with where the time went); `package_portable.ps1 -Folder <name>`.
+  Test build for the owner's Steam Deck: `dist\LlamasoftOnTheSTRemaster` (remaster + run-ahead 2 on for all).
+- **No push until the owner says so** ("much later": their iOS ports come first).
+
+### Polish to-do (owner 2026-11-03: "save our further plans for later"), roughly by impact
+1. **Pad / Deck access to the remaster settings**: remaster on/off and run-ahead 0-3 are keyboard-only (F8 / F7).
+   Add them to the launcher's options page (Y), per game or global; update res/README.txt (it still says the
+   remaster is Photon Storm's only) - all seven games, the CRT glow.
+2. **Steam Deck test of the whole stack** (remaster + run-ahead + the new glow) with the test build: the log's
+   timing / slow present lines, and "crt: glow levels in float" vs "in 8 bits".
+3. **No first-sight frame**: a sprite's first appearance is still drawn by the game (under the captured items, one
+   frame). Decode a game's sprites up front (at level start) instead.
+4. **Smooth screens outside play**: titles, attract demos, level intros, high-score tables and Defender 2's menus
+   still step at 50 / 60 Hz (capture is play only). Worth it first: the Camels' and Hardcore's level intros, title
+   scrollers.
+5. **Run-ahead outside the remaster** (Trip-A-Tron, docs readers, user disks): the run-ahead copy would have to
+   render its picture (the sandbox skips RenderLine).
+6. **Small known glitches**: Photon Storm's paused picture keeps the last frame's shots (the original drops them);
+   Hardcore's trail rings (cosmetic timing, see its notes); the owner's one-off 108 ms stutter (2026-11-03, not
+   reproduced - the slow present line is waiting for it; a scripted run's 121 ms gap at a wave change fell outside
+   every timed phase: events, settings reload, audio or the pacing wait next).
+7. **CRT extras (optional)**: a touch more sharpness (`ss` in the supersampled Line); "vertical sub-pixel through
+   the scanlines" (a sprite between lines shared between two scanlines) as an option - a remaster liberty, owner's
+   call.
+8. **512K Camels build**: leave unless wanted (not in the launcher or the zip; a scripted run stays on its
+   shareware screen).
+9. **Release, when the owner says**: package (`-Release`), smoke-test the unpacked zip outside the repo, refresh
+   the cover with remaster / CRT shots, README.md and release notes, push.
 - Before porting the next game: scan its draw core for every global it reads (`Tools/absreads.py`: each `$xxxxx.l` operand in
   the routine) and sort them into clips / mode / colour / internal; check new sprites
   with run-ahead 2 as well as the run-ahead 0 pixel check.
