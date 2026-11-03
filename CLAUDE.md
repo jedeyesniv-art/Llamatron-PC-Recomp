@@ -85,6 +85,8 @@ elease\Llamatron-<ver>-windows.zip (no game
   ahead. Game RAM identical with run-ahead 3 + ps_analog 1 (7000 frames). --remaster-ahead=N for a run.
 
 ## Settings panel and buttons (2026-11-03; supersedes the "Back = pause", "B twice = disks" notes below)
+- DONE (owner tested 2026-11-03: the panel and every pause "very happy"; the Settings disk stays last on the
+  carousel). Known: turning Remaster off while suspended shows the frame without sprites until resumed.
 - src/settings_menu.cpp: one table of every setting (key, kind toggle / slider / choice, default, range, help,
   "next start" for ones read at game start); 8x8 font at the output's resolution on the left ~half, picture to
   the right as the preview. Changes: settings::Set + Save, then main's ApplySettings (every module's
