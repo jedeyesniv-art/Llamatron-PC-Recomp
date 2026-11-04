@@ -124,6 +124,26 @@ bool g_andes_direct = false;
 bool g_shield_held = false;
 constexpr uint8_t kKeyAlt = 0x38;
 
+// Arcade controls (owner 2026-11-04, after the arcade Defender: andes_controls / d2_controls = 1, the default):
+// the stick's left / right only turns the ship round, thrust is a button - RT analog, X the game's own.
+bool g_andes_arcade = true, g_d2_arcade = true;
+bool g_cruise = false;  // analog thrust: at the trigger's speed last frame (held there)
+
+// A clear sideways push (60% out, within ~35 degrees of level; held from 40% while it stays mostly sideways),
+// so climbing or diving at an angle doesn't flip the ship. The d-pad counts at once. -1 left, 1 right, 0 none.
+int SidePush(const pad::State& p, int was) {
+  bool r = p.Held(SDL_GAMEPAD_BUTTON_DPAD_RIGHT), l = p.Held(SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+  if (r != l) return r ? 1 : -1;
+  float ax = std::fabs(p.lx), ay = std::fabs(p.ly);
+  int side = p.lx > 0 ? 1 : -1;
+  if (was == side && ax > 0.4f && ay < ax) return was;
+  if (ax > 0.6f && ay < ax * 0.7f) return side;
+  return 0;
+}
+
+// How far RT is squeezed, 0..1 (a little dead zone at both ends).
+float TriggerThrust(const pad::State& p) { return std::clamp((p.rt - 0.06f) / 0.86f, 0.0f, 1.0f); }
+
 // The high score name: typed (Crawio, $1A38C: letters, Space = "_"), 3 of them ($1BC96 counts; the cursor
 // $1BC92 is negative when no name is being entered).
 constexpr uint32_t kAndesNameCursor = 0x1BC92;
@@ -191,7 +211,36 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     g_mouse_y -= float(dy);
     g_alt = -1;
   }
-  if (play) {
+  if (play && g_andes_arcade) {
+    // Arcade: left / right turn round (the right button for a few frames, once per push), Y reverses.
+    int dir = SidePush(p, g_stick_dir);
+    int facing = Get16(*m, kAndesFacing) ? -1 : 1;
+    if (dir != 0 && dir != g_stick_dir && dir != facing) g_reverse_frames = 3;
+    g_stick_dir = dir;
+    if (pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) g_reverse_frames = 3;
+    float t = TriggerThrust(p);
+    if (g_reverse_frames > 0) {
+      --g_reverse_frames, buttons |= 1;
+    } else if (p.Held(SDL_GAMEPAD_BUTTON_WEST)) {
+      buttons |= 2, g_cruise = false;  // X: the game's thrust
+    } else if (t > 0) {
+      // RT: the trigger sets a speed (the index $14BC4, 0..19). Below it the thrust is held and the game climbs
+      // at its own rate; there it is held at that speed (the game's step past it taken back); above it (the
+      // trigger eased off) the game's glide.
+      int target = std::max(1, int(std::lround(t * 19)));
+      int speed = Get16(*m, kAndesSpeed);
+      if (speed == target + 1 && g_cruise) Put16(m, kAndesSpeed, target), speed = target;
+      g_cruise = speed <= target;
+      if (g_cruise) buttons |= 2;
+    } else {
+      g_cruise = false;
+    }
+    bool fire = p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.lt > 0.5f;
+    if (fire != g_fire_held) m->KeyEvent(kKeyLShift, fire), g_fire_held = fire;
+    if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) TapKey(m, kKeyLCtrl);  // smart bomb
+    bool shield = p.Held(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) || p.Held(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    if (shield != g_shield_held) m->KeyEvent(kKeyAlt, shield), g_shield_held = shield;
+  } else if (play) {
     // Left / right: thrust that way; against the facing, reverse first (the right button, once per push).
     // (Direct thrust is proportional, so a small push counts: 0.2 / release 0.12; else half way / 0.3.)
     const float on = g_andes_direct ? 0.2f : 0.5f, off = g_andes_direct ? 0.12f : 0.3f;
@@ -251,7 +300,8 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
 constexpr uint32_t kD2Divisor = 0x4D1EC;
 bool g_d2_50fps = true;
 constexpr uint32_t kD2State = 0x4B086, kD2PtrX = 0x62456, kD2PtrY = 0x62458, kD2Scheme = 0x1BCC4,
-                   kD2Facing = 0x1B4B8;
+                   kD2Facing = 0x1B4B8, kD2Vel = 0x1B4B4, kD2Top = 0x1B4CA, kD2Accel = 0x1B4BE,
+                   kD2Dying = 0x2F2DE;  // the death countdown (300 frames; controls skipped)
 constexpr int kD2Play = 0, kD2Title = 2, kD2Screen = 8;
 // State 8's screens, by its sub-handler ($1F200): player select, high score initials (the letter is the
 // pointer's x / 8; left button fixes it, right deletes), others (game over...).
@@ -324,21 +374,62 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     }
     Hold(m, kD2Up, step && v < 0);
     Hold(m, kD2Down, step && v > 0);
-    // Left / right: thrust that way; against the facing, reverse first.
-    int dir = p.lx > 0.5f || p.Held(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ? 1
-              : p.lx < -0.5f || p.Held(SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? -1
-              : std::fabs(p.lx) < 0.3f ? 0 : g_stick_dir;
-    int facing = Get16(*m, kD2Facing) < 0 ? -1 : 1;
-    if (dir != 0 && dir != g_stick_dir && dir != facing) g_reverse_frames = 3;
-    g_stick_dir = dir;
-    if (pad::Pressed(SDL_GAMEPAD_BUTTON_WEST)) g_reverse_frames = 3;
-    Hold(m, kD2Reverse, g_reverse_frames > 0);
-    if (g_reverse_frames > 0) --g_reverse_frames;
-    Hold(m, kD2Thrust, (dir != 0 && g_reverse_frames == 0) || p.lt > 0.5f);
-    Hold(m, kD2Fire, p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f);
-    Hold(m, kD2Inviso, p.Held(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
-    if (pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) TapKey(m, kD2Bomb);
-    if (pad::Pressed(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) TapKey(m, kD2Tab);
+    if (g_d2_arcade) {
+      // Arcade: left / right turn round (Alt for a few frames, once per push), Y reverses.
+      int dir = SidePush(p, g_stick_dir);
+      int facing = Get16(*m, kD2Facing) < 0 ? -1 : 1;
+      if (dir != 0 && dir != g_stick_dir && dir != facing) g_reverse_frames = 3;
+      g_stick_dir = dir;
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) g_reverse_frames = 3;
+      Hold(m, kD2Reverse, g_reverse_frames > 0);
+      bool thrust = false;
+      float t = TriggerThrust(p);
+      if (g_reverse_frames > 0) {
+        --g_reverse_frames;
+      } else if (p.Held(SDL_GAMEPAD_BUTTON_WEST)) {
+        thrust = true, g_cruise = false;  // X: the game's thrust
+      } else if (t > 0 && Get16(*m, kD2Dying) > 0) {
+        g_cruise = false;  // dead: the game skips the controls (and the ship keeps its speed), so leave it alone
+      } else if (t > 0) {
+        // RT: the trigger sets a speed, a share of the top speed $1B4CA (px a frame; the velocity $1B4B4 is
+        // 16.16, + = right). Below it Return is held (the game's acceleration), there the velocity is held,
+        // above it the game's friction slows the ship. (Held: the frame's acceleration past it taken back.)
+        int64_t vel = int32_t(Get32(*m, kD2Vel));
+        int64_t target = int64_t(t * double(Get16(*m, kD2Top)) * 65536.0);
+        int64_t along = vel * facing;  // < 0: still moving the other way (thrust brakes)
+        int64_t step = int32_t(Get32(*m, kD2Accel));
+        if (along > target && along <= target + 2 * step && g_cruise) {
+          uint32_t v32 = uint32_t(int32_t(target * facing));
+          Put16(m, kD2Vel, int(v32 >> 16)), Put16(m, kD2Vel + 2, int(v32 & 0xFFFF));
+          along = target;
+        }
+        g_cruise = along <= target;
+        thrust = g_cruise;
+      } else {
+        g_cruise = false;
+      }
+      Hold(m, kD2Thrust, thrust);
+      Hold(m, kD2Fire, p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.lt > 0.5f);
+      Hold(m, kD2Inviso, p.Held(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) TapKey(m, kD2Bomb);
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) TapKey(m, kD2Tab);
+    } else {
+      // Left / right: thrust that way; against the facing, reverse first.
+      int dir = p.lx > 0.5f || p.Held(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ? 1
+                : p.lx < -0.5f || p.Held(SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? -1
+                : std::fabs(p.lx) < 0.3f ? 0 : g_stick_dir;
+      int facing = Get16(*m, kD2Facing) < 0 ? -1 : 1;
+      if (dir != 0 && dir != g_stick_dir && dir != facing) g_reverse_frames = 3;
+      g_stick_dir = dir;
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_WEST)) g_reverse_frames = 3;
+      Hold(m, kD2Reverse, g_reverse_frames > 0);
+      if (g_reverse_frames > 0) --g_reverse_frames;
+      Hold(m, kD2Thrust, (dir != 0 && g_reverse_frames == 0) || p.lt > 0.5f);
+      Hold(m, kD2Fire, p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f);
+      Hold(m, kD2Inviso, p.Held(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) TapKey(m, kD2Bomb);
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) TapKey(m, kD2Tab);
+    }
   } else {
     ReleaseAll(m);
     g_stick_dir = 0;
@@ -1024,6 +1115,7 @@ void Start(Game g) {
   g_fire_held = false;
   g_alt = -1;
   g_thrust_frac = 0;
+  g_cruise = false;
   LoadSettings();
   g_shield_held = false;
   remaster_andes::Start();
@@ -1042,6 +1134,8 @@ void LoadSettings() {
   g_andes_curve = float(settings::Get("andes_stick_curve", 1.5));
   // Off by default (owner: "left and right feel wrong" with it): the game's own thrust and glide.
   g_andes_direct = settings::Get("andes_direct_thrust", 0) != 0;
+  g_andes_arcade = settings::Get("andes_controls", 1) != 0;
+  g_d2_arcade = settings::Get("d2_controls", 1) != 0;
 }
 
 void Update(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_buttons) {

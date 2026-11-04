@@ -84,6 +84,20 @@ elease\Llamatron-<ver>-windows.zip (no game
   0, ~40 ms quicker than the original game (cancels the interpolation's frame). Cost ~0.3 ms per frame run
   ahead. Game RAM identical with run-ahead 3 + ps_analog 1 (7000 frames). --remaster-ahead=N for a run.
 
+## Arcade controls for Andes Attack and Defender 2 (2026-11-04; owner tried it: "thrust on RT feels very good")
+- After the arcade Defender (stick up/down only, thrust a button): settings andes_controls / d2_controls (1 =
+  ARCADE, default; 0 = STICK THRUST, the older scheme below). Stick left / right only turns round (SidePush in
+  stgames.cpp: 60% out and within ~35 deg of level, held from 40%; one turn per push; d-pad at once), Y reverse,
+  A / LT fire, B smart bomb, X = the game's own thrust, LB / RB shield (Andes) / inviso + Tab (D2).
+- RT analog thrust: the squeeze sets a target speed. Below it the thrust is held (the game's own acceleration),
+  at it the one-step overshoot is taken back (engine lit), above it released (the game's glide / friction).
+  Andes: speed index $14BC4 (0..19; climb delays table $14BC6 1..32 frames, $2D77C = thrust held). D2: velocity
+  $1B4B4 (16.16, + right), accel $1B4BE (0x3000), friction $1B4C6 (0x1800), top $1B4CA (9 px a frame);
+  left alone while dying ($2F2DE countdown: controls skipped). Measured: D2 half 4.7, 30% 2.6, full 9; Andes
+  half 10, full 18, eased 17 -> 5 in ~2 s.
+- Tests: --press=N:grt@<0..1> (part squeeze), --watch=@<hex> (absolute address). Scripted runs die often:
+  defender2_invincible=1 in the test userdata's settings.txt; Andes dies around frame 1150 with the smoke input.
+
 ## Settings panel and buttons (2026-11-03; supersedes the "Back = pause", "B twice = disks" notes below)
 - DONE (owner tested 2026-11-03: the panel and every pause "very happy"; the Settings disk stays last on the
   carousel). Known: turning Remaster off while suspended shows the frame without sprites until resumed.

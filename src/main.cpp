@@ -103,7 +103,7 @@ struct Options {
   int palette_from = -1, palette_to = -1;  // --palette-log=N:M: log the colour registers every frame (tests)
   int dump_frame = -1;     // --dump=N:<file>: write the 1 MB of RAM at frame N (tests, analysis)
   std::string dump_file;
-  std::string profile_file;  // --watch=<hex text offset>[,...]: log these words every 10 frames (tests)
+  std::string profile_file;  // --watch=<hex text offset | @hex address>[,...]: log these words every 10 frames (tests)
 };
 
 bool Arg(const std::string& a, const char* name, std::string* value) {
@@ -149,7 +149,8 @@ Options ParseArgs(int argc, char** argv) {
     }
     else if (Arg(a, "watch", &v)) {
       for (size_t p = 0; p < v.size(); p = v.find(',', p) == std::string::npos ? v.size() : v.find(',', p) + 1)
-        o.watches.push_back(uint32_t(std::strtoul(v.c_str() + p, nullptr, 16)));
+        o.watches.push_back(v[p] == '@' ? 0x80000000u | uint32_t(std::strtoul(v.c_str() + p + 1, nullptr, 16))
+                                        : uint32_t(std::strtoul(v.c_str() + p, nullptr, 16)));
     }
     else if (Arg(a, "dump", &v)) {
       o.dump_frame = std::atoi(v.c_str());
@@ -668,7 +669,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         SDL_MouseButtonFlags mb = opt.headless ? 0 : SDL_GetMouseState(nullptr, nullptr);
         uint8_t buttons = uint8_t((mb & SDL_BUTTON_LMASK ? 2 : 0) | (mb & SDL_BUTTON_RMASK ? 1 : 0));
         // Scripted mouse and pad (tests): mleft, mright, mx<dx>, my<dy> (per frame); pad: gl<degrees>@<deflection>
-        // (left stick), gry<value> (right stick y), glt, grt (triggers), gx, gy, glb, grb (buttons).
+        // (left stick), gry<value> (right stick y), glt, grt, grt@<0..1> (triggers), gx, gy, glb, grb (buttons).
         grid::TestPad tp;
         bool test_pad = false;
         for (const auto& p : opt.presses) {
@@ -679,7 +680,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
             test_pad = true;
           }
           if (p.what.rfind("gry", 0) == 0) tp.ry = float(std::atof(p.what.c_str() + 3)), test_pad = true;
-          if (p.what.rfind("gr", 0) == 0 && p.what.find('@') != std::string::npos) {  // gr<degrees>@<deflection>
+          if (p.what.rfind("gr", 0) == 0 && p.what.find('@') != std::string::npos && p.what.rfind("grt", 0) != 0) {  // gr<degrees>@<deflection>
             double deg = std::atof(p.what.c_str() + 2), mag = std::atof(p.what.c_str() + p.what.find('@') + 1);
             tp.rx = float(std::cos(deg * 3.14159265 / 180) * mag), tp.ry = float(std::sin(deg * 3.14159265 / 180) * mag);
             test_pad = true;
@@ -694,6 +695,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           if (p.what == "gright") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_DPAD_RIGHT, test_pad = true;
           if (p.what == "glt") tp.lt = 1, test_pad = true;
           if (p.what == "grt") tp.rt = 1, test_pad = true;
+          if (p.what.rfind("grt@", 0) == 0) tp.rt = float(std::atof(p.what.c_str() + 4)), test_pad = true;  // squeezed part way
           if (p.what == "gx") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_WEST, test_pad = true;
           if (p.what == "gy") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_NORTH, test_pad = true;
           if (p.what == "glb") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, test_pad = true;
@@ -818,9 +820,11 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       if (!opt.watches.empty() && frame % opt.watch_step == 0) {
         std::string line;
         for (uint32_t w : opt.watches) {
-          const uint8_t* at = machine.Ram() + machine.TextBase() + w;
+          bool abs = w & 0x80000000u;  // @<hex>: an absolute address
+          w &= 0x7FFFFFFFu;
+          const uint8_t* at = machine.Ram() + (abs ? 0 : machine.TextBase()) + w;
           char buf[32];
-          std::snprintf(buf, sizeof(buf), " %X=%d", w, int16_t(at[0] << 8 | at[1]));
+          std::snprintf(buf, sizeof(buf), " %s%X=%d", abs ? "@" : "", w, int16_t(at[0] << 8 | at[1]));
           line += buf;
         }
         LOG("frame %d:%s", frame, line.c_str());

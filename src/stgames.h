@@ -10,7 +10,9 @@
 // Andes Attack (ANDES.BOY): state $12EEE (1 play, 3 paused, 5 title / demo). Mouse: y = altitude ($2B682),
 // left button = thrust, right button = reverse (facing $1C088: 0 right, 1 left); Left Shift = fire; Right
 // Shift = pause, Space = resume.
-//   left stick up / down = altitude; left / right = thrust that way (pushing against the facing reverses first);
+//   arcade (andes_controls=1, default): left stick up / down = altitude, left / right = face that way; RT thrust
+//   (analog: the squeeze = speed), X full thrust, A / LT fire, B smart bomb, Y reverse, LB / RB shield.
+//   stick thrust (0): left stick up / down = altitude; left / right = thrust that way (pushing against the facing reverses first);
 //   A / RT = fire, LT = thrust, X = reverse, Y = smart bomb (Left Control), LB / RB held = shield (Alternate:
 //   Kbshift bit 3, energy $1C440); Start = pause / resume. Away from play
 //   A / RT is the left mouse button (start).
@@ -32,7 +34,8 @@ namespace stgames {
 // (Stargate), Tab ship type (Defender II). No pause key: Start (in play) pauses the emulation.
 //   title: d-pad picks a box (Defender, Defender II, Stargate / Trainer, Options, History), A opens it;
 //   player select: d-pad left / right, A; other screens: left stick = pointer, A / RT left, X / LT right.
-//   play: left stick up / down = climb / dive (pulsed: analog), left / right = thrust that way (turns round
+//   play, arcade (d2_controls=1, default): as Andes Attack's, LB inviso, RB Tab; Start pause.
+//   play, stick thrust (0): left stick up / down = climb / dive (pulsed: analog), left / right = thrust that way (turns round
 //   first), A / RT fire, Y smart bomb, X reverse, LT thrust, LB inviso, RB Tab; Start pause.
 // Hardcore (HARDCORE.PRG, Yak 1992, an unfinished "5-level evaluation demo"): VBL $168F2 calls the hook at
 // $338BA ($104EA title, $145D0 level intro, $10C82 play, $11242 paused). The mouse pointer $338C2 (x, 21..257)
