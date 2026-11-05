@@ -32,6 +32,7 @@ struct Section {
 const Section kSections[] = {
     {"general", "GENERAL"},       {"crt", "CRT LOOK"},       {"crtpp", "CRT++"},       {"llamatron", "LLAMATRON"},
     {"gridrunner", "SUPER GRIDRUNNER"}, {"photonstorm", "PHOTON STORM"}, {"andes", "ANDES ATTACK"},
+    {"rmc", "MUTANT CAMELS"},
     {"defender2", "DEFENDER 2"},  {"hardcore", "HARDCORE"},  {"tripatron", "TRIP-A-TRON"},
 };
 
@@ -130,6 +131,9 @@ const std::vector<Item>& Items() {
        "The game's 60 Hz mode, as the arcade (its speeds adjusted). Off: 50 Hz.", true},
       {"defender2", "50 FRAMES A SECOND", "d2_50fps", Kind::kToggle, 1, 0, 1, 1, {},
        "Draws every frame in play (the original: 25). The game's speed is the same.", true},
+
+      {"rmc", "TWIN STICK", "rmc_twin_stick", Kind::kChoice, 2, 0, 2, 1, {"OFF", "8 WAYS", "360"},
+       "Right stick aims the spit (any angle with 360), left stick moves, jumps, sits. Off: the stick does both."},
 
       {"hardcore", "STROBES", "hc_strobes", Kind::kToggle, 0, 0, 1, 1, {},
        "The game's flashing strobes (its S key still switches them).", true},
@@ -285,7 +289,8 @@ void Open(const std::string& game_id, const std::string& title) {
   if (game_id.empty()) {  // the Settings disk: everything
     for (int s = 0; s < int(std::size(kSections)); ++s) add(s);
   } else {  // in a game: general, the game's own (short), then the CRT look
-    for (const char* id : {"general", game_id.c_str(), "crt", "crtpp"})
+    const std::string own = game_id == "rmctt" ? "rmc" : game_id;  // both Camels builds: one section
+    for (const char* id : {"general", own.c_str(), "crt", "crtpp"})
       for (int s = 0; s < int(std::size(kSections)); ++s)
         if (game_id != "general" && game_id != "crt" && game_id != "crtpp" && std::string(kSections[s].id) == id) add(s);
   }

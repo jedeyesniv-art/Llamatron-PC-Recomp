@@ -126,8 +126,10 @@ std::vector<Known> KnownGames() {
   }
   k.back().game.help = {"REVENGE OF THE MUTANT CAMELS  -  JEFF MINTER", "",
                         "Giant camels against the forces of evil.", "",
-                        "LEFT STICK / D-PAD   move the camel",
-                        "A, X, RT             fire",
+                        "LEFT STICK / D-PAD   move: up jumps, down sits",
+                        "RIGHT STICK          aim the spit (it never stops)",
+                        "A, X, RT             fire held: no jumping or sitting",
+                        "                     (aim with the left stick alone)",
                         "START                pause",
                         "B ON THE PAUSE SCREEN  back to the menu",
                         "BACK                 settings   (B there: back to the disks)", "",

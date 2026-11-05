@@ -39,6 +39,7 @@ void Put16(st::Machine* m, uint32_t a, int v) {
   m->Ram()[a] = uint8_t(v >> 8);
   m->Ram()[a + 1] = uint8_t(v);
 }
+void Put32(st::Machine* m, uint32_t a, uint32_t v) { Put16(m, a, int(v >> 16)), Put16(m, a + 2, int(v & 0xFFFF)); }
 
 void TapKey(st::Machine* m, uint8_t code, int frames = 3) {
   m->KeyEvent(code, true);
@@ -86,12 +87,69 @@ void RmcB(st::Machine* m) {
   }
 }
 
+// Twin stick (setting rmc_twin_stick: 0 off, 1 eight ways, 2 360, default): the camel spits all the time in
+// the joystick's direction (its README: Up jumps, Down sits, fire held = neither, to aim up from the ground). In
+// play ($12778, STE) the joystick byte d0 sets the shot velocity from an 8-way table ($38D34: 16.16 longs
+// $38D24 / $38D28, 3 px a frame, neutral = right) and walk / jump / sit from the same bits. With the right stick
+// pushed (on 0.4, off 0.3), a hook on the move.w d0,d1 after the table read writes its direction instead, so the
+// left stick only moves, jumps and sits. Speeds as the table's: 3 / max(|cos|, |sin|). The confuzer ($3BFDE >= 0)
+// mirrors left / right in solo / assist ($3933C 0 / 1): the aim too; two players ($3933C 2): it swaps the
+// players' joysticks, so the aim is left alone then. The goat's turret ($17B9C) reads the same velocity.
+struct RmcAimAddrs {
+  uint32_t hook, dx, dy, confuse, mode;
+};
+constexpr RmcAimAddrs kRmcAimSte = {0x1279C, 0x38D24, 0x38D28, 0x3BFDE, 0x3933C};
+constexpr RmcAimAddrs kRmcAimTt = {0x127D4, 0x39062, 0x39066, 0x3C370, 0x3963E};  // Tools/mapaddr.py
+const RmcAimAddrs* g_rmc_aim = nullptr;  // null: a build without the hook (the 512K one)
+int g_rmc_twin = 2;
+bool g_rmc_aim_on = false;  // the right stick is pushed: its angle (screen: 0 right, y down)
+double g_rmc_aim_angle = 0;
+
+void RmcOnAim(st::Machine& m) {
+  const RmcAimAddrs& a = *g_rmc_aim;
+  cpu::Set(cpu::Reg(cpu::D0 + 1), (cpu::Get(cpu::Reg(cpu::D0 + 1)) & 0xFFFF0000u) | (cpu::Get(cpu::D0) & 0xFFFF));  // move.w d0,d1
+  cpu::Set(cpu::PC, a.hook + 2);
+  if (!g_rmc_aim_on || g_rmc_twin == 0) return;
+  int16_t confused = int16_t(Get16(m, a.confuse)), mode = int16_t(Get16(m, a.mode));
+  if (confused >= 0 && mode == 2) return;
+  double c = std::cos(g_rmc_aim_angle), s = std::sin(g_rmc_aim_angle);
+  if (g_rmc_twin == 1) {  // eight ways: the table's own values
+    const double q = 0.78539816339744831;  // 45 degrees
+    double k = std::round(g_rmc_aim_angle / q) * q;
+    c = std::round(std::cos(k)), s = std::round(std::sin(k));
+  } else {
+    double big = std::max(std::fabs(c), std::fabs(s));
+    c /= big, s /= big;
+  }
+  if (confused >= 0) c = -c;
+  Put32(&m, a.dx, uint32_t(int32_t(std::lround(3 * c * 65536))));
+  Put32(&m, a.dy, uint32_t(int32_t(std::lround(3 * s * 65536))));
+}
+
+void RmcInstallAim(st::Machine* m) {
+  if (!g_rmc_aim || Get16(*m, g_rmc_aim->hook) == 0x4AFC) return;
+  // move.w d0,d1, after the table's writes of dx and dy (move.w (a0,d1.w),dx; move.w $20(a0,d1.w),dy)
+  const RmcAimAddrs& a = *g_rmc_aim;
+  if (Get16(*m, a.hook) != 0x3200 || Get16(*m, a.hook - 16) != 0x33F0 || Get32(*m, a.hook - 12) != a.dx ||
+      Get16(*m, a.hook - 8) != 0x33F0 || Get32(*m, a.hook - 4) != a.dy)
+    return;  // not unpacked yet (or not this build)
+  Put16(m, a.hook, 0x4AFC);
+  m->AddHook(a.hook, RmcOnAim);
+  LOG("mutant camels: twin stick hook installed (%s)", g_rmc_twin == 2 ? "360" : g_rmc_twin == 1 ? "8 ways" : "off");
+}
+
 void RmcUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   if (g_rmc_tt && Get16(*m, kTtNagWait) == 0x0C79 && Get16(*m, kTtNagWait + 2) == 0x07D0 &&
       Get32(*m, kTtNagWait + 4) == 0x0003D94E && Get16(*m, kTtNagWait + 8) == 0x6FF6)
     Put16(m, kTtNagWait + 8, 0x4E71);
   remaster_rmc::Update(m);
   const pad::State& p = pad::Now();
+  if (RmcPlaying(*m)) RmcInstallAim(m);
+  {
+    float r = std::hypot(p.rx, p.ry);
+    g_rmc_aim_on = r > (g_rmc_aim_on ? 0.3f : 0.4f);
+    if (g_rmc_aim_on) g_rmc_aim_angle = std::atan2(double(p.ry), double(p.rx));
+  }
   uint8_t j1 = pad::JoyBits(p);
   if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.rt > 0.5f) j1 |= st::kJoyFire;
   // The keyboard: cursor keys + Space / Right Ctrl.
@@ -787,7 +845,6 @@ uint32_t g_ps_capture_screen = 0;
 
 uint32_t Reg(int r) { return cpu::Get(cpu::Reg(r)); }
 int RegW(int r) { return int16_t(Reg(r)); }
-void Put32(st::Machine* m, uint32_t a, uint32_t v) { Put16(m, a, int(v >> 16)), Put16(m, a + 2, int(v & 0xFFFF)); }
 using remaster::Decoding;
 void Rts(st::Machine& m) { remaster::Return(m); }
 uint64_t PsKey(uint32_t caller, uint32_t object) { return remaster::Key(caller, object); }
@@ -1082,6 +1139,8 @@ void Reset() { Start(g_game); }
 
 void SetProgram(const std::string& program) {
   g_rmc_tt = program == "REVTT.TOS";
+  g_rmc_aim = program == "REVSTE1M.TOS" ? &kRmcAimSte : g_rmc_tt ? &kRmcAimTt : nullptr;
+  g_rmc_aim_on = false;
   remaster_rmc::Start(program);
   if (program == "REVSTE1M.TOS") kRmcHook = 0x3DD3E, kRmcPlay = 0x111DE, kRmcPause = 0x1056C;
   else if (program == "REVTT.TOS") kRmcHook = 0x3E0CE, kRmcPlay = 0x11206, kRmcPause = 0x10580;
@@ -1136,6 +1195,7 @@ void LoadSettings() {
   g_andes_direct = settings::Get("andes_direct_thrust", 0) != 0;
   g_andes_arcade = settings::Get("andes_controls", 1) != 0;
   g_d2_arcade = settings::Get("d2_controls", 1) != 0;
+  g_rmc_twin = std::clamp(int(settings::Get("rmc_twin_stick", 2)), 0, 2);
 }
 
 void Update(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_buttons) {

@@ -118,6 +118,16 @@ elease\Llamatron-<ver>-windows.zip (no game
   frame counter now runs across visits. SaveRenderShot reads the whole window.
 - Gotcha: pad events arrive in the background (SDL hint): the owner's pad opened the panel during a test.
 
+## Mutant Camels twin stick (2026-11-05; owner asked: move on the left, aim on the right)
+- The camel spits all the time in the joystick's direction (Yak's README; fire held = no jump / sit). Play reads
+  the joystick at $12778 (STE): d0 -> 8-way table $38D34 -> shot velocity $38D24 / $38D28 (16.16 longs, 3 px,
+  neutral = right; the goat's turret $17B9C reads it too), the same bits walk / jump / sit. stgames.cpp hooks
+  the move.w d0,d1 after it ($1279C; TT $127D4, mapaddr.py) and, with the right stick pushed (0.4 / 0.3),
+  writes its direction (speed 3 / max(|cos|, |sin|)). Confuzer $3BFDE >= 0: aim mirrored, or left alone with
+  two players ($3933C = 2: joysticks swapped). Setting rmc_twin_stick 0 off / 1 8 ways / 2 360 (default);
+  panel section MUTANT CAMELS (rmctt shows it too). Not the 512K build. Verified: up while walking right,
+  jump while aiming up, 160 deg = (-3, 1.09); TT 225 deg = (-3, -3); smoke all pass.
+
 ## Volume (2026-11-05; owner: games "really loud on a TV", some louder than others)
 - Settings volume (master, 0..1, gain = v^2: 0.5 = -12 dB) and volume_normalise (1): main.cpp scales the samples
   (clamped) before the queue and the --wav dump. games.cpp NormalGainDb = -23 LUFS (EBU R128) - each game's
