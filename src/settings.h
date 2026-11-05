@@ -12,7 +12,8 @@ void Save();
 // Rereads the file if it changed since the last load (call now and then). True if it was reread.
 bool Reload();
 
-double Get(const std::string& key, double def);
+double Get(const std::string& key, double def);  // (a missing key is added with def)
+bool Has(const std::string& key);
 void Set(const std::string& key, double value);
 void Erase(const std::string& key);
 

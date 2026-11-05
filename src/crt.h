@@ -5,6 +5,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <string>
+
 namespace crt {
 
 // Asks for the GPU renderer that can take our DXIL shader; falls back to SDL's default renderer.
@@ -18,6 +20,9 @@ bool Enabled();  // on and available
 int Mode();      // 0 off (or unavailable), 1 CRT+, 2 CRT++ (psychedelic trails, colour bleed, more glow)
 void Toggle();   // cycles off / CRT+ / CRT++ and saves the setting
 void LoadSettings();
+// The game running ("" = none: the launcher, the Settings disk). Each game has its own look (<id>_crt) and
+// CRT++ sliders (<id>_crt_psy_*) once changed in it; until then, per key, the shared ones (crt, crt_psy_*).
+void SetGame(const std::string& id);
 
 // Draws the ST picture into view (logical coordinates covering the logical presentation) with the CRT look
 // when it's on, else as it is. src_w / src_h: the picture's ST resolution when the texture is bigger (the

@@ -126,6 +126,10 @@ elease\Llamatron-<ver>-windows.zip (no game
   yellow must stay yellow), then the CRT with glow x crt_psy_glow and saturation x crt_psy_saturation.
   Per-second rates (any refresh). Settings crt_psy_* in the panel's CRT++ section, own reset
   (crt_psy_defaults). Tests: a windowed run with --rshot (headless has no renderer).
+- Per game (owner 2026-11-05, after the Deck test: 90 fps, GPU ~35%): the look (<id>_crt) and each CRT++ slider
+  (<id>_crt_psy_*) are the game's own once changed in its panel; until then, per key, the shared ones (the
+  Settings disk / launcher edit those). crt::SetGame(id) around RunGame; panel: "CRT++ FOR THIS GAME", Delete
+  on a row or "USE THE SHARED CRT++" drops the game's own. F9 in a game sets the game's look. settings::Has.
 - Survey of the screens outside play for the remaster: REMASTER.md "Outside play" (--survey, Tools/survey.py).
 
 ## Layout (C:\LlamatronRecomp)

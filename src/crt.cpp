@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "log.h"
 #include "settings.h"
@@ -27,7 +28,15 @@ struct Params {
 SDL_GPUShader* g_shader = nullptr;
 SDL_GPURenderState* g_state = nullptr;
 SDL_GPUDevice* g_device = nullptr;
-int g_mode = 1;  // 0 off, 1 CRT+, 2 CRT++ (setting crt)
+int g_mode = 1;  // 0 off, 1 CRT+, 2 CRT++ (setting crt, or <game>_crt)
+std::string g_game;  // SetGame
+
+// A setting the running game can have its own of: its key if it has one, else the shared key.
+std::string GameKey(const char* key) {
+  if (g_game.empty()) return key;
+  std::string own = g_game + "_" + key;
+  return settings::Has(own) ? own : std::string(key);
+}
 Params g_params{};
 
 // The halation's glow, rebuilt every frame (BuildGlow): the picture as linear light at 320 x 200 (level 0; from the
@@ -342,7 +351,7 @@ int Mode() { return !g_state ? 0 : g_mode == 2 && !g_mix_state ? 1 : g_mode; }
 
 void Toggle() {
   g_mode = (g_mode + 1) % (g_mix_state ? 3 : 2);
-  settings::Set("crt", g_mode);
+  settings::Set(g_game.empty() ? std::string("crt") : g_game + "_crt", g_mode);
   settings::Save();
   LOG("crt %s", g_mode == 2 ? "CRT++" : g_mode ? "on" : "off");
 }
@@ -359,7 +368,7 @@ void LoadSettings() {
     if (reset) settings::Set(key, def);
     return float(settings::Get(key, def));
   };
-  g_mode = std::clamp(int(settings::Get("crt", 1)), 0, 2);
+  g_mode = std::clamp(int(settings::Get(GameKey("crt"), 1)), 0, 2);
   Params& p = g_params;
   p.beam[0] = get("crt_scanlines", 0.45);
   p.beam[1] = get("crt_beam_min", 0.35);
@@ -386,7 +395,7 @@ void LoadSettings() {
   const bool psy_reset = settings::Get("crt_psy_defaults", 0) < kPsyDefaults;
   auto psy = [psy_reset](const char* key, double def) {
     if (psy_reset) settings::Set(key, def);
-    return float(settings::Get(key, def));
+    return float(settings::Get(GameKey(key), def));
   };
   Psy& q = g_psy;
   q.length = psy("crt_psy_length", 0.4);
@@ -406,6 +415,14 @@ void LoadSettings() {
     settings::Set("crt_psy_defaults", kPsyDefaults);
     settings::Save();
   }
+}
+
+void SetGame(const std::string& id) {
+  if (id == g_game) return;
+  g_game = id;
+  LoadSettings();
+  LOG("crt: %s look: %s", id.empty() ? "the shared" : id.c_str(),
+      g_mode == 2 ? "CRT++" : g_mode ? "CRT+" : "off");
 }
 
 void DrawPicture(SDL_Renderer* renderer, SDL_Texture* texture, const SDL_FRect& view, float src_w, float src_h) {

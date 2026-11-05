@@ -43,7 +43,7 @@ const std::vector<Item>& Items() {
       {"general", "RUN-AHEAD", "remaster_ahead", Kind::kChoice, 2, 0, 3, 1, {"OFF", "1 FRAME", "2 FRAMES", "3 FRAMES"},
        "Remaster only: runs the game ahead to cut the delay between the pad and the picture (F7). 2 is the sweet spot."},
       {"general", "CRT LOOK", "crt", Kind::kChoice, 1, 0, 2, 1, {"OFF", "CRT+", "CRT++"},
-       "CRT+: scanlines, phosphor mask and glow, like a TV of the time. CRT++: psychedelic trails on top (F9)."},
+       "CRT+: scanlines, mask and glow, like a TV of the time. CRT++: psychedelic trails on top (F9). In a game: that game's own."},
       {"general", "FULLSCREEN", "", Kind::kFullscreen, 1, 0, 1, 1, {}, "Fullscreen or a window (F11, Alt+Enter)."},
       {"general", "EXCLUSIVE FULLSCREEN", "fullscreen_exclusive", Kind::kToggle, 0, 0, 1, 1, {},
        "Switches the display to a 50 / 100 Hz mode for even motion, at the cost of a blink when switching away.",
@@ -162,9 +162,18 @@ int g_top = 0;  // first row shown
 int g_held_y = 0, g_held_x = 0;
 double g_wait_y = 0, g_wait_x = 0;
 
+// In a game, the look (crt) and the CRT++ sliders are the game's own: <id>_<key> once changed there, until then
+// the shared key (what the Settings disk edits). Per key.
+bool PerGame(const Item& it) {
+  const std::string key = it.key;
+  return !g_game.empty() && (key == "crt" || key.rfind("crt_psy_", 0) == 0);
+}
+std::string OwnKey(const Item& it) { return g_game + "_" + it.key; }
+
 double Value(const Item& it) {
   if (it.kind == Kind::kFullscreen) return g_window && (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) ? 1 : 0;
   if (!*it.key) return 0;
+  if (PerGame(it) && settings::Has(OwnKey(it))) return settings::Get(OwnKey(it), it.def);
   return settings::Get(it.key, it.def);
 }
 
@@ -175,10 +184,11 @@ void SetValue(const Item& it, double v) {
   }
   v = std::clamp(v, it.lo, it.hi);
   if (it.kind == Kind::kSlider) v = std::round(v / it.step) * it.step, v = std::round(v * 1000) / 1000;
-  if (Value(it) == v) return;
-  settings::Set(it.key, v);
+  if (Value(it) == v && !(PerGame(it) && !settings::Has(OwnKey(it)))) return;
+  const std::string key = PerGame(it) ? OwnKey(it) : std::string(it.key);
+  settings::Set(key, v);
   settings::Save();
-  LOG("settings: %s = %g", it.key, v);
+  LOG("settings: %s = %g", key.c_str(), v);
   if (g_apply) g_apply();
 }
 
@@ -201,6 +211,14 @@ void Change(int dir) {
 void Press() {
   const Item* it = Selected();
   if (!it) return;
+  if (it->kind == Kind::kResetCrt && !g_game.empty() && std::string(it->section) == "crtpp") {
+    for (const Item& i : Items())  // the game's own CRT++ sliders go: the shared ones again
+      if (PerGame(i) && std::string(i.key) != "crt") settings::Erase(OwnKey(i));
+    settings::Save();
+    LOG("settings: %s back to the shared CRT++ look", g_game.c_str());
+    if (g_apply) g_apply();
+    return;
+  }
   if (it->kind == Kind::kResetCrt) {
     const bool pp = std::string(it->section) == "crtpp";
     settings::Set(pp ? "crt_psy_defaults" : "crt_defaults", 0);  // crt::LoadSettings puts its defaults back
@@ -218,6 +236,12 @@ void Press() {
 
 void Default() {
   const Item* it = Selected();
+  if (it && PerGame(*it)) {  // the game's own value goes: the shared one again
+    settings::Erase(OwnKey(*it));
+    settings::Save();
+    if (g_apply) g_apply();
+    return;
+  }
   if (it && *it->key && it->kind != Kind::kFullscreen) SetValue(*it, it->def);
 }
 
@@ -390,9 +414,11 @@ void Render(SDL_Renderer* r) {
     const Row& row = g_rows[size_t(i)];
     float ry = y + float(i - g_top) * row_h;
     if (row.section >= 0) {
-      text(kSections[row.section].title, pad, ry + 2 * s, kAccent);
+      const bool own = !g_game.empty() && std::string(kSections[row.section].id) == "crtpp";
+      const char* title = own ? "CRT++ FOR THIS GAME" : kSections[row.section].title;
+      text(title, pad, ry + 2 * s, kAccent);
       SDL_SetRenderDrawColor(r, 255, 200, 90, 90);
-      float lx = pad + (float(SDL_strlen(kSections[row.section].title)) + 1) * glyph;
+      float lx = pad + (float(SDL_strlen(title)) + 1) * glyph;
       SDL_RenderLine(r, lx, ry + 6 * s, pw - pad, ry + 6 * s);
       continue;
     }
@@ -403,7 +429,8 @@ void Render(SDL_Renderer* r) {
       SDL_SetRenderDrawColor(r, 255, 200, 90, 50);
       SDL_RenderFillRect(r, &bar);
     }
-    text(it.label, pad, ry, sel ? kWhite : kLabel);
+    const bool shared_reset = it.kind == Kind::kResetCrt && !g_game.empty() && std::string(it.section) == "crtpp";
+    text(shared_reset ? "USE THE SHARED CRT++" : it.label, pad, ry, sel ? kWhite : kLabel);
     float vx = pad + kLabelCols * glyph;
     double v = Value(it);
     char buf[32];

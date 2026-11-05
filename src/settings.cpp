@@ -66,6 +66,8 @@ double Get(const std::string& key, double def) {
 
 void Set(const std::string& key, double value) { g_values[key] = value; }
 
+bool Has(const std::string& key) { return g_values.count(key) != 0; }
+
 void Erase(const std::string& key) { g_values.erase(key); }
 
 }  // namespace settings

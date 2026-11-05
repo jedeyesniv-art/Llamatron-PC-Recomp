@@ -1080,8 +1080,10 @@ GameEnd RunEntry(Context& c, const games::Game& g, bool direct, bool docs = fals
     c.type_ahead = docs ? std::string() : games::ConsoleAnswers(g);
     c.game = docs ? nullptr : &g;  // (no faster CPU for the reader)
     c.docs_keys = g.docs_keys;
+    crt::SetGame(docs ? std::string() : g.id);  // the game's own CRT look
     end = docs ? RunGame(c, g.docs_program, direct, input::Mode::kDocs)
                : RunGame(c, games::ProgramToRun(g), direct, g.mode);
+    crt::SetGame("");
     c.type_ahead.clear();
     c.game = nullptr;
   }
