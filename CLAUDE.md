@@ -118,6 +118,13 @@ elease\Llamatron-<ver>-windows.zip (no game
   frame counter now runs across visits. SaveRenderShot reads the whole window.
 - Gotcha: pad events arrive in the background (SDL hint): the owner's pad opened the panel during a test.
 
+## Volume (2026-11-05; owner: games "really loud on a TV", some louder than others)
+- Settings volume (master, 0..1, gain = v^2: 0.5 = -12 dB) and volume_normalise (1): main.cpp scales the samples
+  (clamped) before the queue and the --wav dump. games.cpp NormalGainDb = -23 LUFS (EBU R128) - each game's
+  measured loudness (scripted smoke runs, title + ~1 min play; Tools/loudness.py, run with python -P): Andes -7.1,
+  Gridrunner -5.3, Camels TT -3.8, Photon Storm -3.7, Camels -3.2, Defender 2 -3.1, Llamatron -0.6, Hardcore +1.3
+  dB; user disks / Trip-A-Tron (silent) 0. Verified: all eight at -23.0 LUFS after, peaks -4..-10 dB.
+
 ## CRT++ (2026-11-05; owner: "gorgeous", after Minotron's look: "lurid and overwhelming")
 - Setting crt = 0 off / 1 CRT+ (the CRT look below) / 2 CRT++; F9 and the launcher's X cycle all three.
   crt.cpp RunPsy before the CRT shader: the picture copied to 1280 x 800, a feedback trail (psy_trail.frag:

@@ -66,6 +66,10 @@ std::string ProgramToRun(const Game& g);
 // Where its saves go: userdata\ itself, userdata\<id>, or userdata\disks\<image name> for a user disk.
 std::filesystem::path SaveDir(const Game& g, const std::filesystem::path& userdata);
 
+// The gain (dB) that brings this game's sound to the same loudness as the others (-23 LUFS, EBU R128's level),
+// measured from scripted runs (title + play; Tools/loudness.py). 0 for user disks and games without sound.
+float NormalGainDb(const Game& g);
+
 // The folders searched (game\, the exe's folder, Private\ up the tree).
 std::vector<std::filesystem::path> SearchRoots();
 std::filesystem::path ExeDir();

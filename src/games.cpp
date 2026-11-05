@@ -420,6 +420,19 @@ std::string ConsoleAnswers(const Game& g) {
   return {};
 }
 
+float NormalGainDb(const Game& g) {
+  // Integrated loudness of each game's scripted smoke run (title + about a minute of play), 2026-11-05:
+  // Andes -15.9, Gridrunner -17.7, Camels TT -19.2, Photon Storm -19.3, Camels -19.8, Defender 2 -19.9,
+  // Llamatron -22.4, Hardcore -24.3 LUFS (Trip-A-Tron: silent). Hardcore's boost leaves its peaks at -8.6 dB.
+  static const std::map<std::string, float> kGain = {
+      {"andes", -7.1f},  {"gridrunner", -5.3f}, {"rmctt", -3.8f},     {"photonstorm", -3.7f},
+      {"rmc", -3.2f},    {"defender2", -3.1f},  {"llamatron", -0.6f}, {"hardcore", 1.3f},
+  };
+  if (g.user) return 0;
+  auto it = kGain.find(g.id);
+  return it == kGain.end() ? 0 : it->second;
+}
+
 std::string ProgramToRun(const Game& g) {
   const Game::Option* o = FindOption(g, "program");
   return g.user && o ? o->values[size_t(OptionValue(g, "program"))] : g.program;

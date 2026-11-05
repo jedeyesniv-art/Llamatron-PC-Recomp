@@ -926,6 +926,15 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
     }
 
     std::vector<float>& samples = machine.Audio();
+    // Volume: the game's normalising gain (all games equally loud) times the master volume (settings; read
+    // live, squared so the slider feels even: 0.5 = -12 dB). Applied before the WAV dump (tests measure it).
+    if (!samples.empty()) {
+      double v = std::clamp(settings::Get("volume", 1.0), 0.0, 1.0);
+      double db = c.game && settings::Get("volume_normalise", 1) != 0 ? games::NormalGainDb(*c.game) : 0;
+      float gain = float(v * v * std::pow(10.0, db / 20));
+      if (gain != 1.0f)
+        for (float& x : samples) x = std::clamp(x * gain, -1.0f, 1.0f);
+    }
     if (!opt.wav.empty()) c.wav.insert(c.wav.end(), samples.begin(), samples.end());
     if (audio && !samples.empty()) {
       // Keep about 50 ms queued: play up to 0.5% faster or slower (the vsync-locked game runs at the display's
