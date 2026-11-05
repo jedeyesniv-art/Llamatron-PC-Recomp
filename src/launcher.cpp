@@ -555,8 +555,9 @@ void Launcher::Render() {
   const char* hint = SDL_GetTicks() < quit_armed_ms_ ? "PRESS B AGAIN TO QUIT"
                      : picked.settings ? "LEFT/RIGHT CHOOSE    A OPEN    Y WHAT'S HERE    B QUIT"
                      : !crt::Available() ? "LEFT/RIGHT CHOOSE    A PLAY    Y HOW TO PLAY    B QUIT"
-                     : crt::Enabled() ? "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT: ON   B QUIT"
-                                      : "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT: OFF   B QUIT";
+                     : crt::Mode() == 2 ? "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT++   B QUIT"
+                     : crt::Mode() == 1 ? "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT+   B QUIT"
+                                        : "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT: OFF   B QUIT";
   DrawText(hint, w / 2, h * 0.92f, s * 0.9f, {150, 150, 165, 255}, true);
 
   if (info_) {

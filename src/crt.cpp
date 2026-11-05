@@ -1,5 +1,8 @@
 #include "crt.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include "log.h"
 #include "settings.h"
 
@@ -8,6 +11,8 @@ namespace {
 
 #include "shaders/crt.dxil.h"
 #include "shaders/glow.dxil.h"
+#include "shaders/psy_trail.dxil.h"
+#include "shaders/psy_mix.dxil.h"
 
 // The shader's cbuffer (six float4s, see crt.frag.hlsl).
 struct Params {
@@ -22,7 +27,7 @@ struct Params {
 SDL_GPUShader* g_shader = nullptr;
 SDL_GPURenderState* g_state = nullptr;
 SDL_GPUDevice* g_device = nullptr;
-bool g_on = true;
+int g_mode = 1;  // 0 off, 1 CRT+, 2 CRT++ (setting crt)
 Params g_params{};
 
 // The halation's glow, rebuilt every frame (BuildGlow): the picture as linear light at 320 x 200 (level 0; from the
@@ -36,11 +41,40 @@ SDL_GPUSampler* g_sampler = nullptr;
 SDL_GPUShader* g_lin_shader = nullptr;  // glow.frag.hlsl: level 0 drawn as linear light
 SDL_GPURenderState* g_lin_state = nullptr;
 
+// CRT++ (2026-11-05, owner: "lurid and overwhelming", after Minter's later games): every frame shown, the
+// picture copied to 1280 x 800 (g_cur), the trails fed back (psy_trail: the last trail zoomed / turned about the
+// centre, faded, tinted, this frame's bright parts on top; two textures in turn), then the picture with its
+// colour bled and the trails screened over it (psy_mix -> g_out), which the CRT shader draws (glow and
+// saturation boosted). Fades, zoom and colour turns are per second, so any refresh rate looks the same.
+struct Psy {
+  float length = 0.4f, trails = 0.9f, zoom = 0.25f, twist = 0, hue = 0.66f, tint = 0.3f, cycle = 0, threshold = 0.1f;
+  float gain = 1, glow = 4, bleed = 0.5f, saturation = 1.3f, keep = 1;
+} g_psy;
+constexpr int kPsyW = 1280, kPsyH = 800;
+SDL_Texture* g_cur = nullptr;
+SDL_Texture* g_trail[2] = {};
+SDL_Texture* g_out = nullptr;
+int g_trail_at = 0;  // the newest trail
+uint64_t g_psy_last = 0;
+SDL_GPUShader* g_trail_shader = nullptr;
+SDL_GPUShader* g_mix_shader = nullptr;
+SDL_GPURenderState* g_trail_state = nullptr;
+SDL_GPURenderState* g_mix_state = nullptr;
+
 SDL_Texture* GlowTexture(SDL_Renderer* r, int w, int h) {
   SDL_Texture* t = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA64_FLOAT, SDL_TEXTUREACCESS_TARGET, w, h);
   if (!t) t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w, h);
   if (t) SDL_SetTextureScaleMode(t, SDL_SCALEMODE_LINEAR), SDL_SetTextureBlendMode(t, SDL_BLENDMODE_NONE);
   return t;
+}
+
+void FreePsy() {
+  for (SDL_Texture** t : {&g_cur, &g_trail[0], &g_trail[1], &g_out})
+    if (*t) SDL_DestroyTexture(*t), *t = nullptr;
+  if (g_trail_state) SDL_DestroyGPURenderState(g_trail_state), g_trail_state = nullptr;
+  if (g_mix_state) SDL_DestroyGPURenderState(g_mix_state), g_mix_state = nullptr;
+  if (g_trail_shader) SDL_ReleaseGPUShader(g_device, g_trail_shader), g_trail_shader = nullptr;
+  if (g_mix_shader) SDL_ReleaseGPUShader(g_device, g_mix_shader), g_mix_shader = nullptr;
 }
 
 void FreeGlow() {
@@ -74,6 +108,40 @@ bool MakeGlow(SDL_Renderer* r) {
   state.fragment_shader = g_lin_shader;
   g_lin_state = SDL_CreateGPURenderState(r, &state);
   return g_lin_state != nullptr;
+}
+
+SDL_GPUTexture* GpuTexture(SDL_Texture* t) {
+  return static_cast<SDL_GPUTexture*>(
+      SDL_GetPointerProperty(SDL_GetTextureProperties(t), SDL_PROP_TEXTURE_GPU_TEXTURE_POINTER, nullptr));
+}
+
+// A fragment shader taking the drawn texture + g_cur (and uniforms), as a render state.
+SDL_GPURenderState* PsyState(SDL_Renderer* r, const unsigned char* code, size_t size, SDL_GPUShader** shader) {
+  SDL_GPUShaderCreateInfo info{};
+  info.code = code;
+  info.code_size = size;
+  info.entrypoint = "main";
+  info.format = SDL_GPU_SHADERFORMAT_DXIL;
+  info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+  info.num_samplers = 2;
+  info.num_uniform_buffers = 1;
+  if (!(*shader = SDL_CreateGPUShader(g_device, &info))) return nullptr;
+  SDL_GPUTextureSamplerBinding bind{GpuTexture(g_cur), g_sampler};
+  SDL_GPURenderStateCreateInfo state{};
+  state.fragment_shader = *shader;
+  state.num_sampler_bindings = 1;
+  state.sampler_bindings = &bind;
+  return SDL_CreateGPURenderState(r, &state);
+}
+
+bool MakePsy(SDL_Renderer* r) {
+  if (!(g_cur = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, kPsyW, kPsyH))) return false;
+  SDL_SetTextureBlendMode(g_cur, SDL_BLENDMODE_NONE);
+  for (SDL_Texture** t : {&g_trail[0], &g_trail[1], &g_out})
+    if (!(*t = GlowTexture(r, kPsyW, kPsyH))) return false;
+  g_trail_state = PsyState(r, k_psy_trail_dxil, sizeof(k_psy_trail_dxil), &g_trail_shader);
+  g_mix_state = PsyState(r, k_psy_mix_dxil, sizeof(k_psy_mix_dxil), &g_mix_shader);
+  return g_trail_state && g_mix_state;
 }
 
 // Draws `from` over the whole of the current target.
@@ -126,6 +194,66 @@ void BuildGlow(SDL_Renderer* r, SDL_Texture* picture) {
   SDL_SetTextureBlendMode(picture, blend);
 }
 
+// CRT++: the picture through the trails and the bleed into g_out (see Psy).
+void RunPsy(SDL_Renderer* r, SDL_Texture* picture) {
+  const uint64_t now = SDL_GetTicksNS();
+  const float dt = g_psy_last ? std::clamp(float(double(now - g_psy_last) / 1e9), 0.0f, 0.1f) : 0.02f;
+  g_psy_last = now;
+  SDL_Texture* old_target = SDL_GetRenderTarget(r);
+  int lw = 0, lh = 0;
+  SDL_RendererLogicalPresentation mode = SDL_LOGICAL_PRESENTATION_DISABLED;
+  SDL_GetRenderLogicalPresentation(r, &lw, &lh, &mode);
+  auto target = [r](SDL_Texture* t) {
+    SDL_SetRenderTarget(r, t);
+    SDL_SetRenderLogicalPresentation(r, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+  };
+  // the picture at 1280 x 800 (an ST-sized one in whole pixels)
+  SDL_ScaleMode scale = SDL_SCALEMODE_NEAREST;
+  SDL_BlendMode blend = SDL_BLENDMODE_NONE;
+  SDL_GetTextureScaleMode(picture, &scale);
+  SDL_GetTextureBlendMode(picture, &blend);
+  float pw = 0, ph = 0;
+  SDL_GetTextureSize(picture, &pw, &ph);
+  SDL_SetTextureScaleMode(picture, pw >= kPsyW ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
+  SDL_SetTextureBlendMode(picture, SDL_BLENDMODE_NONE);
+  target(g_cur);
+  Blit(r, picture);
+  SDL_SetTextureScaleMode(picture, scale);
+  SDL_SetTextureBlendMode(picture, blend);
+
+  const Psy& p = g_psy;
+  struct {
+    float move[4], tint[4], hue[4];
+  } tu{};
+  tu.move[0] = std::exp(-p.zoom * dt);
+  tu.move[1] = p.twist * dt;
+  tu.move[2] = p.length > 0 ? std::pow(0.5f, dt / p.length) : 0.0f;
+  tu.move[3] = p.threshold;
+  // the tint colour from its hue (fully saturated); its amount is given per 50 Hz frame
+  const float h6 = p.hue * 6;
+  auto chan = [h6](float o) { return std::clamp(std::fabs(std::fmod(h6 + o, 6.0f) - 3) - 1, 0.0f, 1.0f); };
+  tu.tint[0] = chan(0), tu.tint[1] = chan(4), tu.tint[2] = chan(2);
+  tu.tint[3] = 1 - std::pow(1 - std::clamp(p.tint, 0.0f, 0.999f), dt * 50);
+  const float turn = 6.2831853f * p.cycle * dt;
+  tu.hue[0] = std::cos(turn), tu.hue[1] = std::sin(turn), tu.hue[2] = float(kPsyW) / kPsyH * 0.92f, tu.hue[3] = p.gain;
+  SDL_Texture* prev = g_trail[g_trail_at];
+  g_trail_at ^= 1;
+  target(g_trail[g_trail_at]);
+  SDL_SetGPURenderStateFragmentUniforms(g_trail_state, 0, &tu, sizeof(tu));
+  SDL_SetGPURenderState(r, g_trail_state);
+  Blit(r, prev);
+  SDL_SetGPURenderState(r, nullptr);
+
+  float mu[4] = {p.trails, p.bleed * 10.0f / kPsyW, p.keep, 0};
+  target(g_out);
+  SDL_SetGPURenderStateFragmentUniforms(g_mix_state, 0, mu, sizeof(mu));
+  SDL_SetGPURenderState(r, g_mix_state);
+  Blit(r, g_trail[g_trail_at]);
+  SDL_SetGPURenderState(r, nullptr);
+  SDL_SetRenderTarget(r, old_target);
+  SDL_SetRenderLogicalPresentation(r, lw, lh, mode);
+}
+
 }  // namespace
 
 SDL_Renderer* CreateRenderer(SDL_Window* window) {
@@ -170,6 +298,10 @@ bool Init(SDL_Renderer* renderer) {
     SDL_ReleaseGPUShader(g_device, g_shader), g_shader = nullptr;
     return false;
   }
+  if (!MakePsy(renderer)) {
+    LOG("crt: CRT++ unavailable: %s", SDL_GetError());
+    FreePsy();
+  }
   SDL_GPUTextureSamplerBinding bind[kLevels - 1];
   for (int i = 1; i < kLevels; ++i) {
     bind[i - 1].texture = static_cast<SDL_GPUTexture*>(
@@ -193,24 +325,26 @@ bool Init(SDL_Renderer* renderer) {
                                  ? "in float"
                                  : "in 8 bits");
   LoadSettings();
-  LOG("crt shader ready, %s", g_on ? "on" : "off");
+  LOG("crt shader ready, %s", g_mode == 2 ? "CRT++" : g_mode ? "on" : "off");
   return true;
 }
 
 void Shutdown() {
   if (g_state) SDL_DestroyGPURenderState(g_state), g_state = nullptr;
+  FreePsy();
   FreeGlow();
   if (g_shader) SDL_ReleaseGPUShader(g_device, g_shader), g_shader = nullptr;
 }
 
 bool Available() { return g_state != nullptr; }
-bool Enabled() { return g_state && g_on; }
+bool Enabled() { return g_state && g_mode; }
+int Mode() { return !g_state ? 0 : g_mode == 2 && !g_mix_state ? 1 : g_mode; }
 
 void Toggle() {
-  g_on = !g_on;
-  settings::Set("crt", g_on ? 1 : 0);
+  g_mode = (g_mode + 1) % (g_mix_state ? 3 : 2);
+  settings::Set("crt", g_mode);
   settings::Save();
-  LOG("crt %s", g_on ? "on" : "off");
+  LOG("crt %s", g_mode == 2 ? "CRT++" : g_mode ? "on" : "off");
 }
 
 // Defaults from the owner's ShaderGlass profile (newgridbigger.sgp, crt-yah) where it has a matching number, then
@@ -225,7 +359,7 @@ void LoadSettings() {
     if (reset) settings::Set(key, def);
     return float(settings::Get(key, def));
   };
-  g_on = settings::Get("crt", 1) != 0;
+  g_mode = std::clamp(int(settings::Get("crt", 1)), 0, 2);
   Params& p = g_params;
   p.beam[0] = get("crt_scanlines", 0.45);
   p.beam[1] = get("crt_beam_min", 0.35);
@@ -247,6 +381,31 @@ void LoadSettings() {
     settings::Save();
     LOG("crt settings: new defaults (version %d)", kDefaults);
   }
+  // CRT++: its own defaults version (and its own reset in the panel)
+  constexpr int kPsyDefaults = 1;
+  const bool psy_reset = settings::Get("crt_psy_defaults", 0) < kPsyDefaults;
+  auto psy = [psy_reset](const char* key, double def) {
+    if (psy_reset) settings::Set(key, def);
+    return float(settings::Get(key, def));
+  };
+  Psy& q = g_psy;
+  q.length = psy("crt_psy_length", 0.4);
+  q.trails = psy("crt_psy_trails", 0.9);
+  q.zoom = psy("crt_psy_zoom", 0.25);
+  q.twist = psy("crt_psy_twist", 0);
+  q.hue = psy("crt_psy_hue", 0.66);
+  q.tint = psy("crt_psy_tint", 0.3);
+  q.cycle = psy("crt_psy_cycle", 0);
+  q.threshold = psy("crt_psy_threshold", 0.1);
+  q.gain = psy("crt_psy_gain", 1);
+  q.glow = psy("crt_psy_glow", 4);
+  q.bleed = psy("crt_psy_bleed", 0.5);
+  q.saturation = psy("crt_psy_saturation", 1.3);
+  q.keep = psy("crt_psy_keep", 1);
+  if (psy_reset) {
+    settings::Set("crt_psy_defaults", kPsyDefaults);
+    settings::Save();
+  }
 }
 
 void DrawPicture(SDL_Renderer* renderer, SDL_Texture* texture, const SDL_FRect& view, float src_w, float src_h) {
@@ -258,14 +417,23 @@ void DrawPicture(SDL_Renderer* renderer, SDL_Texture* texture, const SDL_FRect& 
   SDL_GetRenderLogicalPresentationRect(renderer, &out);
   float tw = 0, th = 0;
   SDL_GetTextureSize(texture, &tw, &th);
+  const bool psy = Mode() == 2;
+  if (psy) {
+    // the trails and the bleed into g_out, which the CRT draws as a supersampled picture of the ST's size
+    if (src_w <= 0 || src_h <= 0) src_w = tw, src_h = th;
+    RunPsy(renderer, texture);
+    texture = g_out, tw = kPsyW, th = kPsyH;
+  }
   Params& p0 = g_params;
   p0.colour[3] = 0;
   if (src_w > 0 && src_h > 0 && (src_w != tw || src_h != th)) tw = src_w, th = src_h, p0.colour[3] = 1;
   Params& p = g_params;
   p.src[0] = tw, p.src[1] = th, p.src[2] = 1 / tw, p.src[3] = 1 / th;
   p.dst[0] = out.w, p.dst[1] = out.h;
-  if (p.glow[2] > 0) BuildGlow(renderer, texture);
-  SDL_SetGPURenderStateFragmentUniforms(g_state, 0, &p, sizeof(p));
+  Params sent = p;
+  if (psy) sent.glow[2] *= g_psy.glow, sent.colour[0] *= g_psy.saturation;
+  if (sent.glow[2] > 0) BuildGlow(renderer, texture);
+  SDL_SetGPURenderStateFragmentUniforms(g_state, 0, &sent, sizeof(sent));
   SDL_SetGPURenderState(renderer, g_state);
   SDL_RenderTexture(renderer, texture, nullptr, &view);
   SDL_SetGPURenderState(renderer, nullptr);

@@ -15,7 +15,8 @@ void Shutdown();
 
 bool Available();
 bool Enabled();  // on and available
-void Toggle();   // and saves the setting
+int Mode();      // 0 off (or unavailable), 1 CRT+, 2 CRT++ (psychedelic trails, colour bleed, more glow)
+void Toggle();   // cycles off / CRT+ / CRT++ and saves the setting
 void LoadSettings();
 
 // Draws the ST picture into view (logical coordinates covering the logical presentation) with the CRT look

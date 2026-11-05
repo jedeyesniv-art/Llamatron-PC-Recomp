@@ -118,6 +118,16 @@ elease\Llamatron-<ver>-windows.zip (no game
   frame counter now runs across visits. SaveRenderShot reads the whole window.
 - Gotcha: pad events arrive in the background (SDL hint): the owner's pad opened the panel during a test.
 
+## CRT++ (2026-11-05; owner: "gorgeous", after Minotron's look: "lurid and overwhelming")
+- Setting crt = 0 off / 1 CRT+ (the CRT look below) / 2 CRT++; F9 and the launcher's X cycle all three.
+  crt.cpp RunPsy before the CRT shader: the picture copied to 1280 x 800, a feedback trail (psy_trail.frag:
+  the last trail zoomed / turned about the centre, faded, tinted, hue-turned, bright parts fed in; two float
+  textures in turn), then psy_mix.frag (colour bleed, trails screened on where the picture is dark - owner:
+  yellow must stay yellow), then the CRT with glow x crt_psy_glow and saturation x crt_psy_saturation.
+  Per-second rates (any refresh). Settings crt_psy_* in the panel's CRT++ section, own reset
+  (crt_psy_defaults). Tests: a windowed run with --rshot (headless has no renderer).
+- Survey of the screens outside play for the remaster: REMASTER.md "Outside play" (--survey, Tools/survey.py).
+
 ## Layout (C:\LlamatronRecomp)
 - Private\              (git-ignored) Llamatron ST.msa (owner's copy), disk\ = its files, tron.bin/.reloc =
                         the unpacked game (Tools\depack.py), for the analysis tools.

@@ -30,7 +30,7 @@ struct Section {
 };
 
 const Section kSections[] = {
-    {"general", "GENERAL"},       {"crt", "CRT LOOK"},       {"llamatron", "LLAMATRON"},
+    {"general", "GENERAL"},       {"crt", "CRT LOOK"},       {"crtpp", "CRT++"},       {"llamatron", "LLAMATRON"},
     {"gridrunner", "SUPER GRIDRUNNER"}, {"photonstorm", "PHOTON STORM"}, {"andes", "ANDES ATTACK"},
     {"defender2", "DEFENDER 2"},  {"hardcore", "HARDCORE"},  {"tripatron", "TRIP-A-TRON"},
 };
@@ -42,8 +42,8 @@ const std::vector<Item>& Items() {
        "Sprites drawn smooth by the PC at 4x, sliding between frames (F8). Off: the ST's own picture."},
       {"general", "RUN-AHEAD", "remaster_ahead", Kind::kChoice, 2, 0, 3, 1, {"OFF", "1 FRAME", "2 FRAMES", "3 FRAMES"},
        "Remaster only: runs the game ahead to cut the delay between the pad and the picture (F7). 2 is the sweet spot."},
-      {"general", "CRT LOOK", "crt", Kind::kToggle, 1, 0, 1, 1, {},
-       "Scanlines, phosphor mask and glow, like a TV of the time (F9). Tune it below."},
+      {"general", "CRT LOOK", "crt", Kind::kChoice, 1, 0, 2, 1, {"OFF", "CRT+", "CRT++"},
+       "CRT+: scanlines, phosphor mask and glow, like a TV of the time. CRT++: psychedelic trails on top (F9)."},
       {"general", "FULLSCREEN", "", Kind::kFullscreen, 1, 0, 1, 1, {}, "Fullscreen or a window (F11, Alt+Enter)."},
       {"general", "EXCLUSIVE FULLSCREEN", "fullscreen_exclusive", Kind::kToggle, 0, 0, 1, 1, {},
        "Switches the display to a 50 / 100 Hz mode for even motion, at the cost of a blink when switching away.",
@@ -64,6 +64,24 @@ const std::vector<Item>& Items() {
       {"crt", "WARMTH", "crt_temperature", Kind::kSlider, 0.3, -1, 1, 0.1, {}, "Cool blue (-1) to warm (1)."},
       {"crt", "BLOOM", "crt_overflow", Kind::kSlider, 0.85, 0, 1, 0.05, {}, "Very bright colours spilling into white."},
       {"crt", "RESET THE CRT LOOK", "", Kind::kResetCrt, 0, 0, 1, 1, {}, "Press A: every CRT setting back to its default."},
+      {"crtpp", "TRAILS", "crt_psy_trails", Kind::kSlider, 0.9, 0, 2, 0.05, {}, "CRT++: how strongly the trails show."},
+      {"crtpp", "TRAIL LENGTH", "crt_psy_length", Kind::kSlider, 0.4, 0, 3, 0.05, {}, "Seconds for a trail to fade to half."},
+      {"crtpp", "TRAIL ZOOM", "crt_psy_zoom", Kind::kSlider, 0.25, -2, 2, 0.05, {},
+       "Trails stream out from the centre (in: below 0)."},
+      {"crtpp", "TRAIL TWIST", "crt_psy_twist", Kind::kSlider, 0, -2, 2, 0.05, {}, "Trails swirl round the centre."},
+      {"crtpp", "TRAIL COLOUR", "crt_psy_hue", Kind::kSlider, 0.66, 0, 1, 0.02, {},
+       "The colour trails turn into: red 0, yellow .17, green .33, cyan .5, blue .66, magenta .83."},
+      {"crtpp", "TRAIL TINT", "crt_psy_tint", Kind::kSlider, 0.3, 0, 1, 0.05, {}, "How quickly trails take that colour."},
+      {"crtpp", "COLOUR CYCLE", "crt_psy_cycle", Kind::kSlider, 0, 0, 3, 0.05, {}, "Trails run through the rainbow as they age (turns a second)."},
+      {"crtpp", "TRAIL THRESHOLD", "crt_psy_threshold", Kind::kSlider, 0.1, 0, 1, 0.05, {},
+       "Only things brighter than this leave trails (higher: dark backgrounds don't)."},
+      {"crtpp", "KEEP COLOURS", "crt_psy_keep", Kind::kSlider, 1, 0, 1, 0.05, {},
+       "1: trails only where the picture is dark, things keep their own colour. 0: trails over everything."},
+      {"crtpp", "TRAIL FEED", "crt_psy_gain", Kind::kSlider, 1, 0, 3, 0.1, {}, "How bright things are as they enter the trails."},
+      {"crtpp", "GLOW BOOST", "crt_psy_glow", Kind::kSlider, 4, 1, 15, 0.5, {}, "The CRT glow, multiplied."},
+      {"crtpp", "COLOUR BLEED", "crt_psy_bleed", Kind::kSlider, 0.5, 0, 3, 0.1, {}, "Colour smeared sideways, like a composite TV."},
+      {"crtpp", "SATURATION BOOST", "crt_psy_saturation", Kind::kSlider, 1.3, 0.5, 2.5, 0.05, {}, "The CRT saturation, multiplied."},
+      {"crtpp", "RESET CRT++", "", Kind::kResetCrt, 0, 0, 1, 1, {}, "Press A: every CRT++ setting back to its default."},
 
       {"llamatron", "ANALOG AIM", "analog_aim", Kind::kToggle, 0, 0, 1, 1, {},
        "Twin-stick shots in any direction (off: the original 8). Also RB on the title screen."},
@@ -184,8 +202,9 @@ void Press() {
   const Item* it = Selected();
   if (!it) return;
   if (it->kind == Kind::kResetCrt) {
-    settings::Set("crt_defaults", 0);  // crt::LoadSettings puts its defaults back
-    LOG("settings: the CRT look reset");
+    const bool pp = std::string(it->section) == "crtpp";
+    settings::Set(pp ? "crt_psy_defaults" : "crt_defaults", 0);  // crt::LoadSettings puts its defaults back
+    LOG("settings: the %s reset", pp ? "CRT++ look" : "CRT look");
     if (g_apply) g_apply();
     return;
   }
@@ -238,9 +257,9 @@ void Open(const std::string& game_id, const std::string& title) {
   if (game_id.empty()) {  // the Settings disk: everything
     for (int s = 0; s < int(std::size(kSections)); ++s) add(s);
   } else {  // in a game: general, the game's own (short), then the CRT look
-    for (const char* id : {"general", game_id.c_str(), "crt"})
+    for (const char* id : {"general", game_id.c_str(), "crt", "crtpp"})
       for (int s = 0; s < int(std::size(kSections)); ++s)
-        if (game_id != "general" && game_id != "crt" && std::string(kSections[s].id) == id) add(s);
+        if (game_id != "general" && game_id != "crt" && game_id != "crtpp" && std::string(kSections[s].id) == id) add(s);
   }
   g_sel = g_top = 0;
   Move(1);
