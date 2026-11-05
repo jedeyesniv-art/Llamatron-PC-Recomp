@@ -76,6 +76,8 @@ struct Options {
   int trip_music = -1;     // --trip-music=0|1|2: Trip-A-Tron's music mode for this run
   std::map<int, std::string> shots;  // --shot=N:<file.bmp>
   bool remaster_headless = false;
+  int survey_from = -1, survey_to = -1;  // --survey=F:T:<file>: frames F..T shown + who wrote into screens (Tools/survey.py)
+  std::string survey_file;
   int remaster_writers = -1;  // --remaster-writers=N: log who writes into the screen in captured passes N, N + 1
   bool remaster_probe = false;  // --remaster-probe: log the ship's angle each frame shown (latency tests)
   int remaster_ahead = -1;      // --remaster-ahead=N: run-ahead for this run (not saved)  // --remaster-capture: capture without a renderer (tests: does it change the game?)
@@ -124,6 +126,11 @@ Options ParseArgs(int argc, char** argv) {
     else if (Arg(a, "wav", &v)) o.wav = v;
     else if (Arg(a, "shot", &v)) o.shots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
     else if (a == "--remaster-capture") o.remaster_headless = true;
+    else if (Arg(a, "survey", &v)) {
+      o.survey_from = std::atoi(v.c_str());
+      size_t c1 = v.find(':'), c2 = v.find(':', c1 + 1);
+      o.survey_to = std::atoi(v.c_str() + c1 + 1), o.survey_file = v.substr(c2 + 1);
+    }
     else if (a == "--remaster-probe") o.remaster_probe = true;
     else if (a.rfind("--remaster-writers=", 0) == 0) o.remaster_writers = std::atoi(a.c_str() + 19);
     else if (Arg(a, "remaster-ahead", &v)) o.remaster_ahead = std::atoi(v.c_str());
@@ -210,6 +217,47 @@ void SetRemasterColour0(const st::Machine& m) {
   const float* c = m.CalmColour();
   auto b = [](float v) { return uint32_t(std::clamp(v, 0.0f, 1.0f) * 255 + 0.5f); };
   remaster::SetShownColour0(m.CalmBackground(), 0xFF000000u | b(c[0]) << 16 | b(c[1]) << 8 | b(c[2]));
+}
+
+// --survey: every frame in the range, the picture shown (12-bit colours) and the code that wrote into any screen
+// shown so far (16-byte blocks), for Tools/survey.py.
+struct Survey {
+  FILE* f = nullptr;
+  std::vector<uint32_t> bases;
+  std::vector<std::pair<uint32_t, int>> writers;
+  std::vector<uint16_t> last;
+} g_survey;
+void SurveyWatch(uint32_t a, uint32_t pc) {
+  bool in = false;
+  for (uint32_t b : g_survey.bases) in |= a >= b && a < b + 32000;
+  if (!in) return;
+  for (auto& w : g_survey.writers)
+    if (w.first == (pc & ~15u)) return void(++w.second);
+  g_survey.writers.push_back({pc & ~15u, 1});
+}
+void SurveyFrame(const st::Machine& m, int frame) {
+  uint32_t base = m.FrameBase();
+  if (std::find(g_survey.bases.begin(), g_survey.bases.end(), base) == g_survey.bases.end()) {
+    g_survey.bases.push_back(base);
+    if (g_survey.bases.size() > 6) g_survey.bases.erase(g_survey.bases.begin());
+  }
+  std::vector<uint16_t> px(st::kScreenW * st::kScreenH);
+  const uint32_t* src = m.Frame();
+  for (int y = 0; y < st::kScreenH; ++y)
+    for (int x = 0; x < st::kScreenW; ++x) {
+      // medium resolution: every other pixel
+      uint32_t c = src[y * m.FrameWidth() + x * (m.FrameWidth() / st::kScreenW)];
+      px[y * st::kScreenW + x] = uint16_t((c >> 12 & 0xF00) | (c >> 8 & 0xF0) | (c >> 4 & 0xF));
+    }
+  const bool same = px == g_survey.last;  // unchanged pictures aren't written again
+  int32_t head[4] = {frame, int32_t(base), int32_t(g_survey.writers.size()), same ? 0 : 1};
+  std::fwrite(head, 4, 4, g_survey.f);
+  for (auto& w : g_survey.writers) {
+    int32_t e[2] = {int32_t(w.first), w.second};
+    std::fwrite(e, 4, 2, g_survey.f);
+  }
+  g_survey.writers.clear();
+  if (!same) std::fwrite(px.data(), 2, px.size(), g_survey.f), g_survey.last = std::move(px);
 }
 
 void SaveShot(const st::Machine& m, const std::string& path) {
@@ -789,8 +837,16 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       playing_second &= playing;
       if (stgames::HostPaused() && (mode == input::Mode::kDefender2)) {
         machine.Audio().clear();  // paused: the picture stays, no sound, no frames
-      } else if (!machine.RunFrame()) {
-        running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
+      } else {
+        if (frame == opt.survey_from && !opt.survey_file.empty()) {
+          g_survey.f = std::fopen(opt.survey_file.c_str(), "wb");
+          if (g_survey.f) cpu::g_write_watch = SurveyWatch;
+        }
+        if (!machine.RunFrame()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
+        if (g_survey.f) {
+          SurveyFrame(machine, frame);
+          if (frame >= opt.survey_to) std::fclose(g_survey.f), g_survey.f = nullptr, cpu::g_write_watch = nullptr;
+        }
       }
       slow_run += since(t_run);
       uint64_t t_ahead = SDL_GetTicksNS();

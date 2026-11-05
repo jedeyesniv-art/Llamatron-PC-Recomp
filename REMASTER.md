@@ -51,6 +51,27 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
   the routine) and sort them into clips / mode / colour / internal; check new sprites
   with run-ahead 2 as well as the run-ahead 0 pixel check.
 
+### Outside play: the survey (2026-11-05; polish item 4, owner: Andes, Camels, D2, Llamatron first, Hardcore last)
+Tool: `--survey=F:T:<file>` (each frame's picture + the code that wrote into a screen) with `--watch=<state>
+--watch-step=1`, then `python -P Tools/survey.py <file> <log> <png folder>`: per state, new pictures a second and
+each change sorted as objects / scroll (band, dx, dy) / palette / redraw, top writers. Dumps ~700 MB a run.
+Runs were mostly without input, so options screens, name entry and high-score tables weren't all reached.
+- **Cheap: the screens draw through the core we already hook**; only the capture's state test needs widening (and
+  the known catch: skipped drawing outside play shifts the main loop's VBL phase, title animations a VBL apart).
+  Andes title / "know thine enemies" (state 5, core $21D6C, 50/s); Camels menus (hook $1084A, the letters
+  wobble: ~57 sprites, core $1A854) and the end-of-wave bonus ($112A2: play scene + text rising 3 px a frame);
+  Llamatron title (llama heads, hook text $551C), wave intros ($5764) and game over ($0D94, dancing figures),
+  sprite routine $5E8A; Photon Storm title / attract screens (states 7, 8, 11, 12: core $44BA8 region);
+  Gridrunner title (5).
+- **Needs the new scroll piece** (a band of lines shifted N px a frame, slid in between): Andes' banner
+  (lines 16-39, -2 px a frame); Llamatron's instruction scroller (the whole screen up 1 px a frame, text $0520);
+  Andes' early slide-ins (5 px a frame down) maybe.
+- **Nothing to gain**: Camels title (still picture), Defender 2 title (still until the pointer), D2's loading
+  noise (palette), Llamatron / Gridrunner screens that are palette cycles, the crack screens.
+- **Already smooth?** Attract demos run in the play state (Andes 1, Camels $111DE, D2 0, Gridrunner 1, PS 1):
+  check each is captured (Andes / D2 install on the first play state; D2 also tests its frame pointer).
+- D2's starfield intro (state 6, plotter $1E980 region, ~40/s): check whether that plotter is one we hook.
+
 ## What the remaster is (one paragraph)
 The 68000 game runs unchanged. During play, hooks on the game's **draw primitives** (its sprite routine, dot
 plotters, special-case draws such as the ship) record each object instead of drawing it into the ST screen. We
