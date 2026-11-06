@@ -14,9 +14,16 @@
 //     into both screens and the background: left alone),
 //   $27E6 (the llama), $2734 / $2760 (extras over it).
 // The restore list is written by the routine itself: a draw we skip adds no entry, so nothing is restored there.
+// Outside play (2026-11-06) the same draw call and sprite routine draw the title (VBL hook $551C, draw function
+// $5668: the llama heads) and the continue screen (hook $C94, draw $D5A: "CONTINUE?" and its count over the last
+// play picture, which the game leaves in the screens - so the last play pass's items are added to each frame).
+// Captured too. Not the version
+// screen / instruction scroller (hook $CEC; CPU-timed) nor the wave change's zoom ($AEC: boxes drawn by $5ACE
+// straight into the screen shown, as fast as the CPU goes).
 #include "remaster_llama.h"
 
 #include <cstring>
+#include <vector>
 
 #include "cpu.h"
 #include "game.h"
@@ -29,10 +36,13 @@ namespace {
 constexpr uint32_t kDrawCall = 0x5C10, kDrawDone = 0x5C12, kScreen = 0x52FB4, kDrawFn = 0x52FBE, kGameDraw = 0x2702;
 constexpr uint32_t kSprite = 0x5E8A, kPlain = 0x5E90, kShaped = 0x5FC4;
 constexpr uint32_t kVblHook = 0x52FC2, kNoHandler = 0x5664;
+constexpr uint32_t kTitleHook = 0x551C, kTitleDraw = 0x5668, kOverHook = 0xC94, kOverDraw = 0xD5A;
 constexpr uint32_t kWrapper = 0x58AA, kMarkFrom = 0x5870, kMarkTo = 0x58A2, kShotsCaller = 0x1D02;
 
 bool g_installed = false;
 bool g_capture = false;  // this frame's drawing goes to remaster
+bool g_play_pass = false;  // the pass being captured is play's
+std::vector<remaster::Item> g_pass_items, g_last_play;  // play's items: this pass, the last complete one
 uint32_t g_screen = 0, g_text = 0;
 
 uint32_t Get32(const st::Machine& m, uint32_t a) {
@@ -48,16 +58,32 @@ int RegW(int r) { return int16_t(Reg(r)); }
 // draws nothing new: the last picture stays (the colours still cycle).
 bool Frozen(st::Machine& m) { return Get32(m, g_text + kVblHook) == g_text + kNoHandler; }
 
+// The screens captured: play, the title, game over (each with its own draw function).
+bool CapturedScreen(st::Machine& m) {
+  const uint32_t t = g_text, fn = Get32(m, t + kDrawFn), hook = Get32(m, t + kVblHook);
+  return (game::Playing(m) && fn == t + kGameDraw) || (hook == t + kTitleHook && fn == t + kTitleDraw) ||
+         (hook == t + kOverHook && fn == t + kOverDraw);
+}
+
 // $5C10 "jsr (a3)": the screen's drawing starts.
 void OnDrawCall(st::Machine& m) {
   const uint32_t t = g_text;
   if (!remaster::Decoding(m)) {
     bool game_screen = Get32(m, t + kDrawFn) == t + kGameDraw;
-    g_capture = remaster::Enabled() && game::Playing(m) && game_screen;
+    g_capture = remaster::Enabled() && CapturedScreen(m);
     g_screen = Get32(m, t + kScreen) & 0xFFFFFF;
-    if (g_capture) remaster::BeginFrame(g_screen);
-    else if ((game::Paused(m) || Frozen(m)) && game_screen && remaster::Enabled()) remaster::Hold();
-    else remaster::Stop();
+    g_play_pass = g_capture && game_screen;
+    g_pass_items.clear();
+    if (g_capture) {
+      remaster::BeginFrame(g_screen);
+      // The continue screen: the last play picture under it, still.
+      if (Get32(m, t + kVblHook) == t + kOverHook)
+        for (const remaster::Item& it : g_last_play) remaster::Add(g_screen, it);
+    } else if ((game::Paused(m) || Frozen(m)) && game_screen && remaster::Enabled()) {
+      remaster::Hold();
+    } else {
+      remaster::Stop();
+    }
   }
   uint32_t sp = Reg(cpu::A7) - 4;
   uint8_t* p = m.Ram() + (sp & 0xFFFFFF);
@@ -69,7 +95,10 @@ void OnDrawCall(st::Machine& m) {
 
 // $5C12 "move.w #$FE0C,(a2)": the pass is complete.
 void OnDrawDone(st::Machine& m) {
-  if (!remaster::Decoding(m) && g_capture) remaster::EndFrame(g_screen);
+  if (!remaster::Decoding(m) && g_capture) {
+    remaster::EndFrame(g_screen);
+    if (g_play_pass) g_last_play.swap(g_pass_items);
+  }
   Put16(&m, Reg(cpu::A0 + 2) & 0xFFFFFF, 0xFE0C);
   cpu::Set(cpu::PC, g_text + kDrawDone + 4);
 }
@@ -118,6 +147,7 @@ void OnSprite(st::Machine& m) {
   }
   it.image = id;
   it.clip_top = 0, it.clip_bottom = 198;
+  if (g_play_pass) g_pass_items.push_back(it);
   remaster::Add(g_screen, it);
   remaster::Return(m);  // not drawn
 }
@@ -148,28 +178,41 @@ void Install(st::Machine* m) {
   g_capture = false;
   remaster::Stop();
   struct Saved {
-    bool capture;
+    bool capture, play_pass;
     uint32_t screen;
+    std::vector<remaster::Item> pass_items, last_play;
   };
   static Saved saved;
-  remaster::SetAheadState([] { saved = {g_capture, g_screen}, game::SaveAheadState(); },
-                          [] { g_capture = saved.capture, g_screen = saved.screen, game::RestoreAheadState(); });
+  remaster::SetAheadState(
+      [] {
+        saved.capture = g_capture, saved.play_pass = g_play_pass, saved.screen = g_screen;
+        saved.pass_items = g_pass_items, saved.last_play = g_last_play;
+        game::SaveAheadState();
+      },
+      [] {
+        g_capture = saved.capture, g_play_pass = saved.play_pass, g_screen = saved.screen;
+        g_pass_items.swap(saved.pass_items), g_last_play.swap(saved.last_play);
+        game::RestoreAheadState();
+      });
   LOG("llamatron: remaster hooks installed");
 }
 
 }  // namespace
 
-void Start() { g_installed = g_capture = false; }
+void Start() {
+  g_installed = g_capture = g_play_pass = false;
+  g_pass_items.clear(), g_last_play.clear();
+}
 
 void Update(st::Machine* m) {
-  // From play on (the program has unpacked itself by then).
-  if (!g_installed && game::Playing(*m)) Install(m);
+  // From the title or play on (the program has unpacked itself by then).
+  if (!g_installed && (game::Playing(*m) || game::AtTitle(*m))) Install(m);
   if (!g_installed || !g_text) return;
   remaster::DrawQueued(m, "llamatron");
   if (game::Paused(*m) && remaster::Enabled()) remaster::Hold();
-  // Left play some other way than through the draw call (wave transitions, the title...): the ST picture.
+  // Left the captured screens some other way than through the draw call (wave changes...): the ST picture.
   else if (Frozen(*m)) remaster::Hold();
-  else if (g_capture && !game::Playing(*m)) g_capture = false, remaster::Stop();
+  else if (g_capture && !CapturedScreen(*m)) g_capture = false, remaster::Stop();
 }
 
 }  // namespace remaster_llama

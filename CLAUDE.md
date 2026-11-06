@@ -65,6 +65,11 @@ elease\Llamatron-<ver>-windows.zip (no game
 - Llamatron remaster (2026-11-02): src/remaster_llama.cpp (sprite routine $5E8A, frame $5C10 / $5C12; text
   offsets). Its state depends on CPU speed (the original alone diverges at x4 / x16), so pixel checks run in
   windows before the first death or wave change (REMASTER.md "Verification").
+  2026-11-06: also the title (hook $551C, draw $5668: the parade, the sheep; on the faster CPU too, main.cpp
+  game::AtTitle - VBL-timed, at x1 a busy pass took 3 VBLs) and the continue screen (hook $C94, draw $D5A: the
+  last play pass's items added under it each frame - the game leaves that picture in the screens). Not the wave
+  change zoom ($AEC: boxes into the shown screen at CPU speed), version screen / scroller ($CEC, CPU-timed).
+  remaster.cpp, run-ahead 0: each screen's last complete pass (Capture::done), not the one being built.
 - Gridrunner remaster (2026-11-02): src/remaster_grid.cpp (core $4BCE4, pass $144DA..$145E2). Items now take
   each line's palette (Machine::LinePalettes: rasters), all games.
   Its image id includes the colour word $58054 (level 4's text came out dark: the owner's report).

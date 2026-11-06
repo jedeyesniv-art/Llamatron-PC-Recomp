@@ -26,9 +26,11 @@ bool g_renderer = false;
 struct Capture {
   bool capturing = false, hold = false;
   std::unordered_map<uint32_t, std::vector<Item>> building;  // per screen: what the game drew into it
+  std::unordered_map<uint32_t, std::vector<Item>> done;  // per screen: its last complete pass (EndFrame)
   std::unordered_map<uint32_t, std::unordered_map<uint64_t, int>> counts;  // per screen: keys so far
   std::vector<Item> latest;  // the last complete draw pass (EndFrame)
   bool have_latest = false;
+  uint32_t redrawn = 1;  // a screen whose pass completed since the last frame shown (1: none; screens are even)
 };
 Capture g_real, g_fork;
 Capture* g_cap = &g_real;
@@ -238,7 +240,9 @@ void EndFrame(uint32_t screen) {
   auto b = g_cap->building.find(screen);
   if (b == g_cap->building.end()) return;
   g_cap->latest = b->second;
+  g_cap->done[screen] = b->second;
   g_cap->have_latest = true;
+  g_cap->redrawn = screen;
 }
 
 void Add(uint32_t screen, Item item) {
@@ -434,6 +438,8 @@ void Return(st::Machine& m) {
 
 void FrameShown(uint32_t screen) {
   ++g_shown;
+  const uint32_t redrawn = g_real.redrawn;
+  g_real.redrawn = 1;
   if (!g_real.capturing) {
     g_have = false;
     return;
@@ -451,14 +457,15 @@ void FrameShown(uint32_t screen) {
   if (g_ahead >= 2 && g_fork.have_latest) pick = &g_fork.latest;
   else if (g_ahead >= 1 && g_real.have_latest) pick = &g_real.latest;
   else if (g_ahead == 0) {
-    if (g_have && screen == g_cur_screen) {
+    // Still the screen shown last, and not drawn again since (a screen drawn while shown - Llamatron's title - is).
+    if (g_have && screen == g_cur_screen && redrawn != screen) {
       g_prev = g_cur;
       g_match.resize(g_cur.size());
       for (int i = 0; i < int(g_cur.size()); ++i) g_match[i] = i;
       return;
     }
-    auto b = g_real.building.find(screen);
-    if (b != g_real.building.end()) pick = &b->second;
+    auto b = g_real.done.find(screen);  // (not building: a screen drawn while shown has its next pass under way)
+    if (b != g_real.done.end()) pick = &b->second;
   }
   if (!pick) {
     g_have = false;
