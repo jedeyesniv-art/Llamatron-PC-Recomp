@@ -555,7 +555,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   int frame = 0, vsyncs = 0, lock_k = -1;
   // Timing stats, logged every 10 s: game frames and presents per second, longest gap between presents.
   uint64_t stats_start = SDL_GetTicksNS(), last_present = 0, worst_gap = 0;
-  int stats_frames = 0, stats_presents = 0;
+  int stats_frames = 0, stats_presents = 0, stats_textures = 0;
   // A present more than 40 ms after the one before: where the time went since then (logged as "slow present").
   uint64_t slow_update = 0, slow_run = 0, slow_ahead = 0, slow_draw = 0;
   int slow_frames = 0;
@@ -1005,6 +1005,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       {
         int decoded = 0, textures = 0;
         remaster::TakeCounts(&decoded, &textures);
+        stats_textures += textures;
         if (last_present && now - last_present > 40'000'000ull)
           LOG("slow present at frame %d: %.1f ms since the last (%d game frames; update %.1f, emulation %.1f, "
               "run-ahead %.1f, remaster draw %.1f, present %.1f ms; %d sprite images decoded, %d textures made)",
@@ -1016,9 +1017,9 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       ++stats_presents;
       if (now - stats_start >= 10'000'000'000ull) {
         double secs = double(now - stats_start) / 1e9;
-        LOG("timing: %.2f game frames/s, %.2f presents/s, longest present gap %.1f ms", stats_frames / secs,
-            stats_presents / secs, double(worst_gap) / 1e6);
-        stats_start = now, stats_frames = stats_presents = 0, worst_gap = 0;
+        LOG("timing: %.2f game frames/s, %.2f presents/s, longest present gap %.1f ms, %d sprite textures made",
+            stats_frames / secs, stats_presents / secs, double(worst_gap) / 1e6, stats_textures);
+        stats_start = now, stats_frames = stats_presents = 0, worst_gap = 0, stats_textures = 0;
       }
     }
   }

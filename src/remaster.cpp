@@ -68,13 +68,64 @@ void DropTextures(std::unordered_map<uint64_t, SDL_Texture*>& variants) {
   for (auto& [sig, t] : variants) SDL_DestroyTexture(t);
   variants.clear();
 }
+// Each image also as layers: a white mask per colour index it uses, drawn tinted (SDL_SetTextureColorMod) - any
+// colours without making a texture. Used while an image's colours keep changing (a flash, a colour cycle, rasters
+// moving under it: made per frame, ~200 textures a frame cost the owner 50-150 ms frames in the TT Megamix).
+std::unordered_map<uint64_t, std::vector<std::pair<int, SDL_Texture*>>> g_layers;
+// Per image: in how many frames each set of its colours was asked for; one is baked into a texture from the third.
+struct Seen {
+  int frames = 0, last = -1;
+};
+std::unordered_map<uint64_t, std::unordered_map<uint64_t, Seen>> g_seen;
+int g_draw_frame = 0;
+constexpr int kBakeAfter = 3;
+// And at most this many baked a frame (each ~0.35 ms on D3D12): a sprite crossing raster lines whose colours cycle
+// recurs in many sets - baking them all as they came cost 50-150 ms frames in the TT Megamix (the owner's hitch).
+constexpr int kBakesPerFrame = 6;
+int g_bake_budget = kBakesPerFrame;
+
+void DropLayers(uint64_t id) {
+  if (auto l = g_layers.find(id); l != g_layers.end()) {
+    for (auto& [c, t] : l->second) SDL_DestroyTexture(t);
+    g_layers.erase(l);
+  }
+  g_seen.erase(id);
+}
 void DropTextures() {
   for (auto& [id, v] : g_textures) DropTextures(v);
   g_textures.clear();
+  for (auto& [id, l] : g_layers)
+    for (auto& [c, t] : l) SDL_DestroyTexture(t);
+  g_layers.clear();
+  g_seen.clear();
 }
 
-// The image in the colours `pal` (ARGB): made once per set of the colours it uses.
 int g_count_decoded = 0, g_count_textures = 0;
+
+const std::vector<std::pair<int, SDL_Texture*>>* LayersFor(SDL_Renderer* r, uint64_t id) {
+  if (auto l = g_layers.find(id); l != g_layers.end()) return &l->second;
+  auto im = g_images.find(id);
+  if (im == g_images.end() || im->second.w <= 0 || im->second.h <= 0) return nullptr;
+  const Image& image = im->second;
+  auto& layers = g_layers[id];
+  uint16_t used = g_used[id];
+  std::vector<uint32_t> px(size_t(image.w) * size_t(image.h));
+  for (int c = 0; c < 16; ++c) {
+    if (!(used >> c & 1)) continue;
+    for (size_t i = 0; i < px.size(); ++i) px[i] = image.pixels[i] && (image.pixels[i] & 15) == c ? 0xFFFFFFFFu : 0;
+    ++g_count_textures;
+    SDL_Texture* t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, image.w, image.h);
+    if (!t) continue;
+    SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
+    SDL_UpdateTexture(t, nullptr, px.data(), image.w * 4);
+    layers.push_back({c, t});
+  }
+  return &layers;
+}
+
+// The image in the colours `pal` (ARGB), baked: made once per set of the colours it uses, once that set has been
+// asked for in kBakeAfter frames and the frame's budget allows (null until then: draw the layers).
 SDL_Texture* TextureFor(SDL_Renderer* r, uint64_t id, const uint32_t* pal) {
   auto im = g_images.find(id);
   if (im == g_images.end() || im->second.w <= 0 || im->second.h <= 0) return nullptr;
@@ -85,6 +136,12 @@ SDL_Texture* TextureFor(SDL_Renderer* r, uint64_t id, const uint32_t* pal) {
     if (used >> i & 1) sig = (sig ^ pal[i]) * 1099511628211ull;
   auto& variants = g_textures[id];
   if (auto t = variants.find(sig); t != variants.end()) return t->second;
+  auto& seen = g_seen[id];
+  if (seen.size() > 1024) seen.clear();
+  Seen& s = seen[sig];
+  if (s.last != g_draw_frame) ++s.frames, s.last = g_draw_frame;
+  if (s.frames < kBakeAfter || g_bake_budget <= 0) return nullptr;
+  --g_bake_budget;
   if (variants.size() >= kMaxVariants) DropTextures(variants);
   std::vector<uint32_t> px(size_t(image.w) * size_t(image.h));
   for (size_t i = 0; i < px.size(); ++i) px[i] = image.pixels[i] ? pal[image.pixels[i] & 15] : 0;
@@ -96,6 +153,23 @@ SDL_Texture* TextureFor(SDL_Renderer* r, uint64_t id, const uint32_t* pal) {
   SDL_UpdateTexture(t, nullptr, px.data(), image.w * 4);
   variants[sig] = t;
   return t;
+}
+
+// Draws the image (its `src` rows, or all) into `d` in the colours `pal`: baked if there is one, else its layers.
+void DrawImage(SDL_Renderer* r, uint64_t id, const uint32_t* pal, const SDL_FRect* src, const SDL_FRect& d,
+               bool rotate, double degrees) {
+  auto render = [&](SDL_Texture* t) {
+    if (rotate) SDL_RenderTextureRotated(r, t, src, &d, degrees, nullptr, SDL_FLIP_NONE);
+    else SDL_RenderTexture(r, t, src, &d);
+  };
+  if (SDL_Texture* t = TextureFor(r, id, pal)) return render(t);
+  const auto* layers = LayersFor(r, id);
+  if (!layers) return;
+  for (const auto& [c, t] : *layers) {
+    uint32_t col = pal[c];
+    SDL_SetTextureColorMod(t, uint8_t(col >> 16), uint8_t(col >> 8), uint8_t(col));
+    render(t);
+  }
 }
 
 // The frame's colours per line (ARGB), and which colour indices change between lines (rasters).
@@ -284,6 +358,7 @@ void SetImage(uint64_t id, Image image) {
   g_used[id] = used;
   g_images[id] = std::move(image);
   if (auto t = g_textures.find(id); t != g_textures.end()) DropTextures(t->second), g_textures.erase(t);
+  DropLayers(id);
 }
 
 void Hold() {
@@ -508,6 +583,8 @@ bool Active() { return Enabled() && g_real.capturing && g_have; }
 void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float alpha,
           const uint16_t* line_palettes, bool ste_colours, const uint32_t* st_pixels) {
   const int W = 320 * kScale, H = 200 * kScale;
+  ++g_draw_frame;
+  g_bake_budget = kBakesPerFrame;
   if (!g_target) {
     g_target = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, W, H);
     if (!g_target) {
@@ -575,19 +652,14 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
     float top = y + im.oy;
     if (!it.rotate && (g_used[it.image] & lines.varying)) {  // raster colours: each row in its line's colours
       for (int j = 0; j < im.h; ++j) {
-        SDL_Texture* t = TextureFor(r, it.image, lines.At(int(std::floor(top + j + 0.5f))));
-        if (!t) break;
         SDL_FRect src{0, float(j), float(im.w), 1};
         SDL_FRect d{(x + im.ox) * kScale, (top + j) * kScale, float(im.w * kScale), float(kScale)};
-        SDL_RenderTexture(r, t, &src, &d);
+        DrawImage(r, it.image, lines.At(int(std::floor(top + j + 0.5f))), &src, d, false, 0);
       }
       return;
     }
-    SDL_Texture* t = TextureFor(r, it.image, lines.At(int(top + im.h / 2)));
-    if (!t) return;
     SDL_FRect d{(x + im.ox) * kScale, top * kScale, float(im.w * kScale), float(im.h * kScale)};
-    if (it.rotate) SDL_RenderTextureRotated(r, t, nullptr, &d, (angle - it.angle_base) * 57.2957795, nullptr, SDL_FLIP_NONE);
-    else SDL_RenderTexture(r, t, nullptr, &d);
+    DrawImage(r, it.image, lines.At(int(top + im.h / 2)), nullptr, d, it.rotate, (angle - it.angle_base) * 57.2957795);
   };
   if (any_behind) {
     for (int i = 0; i < int(g_cur.size()); ++i)
