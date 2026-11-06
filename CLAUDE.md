@@ -83,6 +83,11 @@ elease\Llamatron-<ver>-windows.zip (no game
   build not covered). Captures sprites, stars, falling blocks, ground stripes, buildings, the level message;
   not in pause. Generic additions: remaster::kBlack (opaque black pixels), Item::fine_x/fine_y/period,
   SetShownColour0 (calm background). 120 presents/s in play.
+  2026-11-06: also the two menus (hooks $1084A / $10C4A, draws $10EE8 / $10E1E: only the starfield moves -
+  hooked, each star a dot sliding by its countdown) and the end-of-wave bonus ($112A2 / $115AA); faster CPU on
+  the menus (games.cpp play_more; the change-overs $1AC3C are CPU-timed). TT: $1085E / $10C5E, $10EFC / $10E32,
+  $112CA / $115D2. Pixel-identical but for a TT bonus frame where a stretched (type 1) streak is clipped at
+  line 16 (the sandbox image sliced vs the routine's own clipping).
 - Defender 2 remaster (2026-11-03): src/remaster_d2.cpp - many small draw routines hooked (sprites, plotters,
   OR-ed stars / particles / lasers via remaster::IndexAt, ground bands, terrain, planet); HUD and radar left.
   --remaster-writers=N logs what still writes into the screen (any game).

@@ -56,6 +56,9 @@ Tool: `--survey=F:T:<file>` (each frame's picture + the code that wrote into a s
 --watch-step=1`, then `python -P Tools/survey.py <file> <log> <png folder>`: per state, new pictures a second and
 each change sorted as objects / scroll (band, dx, dy) / palette / redraw, top writers. Dumps ~700 MB a run.
 Runs were mostly without input, so options screens, name entry and high-score tables weren't all reached.
+- **Camels DONE 2026-11-06** (STE + TT): the menus (their starfield, sliding) and the end-of-wave bonus; faster CPU on
+  the menus. Title: a still picture. Known: a type 1 (stretched) sprite clipped at the top line shades a little
+  differently from the game's own clipping (seen once, TT bonus).
 - **Llamatron DONE 2026-11-06**: the title (parade, sheep; faster CPU there) and the continue screen (its frozen
   play picture is the last play pass's items, re-added each frame: before, it showed an empty arena - a bug since
   the first port). Left: the wave change zoom (CPU-timed boxes straight into the shown screen) and the CPU-timed

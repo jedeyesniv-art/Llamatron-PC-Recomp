@@ -17,6 +17,13 @@
 // covers the stars) and the level message ($10BEA). Opaque things (blocks, stripes, message, buildings' strips)
 // carry their black (remaster::kBlack). Left to the game: the HUD, the pause screen (it writes text over the
 // picture), other screens.
+// Outside play (2026-11-06; Camels only): the two menus (hook $1084A drawing with $10EE8: "what is thy bidding",
+// hook $10C4A with $10E1E: the game mode) and the end-of-wave bonus (hook $112A2 with $115AA: the play scene and
+// the bonus text) draw through the same main loop and routines: captured too. The menus draw only their starfield
+// per frame ($10EE8: stars in the table $37BF6, 10 bytes each - screen offset, plane bits, a countdown and its
+// reload, the pixel's mask -, OR-ed in; the VBL ($10EAA) moves each one a line down when its countdown runs
+// out): hooked, each star a dot sliding by its countdown. Not the change-overs between them
+// (hook $1AC3C: CPU-timed) nor the title (a still picture).
 // A new sprite image is drawn by the game the first time (decoded in the sandbox between frames): for that frame
 // it sits under the captured items (seen: an animated score popup under the camel for a frame).
 #include "remaster_rmc.h"
@@ -46,13 +53,16 @@ struct Addrs {
   int clip_top2, clip_top3;  // the first line types 2 and 1 / 3 draw on
   const char* name;
   uint32_t type6, plot2x2, plot2x1;  // Hardcore: compiled sprites (type 6), 2 x 2 / 2 x 1 one-plane plotters
+  uint32_t menu1, menu1_draw, menu2, menu2_draw, bonus, bonus_draw;  // other screens' hooks and draw routines
+  uint32_t menu_stars;  // the menus' starfield ("lea table,a6")
 };
 const Addrs kSte = {0x3DD3E, 0x111DE, 0x1056C, 0x4036A, 0x11450, 0x1A854, 0x3DF54,
                     0x1A3B6, 0x1A580, 0x1B0FA, 0x1AF14, 0x37000, 0x3DF54,
                     0x1A772, 0x1A956,
                     0x11D50, 0x11D78, 0x27C4C, 0x3D5C0, 0x3D5BE,
                     0x1247A, 0x1B700, 0x39384,
-                    0x10BEA, 0x1B286, 0x3CB1A, 0x10BCE, 16, 16, "mutant camels", 0, 0, 0};
+                    0x10BEA, 0x1B286, 0x3CB1A, 0x10BCE, 16, 16, "mutant camels", 0, 0, 0,
+                    0x1084A, 0x10EE8, 0x10C4A, 0x10E1E, 0x112A2, 0x115AA, 0x10EE8};
 // The TT Megamix (REVTT.TOS): found from the STE build's code bytes (32 bullets, twice the objects: the tables
 // after the first are further on).
 const Addrs kTt = {0x3E0CE, 0x11206, 0x10580, 0x426FA, 0x11478, 0x1A88C, 0x3E2E4,
@@ -60,7 +70,8 @@ const Addrs kTt = {0x3E0CE, 0x11206, 0x10580, 0x426FA, 0x11478, 0x1A88C, 0x3E2E4
                    0x1A7AA, 0x1A98E,
                    0x11D78, 0x11DA0, 0x27C8A, 0x3D950, 0x3D94E,
                    0x124A2, 0x1B73E, 0x39686,
-                   0x10BFE, 0x1B2C4, 0x3CEAA, 0x10BE2, 16, 16, "camels tt", 0, 0, 0};
+                   0x10BFE, 0x1B2C4, 0x3CEAA, 0x10BE2, 16, 16, "camels tt", 0, 0, 0,
+                   0x1085E, 0x10EFC, 0x10C5E, 0x10E32, 0x112CA, 0x115D2, 0x10EFC};
 // Hardcore (HARDCORE.PRG, Yak 1992): the same library - main loop, dispatcher $171E2 and its types, the plotter -
 // found with Tools/mapaddr.py from the Camels' STE dump. Play's draw routine $10974 (pause $11242). Type 2 clips
 // from line 1 here (the playfield's frame is drawn as part of the background).
@@ -92,10 +103,18 @@ int RegW(int r) { return int16_t(Reg(r)); }
 // all (nothing else moves).
 bool Playing(const st::Machine& m) { return Get32(m, A.hook) == A.play && Get32(m, A.draw_ptr) == A.play_draw; }
 
+// The frames captured: play's, and (the Camels) the menus' and the bonus screen's.
+bool Captured(const st::Machine& m) {
+  if (Playing(m)) return true;
+  uint32_t hook = Get32(m, A.hook), draw = Get32(m, A.draw_ptr);
+  return A.menu1 && ((hook == A.menu1 && draw == A.menu1_draw) || (hook == A.menu2 && draw == A.menu2_draw) ||
+                     (hook == A.bonus && draw == A.bonus_draw));
+}
+
 // "jsr (a3)": a frame is drawn.
 void OnLoopCall(st::Machine& m) {
   if (!remaster::Decoding(m)) {
-    g_capture = remaster::Enabled() && Playing(m);
+    g_capture = remaster::Enabled() && Captured(m);
     g_screen = Get32(m, A.screen) & 0xFFFFFF;
     if (g_capture) remaster::BeginFrame(g_screen);
     else remaster::Stop();
@@ -364,6 +383,35 @@ void PlotOr(st::Machine& m, uint32_t entry, int rows) {
 void OnPlot2x2(st::Machine& m) { PlotOr(m, A.plot2x2, 2); }
 void OnPlot2x1(st::Machine& m) { PlotOr(m, A.plot2x1, 1); }
 
+// The menus' starfield: "lea table,a6; move.w count,d7" then a dbra loop over the stars.
+void OnMenuStars(st::Machine& m) {
+  const uint32_t table = Get32(m, A.menu_stars + 2) & 0xFFFFFF, count = Get32(m, A.menu_stars + 8) & 0xFFFFFF;
+  if (remaster::Decoding(m) || !g_capture || (Reg(cpu::A0 + 1) & 0xFFFFFF) != g_screen) {
+    cpu::Set(cpu::Reg(cpu::A0 + 6), table);
+    cpu::Set(cpu::PC, A.menu_stars + 6);
+    return;
+  }
+  int n = Get16(m, count) + 1;
+  for (int i = 0; i < n && i < 1000; ++i) {
+    uint32_t s = table + uint32_t(i) * 10, off = Get32(m, s);
+    int bits = Get16(m, s + 4), mask = Get16(m, s + 8) & 0xFFFF;
+    int down = int8_t(m.Ram()[s + 6]), reload = int8_t(m.Ram()[s + 7]);
+    if (off >= 32000 || mask == 0) continue;
+    int bit = 15;
+    while (!(mask & (1 << bit))) --bit;
+    int x = int(off % 160 / 8) * 16 + (15 - bit), y = int(off / 160);
+    remaster::Item it;
+    it.kind = remaster::kDot;
+    it.key = remaster::Key(A.menu_stars, uint32_t(i) + 1);
+    it.x = float(x), it.y = float(y);
+    it.colour = uint8_t((remaster::IndexAt(m, g_screen, x, y) | bits) & 15);
+    if (reload >= 0 && down <= reload) it.fine_y = float(reload - down) / float(reload + 1);  // towards the next line
+    it.clip_top = 0, it.clip_bottom = 199;
+    remaster::Add(g_screen, it);
+  }
+  remaster::Return(m);  // not drawn (and no restore entries: nothing to restore)
+}
+
 void Install(st::Machine* m) {
   struct H {
     uint32_t at;
@@ -386,6 +434,7 @@ void Install(st::Machine* m) {
       {A.plot2x1, {0x4A, 0x40, 0x6B, 0x00}, OnPlot2x1},     // tst.w d0; bmi.w
       {A.banner, {0x30, 0x39, uint8_t(A.banner_y >> 24), uint8_t(A.banner_y >> 16), uint8_t(A.banner_y >> 8),
                   uint8_t(A.banner_y), 0x67}, OnBanner},  // move.w $1B286,d0; beq.b
+      {A.menu_stars, {0x4D, 0xF9}, OnMenuStars},  // lea table,a6
   };
   g_installed = true;
   for (const H& h : hooks)
@@ -420,10 +469,10 @@ void Start(const std::string& program) {
 
 void Update(st::Machine* m) {
   if (!g_supported) return;
-  if (!g_installed && Get32(*m, A.hook) == A.play) Install(m);
+  if (!g_installed && (Get32(*m, A.hook) == A.play || (A.menu1 && Get32(*m, A.hook) == A.menu1))) Install(m);
   if (!g_installed) return;
   remaster::DrawQueued(m, A.name);
-  if (g_capture && !Playing(*m)) g_capture = false, remaster::Stop();
+  if (g_capture && !Captured(*m)) g_capture = false, remaster::Stop();
 }
 
 }  // namespace remaster_rmc
