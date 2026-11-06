@@ -91,6 +91,11 @@ elease\Llamatron-<ver>-windows.zip (no game
 - Defender 2 remaster (2026-11-03): src/remaster_d2.cpp - many small draw routines hooked (sprites, plotters,
   OR-ed stars / particles / lasers via remaster::IndexAt, ground bands, terrain, planet); HUD and radar left.
   --remaster-writers=N logs what still writes into the screen (any game).
+  2026-11-06: also the title ($1FA38: the three preview boxes), player select ($117F0) and the high scores
+  ($11C70) - frame routines of states 2 / 8, remaster_d2::DrawsEveryVbl: divisor 1, faster CPU (stgames::FastCpu
+  next to the registry rule), captured. Not the version screen ($1EB24) nor the logo ($1E92A: its lightning
+  grows per drawn frame). The high scores' side pillars are copied inline ($11C90): not slid, but now 1 px a
+  frame (were 2 every other).
 - Hardcore remaster (2026-11-03): the Camels port with Hardcore addresses (remaster_rmc.cpp kHc) + compiled
   sprites (type 6) and one-plane plotters. Trail rings $1A1F8/$1A4F8 advance per drawn frame (cosmetic).
 - Run-ahead (2026-11-02; setting remaster_ahead 0..3, default 2; F7 cycles, a message line for 2.5 s):

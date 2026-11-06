@@ -11,6 +11,9 @@
 //     $64500..$64502. Reached through $4B6BA (writes the restore entry: return $4B6E2, the drawing code at sp + 12;
 //     with $4CEBC set it draws into every screen and the background: the HUD, left alone) and the centring
 //     wrapper $4B74C (its call at $4B772: the drawing code at sp + 18).
+// Outside play (2026-11-06) the same main loop draws the attract screens with their own frame routines, through the
+// same core: $1FA38 the title (state 2: its three preview boxes), $117F0 player select and $11C70 the high scores
+// (8). Captured too, drawn every VBL. Not the version screen ($1EB24) nor the logo ($1E92A: pass-timed).
 #include "remaster_d2.h"
 
 #include <algorithm>
@@ -66,12 +69,30 @@ void Put(const remaster::Item& it) {
 }
 
 bool Playing(const st::Machine& m) { return Get16(m, kState) == 0 && Get32(m, kFramePtr) == kPlayFrame; }
+// (Not the logo $1E92A, state 6: its lightning grows per drawn frame - at 60 a second the strikes came at other
+// moments and the screen ended sooner.)
+constexpr uint32_t kAttractFrames[] = {0x1FA38, 0x117F0, 0x11C70};
+
+}  // namespace
+
+bool DrawsEveryVbl(const st::Machine& m) { return Playing(m) || Attract(m); }
+
+bool Attract(const st::Machine& m) {
+  int state = Get16(m, kState);
+  if (state != 2 && state != 8) return false;
+  uint32_t frame = Get32(m, kFramePtr);
+  for (uint32_t f : kAttractFrames)
+    if (frame == f) return true;
+  return false;
+}
+
+namespace {
 
 // $4CC9A "jsr (a3)": a frame is drawn.
 void OnLoopCall(st::Machine& m) {
   g_m = &m;
   if (!remaster::Decoding(m)) {
-    g_capture = remaster::Enabled() && Playing(m);
+    g_capture = remaster::Enabled() && DrawsEveryVbl(m);
     g_screen = Get32(m, kScreen) & 0xFFFFFF;
     g_in_pass = g_capture;
     if (g_capture) remaster::BeginFrame(g_screen);
@@ -482,11 +503,11 @@ void Install(st::Machine* m) {
 void Start() { g_installed = g_capture = g_in_pass = false; }
 
 void Update(st::Machine* m) {
-  // From play on (DEFENDR2.EXE is loaded by the first program).
-  if (!g_installed && Get16(*m, kState) == 0 && Get32(*m, kFramePtr) == kPlayFrame) Install(m);
+  // From the logo or play on (DEFENDR2.EXE, loaded by the first program, is in place by then).
+  if (!g_installed && DrawsEveryVbl(*m)) Install(m);
   if (!g_installed) return;
   remaster::DrawQueued(m, "defender 2");
-  if (g_capture && !Playing(*m)) g_capture = g_in_pass = false, remaster::Stop();
+  if (g_capture && !DrawsEveryVbl(*m)) g_capture = g_in_pass = false, remaster::Stop();
 }
 
 }  // namespace remaster_d2

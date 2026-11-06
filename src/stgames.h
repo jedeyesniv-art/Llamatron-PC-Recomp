@@ -79,5 +79,7 @@ bool Calm(const st::Machine& m);
 void CalmStyle(int* hold, float* cap, float* release);
 // The emulation is paused (Defender 2's Start: it has no pause of its own): don't run frames.
 bool HostPaused();
+// The faster CPU beyond the registry's play rule (Defender 2's attract screens).
+bool FastCpu(const st::Machine& m);
 
 }  // namespace stgames

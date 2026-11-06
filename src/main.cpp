@@ -826,7 +826,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       // VBL either way); other screens are timed by CPU speed and keep the original.
       bool playing = llamatron    ? game::Playing(machine) || game::AtTitle(machine)  // (the title is VBL-timed)
                      : gridrunner ? grid::FastCpu(grid::GameState(machine))
-                     : c.game && c.game->play_at ? PlayRule(machine, *c.game)
+                     : c.game && c.game->play_at ? PlayRule(machine, *c.game) || stgames::FastCpu(machine)
                                                  : false;
       const bool forced = opt.cpu_all && frame >= opt.cpu_all_from;
       if (forced) playing = true;

@@ -354,7 +354,8 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
 
 // Frames are drawn every $4D1EC VBLs (2 = 25 frames/s, set at $109BC; the main loop $1B2D8 waits for the
 // VBL's countdown $62454); the game logic is in the VBL ($1BCEA), so 1 only draws more often (verified: world
-// position identical frame for frame). d2_50fps (default 1): 1 in play, with the faster CPU.
+// position identical frame for frame). d2_50fps (default 1): 1 in play and on the VBL-timed attract screens
+// (remaster_d2::DrawsEveryVbl), with the faster CPU (stgames::FastCpu for the attract screens).
 constexpr uint32_t kD2Divisor = 0x4D1EC;
 bool g_d2_50fps = true;
 constexpr uint32_t kD2State = 0x4B086, kD2PtrX = 0x62456, kD2PtrY = 0x62458, kD2Scheme = 0x1BCC4,
@@ -414,7 +415,7 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     if (--g_d2_click_frames < 4) buttons |= 2;
   }
   if (g_d2_50fps) {
-    int want = state == kD2Play ? 1 : 2;
+    int want = remaster_d2::DrawsEveryVbl(*m) ? 1 : 2;
     if (Get16(*m, kD2Divisor) != want) Put16(m, kD2Divisor, want);
   }
   if (state == kD2Play) {
@@ -1287,6 +1288,8 @@ const char* Hint(st::Machine* m, bool have_pad) {
 bool QuitRequested() { return g_quit; }
 
 bool HostPaused() { return g_host_paused; }
+
+bool FastCpu(const st::Machine& m) { return g_game == Game::kDefender2 && remaster_d2::Attract(m); }
 
 void CalmStyle(int* hold, float* cap, float* release) {
   // Hardcore's are single white frames now and then: a short hold and a low cap (a faint, short pulse), not

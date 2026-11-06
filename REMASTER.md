@@ -56,6 +56,9 @@ Tool: `--survey=F:T:<file>` (each frame's picture + the code that wrote into a s
 --watch-step=1`, then `python -P Tools/survey.py <file> <log> <png folder>`: per state, new pictures a second and
 each change sorted as objects / scroll (band, dx, dy) / palette / redraw, top writers. Dumps ~700 MB a run.
 Runs were mostly without input, so options screens, name entry and high-score tables weren't all reached.
+- **Defender 2 DONE 2026-11-06**: title (preview boxes), player select, high scores at 60 a second on the faster
+  CPU, captured; pixel-identical. Left: the version screen and the logo (its lightning is pass-timed); the high
+  scores' pillars are inline copies (would need the scroll-band piece).
 - **Camels DONE 2026-11-06** (STE + TT): the menus (their starfield, sliding) and the end-of-wave bonus; faster CPU on
   the menus. Title: a still picture. Known: a type 1 (stretched) sprite clipped at the top line shades a little
   differently from the game's own clipping (seen once, TT bonus).
