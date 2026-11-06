@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "cpu.h"
+#include "input.h"
 #include "log.h"
 #include "pad.h"
 #include "remaster.h"
@@ -161,6 +162,8 @@ void RmcUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   if ((j1 & st::kJoyUp) && (j1 & st::kJoyDown)) j1 &= uint8_t(~(st::kJoyUp | st::kJoyDown));
   if ((j1 & st::kJoyLeft) && (j1 & st::kJoyRight)) j1 &= uint8_t(~(st::kJoyLeft | st::kJoyRight));
   m->SetJoystick(1, j1);
+  // Player 2 (Two-Player: the goat, joystick 0 - $13804 reads it; the confuzer swaps the two sticks) on pad 2.
+  m->SetJoystick(0, input::SecondPadJoystick());
   if (pad::Pressed(SDL_GAMEPAD_BUTTON_START)) RmcBack(m);
   if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) RmcB(m);
   m->MouseInput(mdx, mdy, mbuttons);
@@ -270,17 +273,16 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     g_alt = -1;
   }
   if (play && g_andes_arcade) {
-    // Arcade: left / right turn round (the right button for a few frames, once per push), Y reverses.
+    // Arcade: left / right turn round (the right button for a few frames, once per push), X / Y reverse
+    // (owner 2026-11-06: X was full thrust; RT does that).
     int dir = SidePush(p, g_stick_dir);
     int facing = Get16(*m, kAndesFacing) ? -1 : 1;
     if (dir != 0 && dir != g_stick_dir && dir != facing) g_reverse_frames = 3;
     g_stick_dir = dir;
-    if (pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) g_reverse_frames = 3;
+    if (pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_WEST)) g_reverse_frames = 3;
     float t = TriggerThrust(p);
     if (g_reverse_frames > 0) {
       --g_reverse_frames, buttons |= 1;
-    } else if (p.Held(SDL_GAMEPAD_BUTTON_WEST)) {
-      buttons |= 2, g_cruise = false;  // X: the game's thrust
     } else if (t > 0) {
       // RT: the trigger sets a speed (the index $14BC4, 0..19). Below it the thrust is held and the game climbs
       // at its own rate; there it is held at that speed (the game's step past it taken back); above it (the
@@ -434,19 +436,17 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     Hold(m, kD2Up, step && v < 0);
     Hold(m, kD2Down, step && v > 0);
     if (g_d2_arcade) {
-      // Arcade: left / right turn round (Alt for a few frames, once per push), Y reverses.
+      // Arcade: left / right turn round (Alt for a few frames, once per push), X / Y reverse.
       int dir = SidePush(p, g_stick_dir);
       int facing = Get16(*m, kD2Facing) < 0 ? -1 : 1;
       if (dir != 0 && dir != g_stick_dir && dir != facing) g_reverse_frames = 3;
       g_stick_dir = dir;
-      if (pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) g_reverse_frames = 3;
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_WEST)) g_reverse_frames = 3;
       Hold(m, kD2Reverse, g_reverse_frames > 0);
       bool thrust = false;
       float t = TriggerThrust(p);
       if (g_reverse_frames > 0) {
         --g_reverse_frames;
-      } else if (p.Held(SDL_GAMEPAD_BUTTON_WEST)) {
-        thrust = true, g_cruise = false;  // X: the game's thrust
       } else if (t > 0 && Get16(*m, kD2Dying) > 0) {
         g_cruise = false;  // dead: the game skips the controls (and the ship keeps its speed), so leave it alone
       } else if (t > 0) {
@@ -672,6 +672,7 @@ constexpr double kPi = 3.14159265358979;
 constexpr int kPsMaxShots = 32;
 bool g_ps_analog = true;
 bool g_ps_pad = false;        // the pad drives the ship this frame (turns are ours)
+bool g_ps_boost = false, g_ps_single = false;  // Left Shift / Alternate held down on the ST by the pad
 bool g_ps_aim_on = false;     // the sticks give an exact aim this frame (the right stick's, else the left's)
 double g_ps_aim = 0;          // its angle (radians, screen: 0 right, y down)
 int g_ps_aim_cell = -1;       // the direction the game makes of the pointer we wrote
@@ -1111,6 +1112,7 @@ void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   }
   if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST) && state == kPsPaused) TapKey(m, kKeyQ);  // quit to the title
   int dx = 0, dy = 0;
+  bool boost = false, single = false;
   g_ps_aim_on = g_ps_steer_on = g_ps_pad = false;
   if (state == kPsPlay && p.connected) {
     g_ps_pad = true;
@@ -1142,8 +1144,15 @@ void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     }
     Put16(m, kPsX, px);
     Put16(m, kPsY, py);
-    if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f || right_on) buttons |= 2;      // fire
-    if (steer_mag > 0.7f || p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.lt > 0.5f) buttons |= 1;      // thrust
+    if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || right_on) buttons |= 2;                      // fire
+    if (steer_mag > 0.7f || p.Held(SDL_GAMEPAD_BUTTON_WEST)) buttons |= 1;                // thrust
+    // The play loop's Kbshift ($17BF4, copy $27C50): bit 2 Control = smart bomb ($17C56: count $1D126, one
+    // at a time $183B8); bit 1 Left Shift held = boost ($17ED8: the move doubled while the gauge $1D12C
+    // lasts, 1 step per 30 frames, back 1 per 120); bit 3 Alternate held while firing = one shot instead of
+    // the three ($1845E). RT bomb, LT boost, LB / RB single shot.
+    if (pad::RtPressed()) TapKey(m, kKeyLCtrl);
+    boost = p.lt > 0.5f;
+    single = p.Held(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) || p.Held(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
   } else {
     // Menus and the initials: the stick is the mouse, A / RT the left button, X / LT the right one.
     if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;
@@ -1153,6 +1162,8 @@ void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     dx = int(g_ps_mx), dy = int(g_ps_my);
     g_ps_mx -= float(dx), g_ps_my -= float(dy);
   }
+  if (boost != g_ps_boost) m->KeyEvent(kKeyLShift, boost), g_ps_boost = boost;
+  if (single != g_ps_single) m->KeyEvent(kKeyAlt, single), g_ps_single = single;
   m->MouseInput(mdx + dx, mdy + dy, buttons);
 }
 
@@ -1191,6 +1202,7 @@ void Start(Game g) {
   g_letter = 0, g_letter_repeat = 0;
   g_hc_x = g_hc_y = -1;
   g_ps_mx = g_ps_my = 0;
+  g_ps_boost = g_ps_single = false;
   g_docs_frame = g_docs_repeat = 0;
   g_docs_keys.clear();
   g_hc_strobes_done = false;

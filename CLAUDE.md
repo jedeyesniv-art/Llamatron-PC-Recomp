@@ -108,11 +108,27 @@ elease\Llamatron-<ver>-windows.zip (no game
   0, ~40 ms quicker than the original game (cancels the interpolation's frame). Cost ~0.3 ms per frame run
   ahead. Game RAM identical with run-ahead 3 + ps_analog 1 (7000 frames). --remaster-ahead=N for a run.
 
+## Controls audit (2026-11-06; owner: "we can't be missing any controls")
+- Every game's input reads listed from RAM dumps (TOS Kbshift / Crawio calls, own key tables) against the pad.
+  Mapped now: Photon Storm play loop Kbshift ($17BF4, copy $27C50): bit 2 Control = smart bomb (count $1D126,
+  one at a time $183B8; colour 0 pulses blue ~4 frames: no calming needed) -> RT; bit 1 Left Shift held = boost
+  (move doubled while the gauge $1D12C 0..19 lasts: -1 per 30 frames, +1 per 120) -> LT; bit 3 Alternate held
+  while firing = single shots instead of the three-way spread ($1845E) -> LB / RB. RT / LT no longer fire /
+  thrust there (A / right stick fire, X / far push thrust). Verified scripted: bombs 3 -> 2 -> 1, gauge 19 -> 10.
+  Camels two-player (team mode $3933C = 2): player 2 = the goat on joystick 0 ($13804) -> pad 2
+  (input::SecondPadJoystick, as Llamatron's TEAM). Untested with a real second pad.
+- Complete already: Andes (Kbshift bits 0-3 all mapped), Defender 2 (its 8 keys via table $4B300: Tab / Insert,
+  Return, Ctrl, LShift, #, RShift, Alt, Caps - Caps in Defender II = an energy weapon $138A2, on LB), Gridrunner.
+- Left unmapped on purpose (cheats / switches): Llamatron pause h (50/60) s (samples); Hardcore s h n (next
+  level, a tester key); Camels l n (cheats); typed codes: Photon title "your-mind-is-my-ashtray" ($27316),
+  Andes title "delicate-sound-of-thunder" ($137D8), Gridrunner pause "pink-floyd-are-gods"; letters = sounds in
+  Andes / Gridrunner. Keyboard still sends them all.
+
 ## Arcade controls for Andes Attack and Defender 2 (2026-11-04; owner tried it: "thrust on RT feels very good")
 - After the arcade Defender (stick up/down only, thrust a button): settings andes_controls / d2_controls (1 =
   ARCADE, default; 0 = STICK THRUST, the older scheme below). Stick left / right only turns round (SidePush in
-  stgames.cpp: 60% out and within ~35 deg of level, held from 40%; one turn per push; d-pad at once), Y reverse,
-  A / LT fire, B smart bomb, X = the game's own thrust, LB / RB shield (Andes) / inviso + Tab (D2).
+  stgames.cpp: 60% out and within ~35 deg of level, held from 40%; one turn per push; d-pad at once), X / Y
+  reverse (X was full thrust until 2026-11-06), A / LT fire, B smart bomb, LB / RB shield (Andes) / inviso + Tab (D2).
 - RT analog thrust: the squeeze sets a target speed. Below it the thrust is held (the game's own acceleration),
   at it the one-step overshoot is taken back (engine lit), above it released (the game's glide / friction).
   Andes: speed index $14BC4 (0..19; climb delays table $14BC6 1..32 frames, $2D77C = thrust held). D2: velocity
@@ -463,7 +479,7 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
 - Pad (owner 2026-10-22, src\gridrunner.cpp): left stick moves the pointer (= ship) through a response curve
   (written straight into $54DD0/$54DD2), d-pad slowly; RT/A = left button (fire/click), LT/X = right button
   (nosecone: held = attached); right stick flicked up/down = one left Shift/Alt tap (one step towards up/down;
-  owner: "like a button", no repeat while held; next flick after it returns below 30%); RB/LB = one step up/down
+  owner: "like a button", no repeat while held; next flick after it returns below 30%); RB/LB (and in the game d-pad up/down, owner 2026-11-06; the d-pad's left/right still move slowly) = one step up/down
   per press; Y = Control (2026-10-23; was RB). X/Y/LB/RB only in the game, not on the title (menu shortcuts there)
   or the shortcut screens; Back/Start
   = pause/resume; B = pause: quit to title (Q), title: quit (twice). Keyboard: every key goes to the ST.

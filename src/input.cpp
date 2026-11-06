@@ -307,11 +307,7 @@ void UpdateGeneric(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_but
     if (back != g_back_held) m->KeyEvent(0x01, back);     // B: Esc
     g_start_held = start, g_back_held = back;
   }
-  if (g_pads.size() >= 2) {
-    SDL_Gamepad* p = g_pads[1];
-    j0 |= StickBits(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY) | DpadBits(p);
-    if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_SOUTH)) j0 |= st::kJoyFire;
-  }
+  j0 |= SecondPadJoystick();
   int dx = int(g_mouse_x), dy = int(g_mouse_y);
   g_mouse_x -= float(dx), g_mouse_y -= float(dy);
   m->SetJoystick(0, Clean(j0));
@@ -330,6 +326,14 @@ void Reset() {
   g_start_held = g_back_held = false;
 }
 SDL_Gamepad* FirstPad() { return g_pads.empty() ? nullptr : g_pads[0]; }
+
+uint8_t SecondPadJoystick() {
+  if (g_pads.size() < 2) return 0;
+  SDL_Gamepad* p = g_pads[1];
+  uint8_t j = StickBits(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY) | DpadBits(p);
+  if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_SOUTH)) j |= st::kJoyFire;
+  return Clean(j);
+}
 
 const char* Hint(st::Machine* m) {
   if (g_mode == Mode::kTripATron) return trip::Hint(m, !g_pads.empty());
@@ -401,11 +405,7 @@ void Update(st::Machine* m) {
       j1 |= st::kJoyFire;
     }
   }
-  if (g_pads.size() >= 2) {
-    SDL_Gamepad* p = g_pads[1];
-    j0 |= StickBits(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY) | DpadBits(p);
-    if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_SOUTH)) j0 |= st::kJoyFire;
-  }
+  j0 |= SecondPadJoystick();
   if (!aim) game::SetAim(false, 0, 0);
   m->SetJoystick(0, Clean(j0));
   m->SetJoystick(1, Clean(j1));

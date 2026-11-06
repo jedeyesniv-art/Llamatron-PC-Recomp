@@ -74,6 +74,7 @@ float g_vx = 0, g_vy = 0;  // the pointer's eased speed, pixels per frame
 uint8_t g_held_keys = 0;   // bit 2 Control (held by the pad)
 int g_flick = 0;           // right stick: -1 up, 1 down, 0 back near the centre (ready for the next flick)
 bool g_lb = false, g_rb = false;  // shoulder buttons last frame (one nosecone step per press)
+bool g_du = false, g_dd = false;  // d-pad up / down last frame (the same, in the game)
 bool g_quit = false;
 bool g_running = false;  // the game has unpacked itself and reached its title
 bool g_hide_entry_lane = true;
@@ -414,11 +415,15 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     float vx, vy;
     Curve(axis(SDL_GAMEPAD_AXIS_LEFTX), axis(SDL_GAMEPAD_AXIS_LEFTY), &vx, &vy);
     bool shortcuts = ShortcutScreen(GameState(*m));
+    // In the game (not the title, whose X / Y / LB are menu shortcuts, nor the shortcut screens).
+    bool in_game = g_running && GameState(*m) != kTitle && !shortcuts;
     if (!shortcuts) {
       if (button(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) vx -= float(g_tune.dpad);
       if (button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) vx += float(g_tune.dpad);
-      if (button(SDL_GAMEPAD_BUTTON_DPAD_UP)) vy -= float(g_tune.dpad);
-      if (button(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) vy += float(g_tune.dpad);
+      if (!in_game) {  // in the game d-pad up / down turn the nosecone shot instead (owner 2026-11-06)
+        if (button(SDL_GAMEPAD_BUTTON_DPAD_UP)) vy -= float(g_tune.dpad);
+        if (button(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) vy += float(g_tune.dpad);
+      }
     }
     Ease(&vx, &vy);
     if (g_running && (vx != 0 || vy != 0)) {
@@ -433,13 +438,11 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     }
     if (axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 0.4f || (button(SDL_GAMEPAD_BUTTON_SOUTH) && !shortcuts))
       buttons |= 2;  // left
-    // In the game (not the title, whose X / Y / LB are menu shortcuts, nor the shortcut screens).
-    bool in_game = g_running && GameState(*m) != kTitle && !shortcuts;
     if (axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 0.4f || (button(SDL_GAMEPAD_BUTTON_WEST) && in_game))
       buttons |= 1;  // right: the nosecone back to the ship while held
     // Nosecone shot direction: one step per flick of the right stick up or down, like a button (the game would
     // repeat while its key is held: a 2-frame tap is one step); the stick must come back near the centre first.
-    // RB / LB: one step up / down per press.
+    // RB / LB and d-pad up / down: one step up / down per press.
     float ry = axis(SDL_GAMEPAD_AXIS_RIGHTY);
     auto step = [&](bool up) { TapKey(m, up != g_tune.fire_mode_swap ? kLShift : kAlt, 2); };
     if (g_flick == 0 && std::fabs(ry) > 0.5f) {
@@ -450,12 +453,14 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     }
     bool lb = button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) && in_game;
     bool rb = button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) && in_game;
-    if (rb && !g_rb) step(true);
-    if (lb && !g_lb) step(false);
-    g_lb = lb, g_rb = rb;
+    bool du = button(SDL_GAMEPAD_BUTTON_DPAD_UP) && in_game;
+    bool dd = button(SDL_GAMEPAD_BUTTON_DPAD_DOWN) && in_game;
+    if ((rb && !g_rb) || (du && !g_du)) step(true);
+    if ((lb && !g_lb) || (dd && !g_dd)) step(false);
+    g_lb = lb, g_rb = rb, g_du = du, g_dd = dd;
     Hold(m, 2, kCtrl, button(SDL_GAMEPAD_BUTTON_NORTH) && in_game);  // voluntary martyrdom
   } else {
-    g_lb = g_rb = false;
+    g_lb = g_rb = g_du = g_dd = false;
     Hold(m, 2, kCtrl, false);
   }
   // The front virtual click (after any name entry animation has finished).
@@ -509,7 +514,7 @@ void Reset() {
   g_vx = g_vy = 0;
   g_held_keys = 0;
   g_flick = 0;
-  g_lb = g_rb = false;
+  g_lb = g_rb = g_du = g_dd = false;
   g_title_hint_ms = 0;
   g_quit = g_running = g_hooked = g_test = false;
   g_clicks.clear();

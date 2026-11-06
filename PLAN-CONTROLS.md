@@ -12,8 +12,7 @@
 CONTROLS
   FIRE            A
   SMART BOMB      B
-  FULL THRUST     X
-  REVERSE         Y
+  REVERSE         X  Y
   SHIELD          LB  RB
   UP / DOWN / LEFT / RIGHT   (d-pad, a row each)
   RESET CONTROLS
@@ -43,7 +42,8 @@ CONTROLS
 
 ## Per-game function lists
 Built from each game's how-to-play page (games.cpp `help`) and its control code: Llamatron, Gridrunner,
-Trip-A-Tron, Camels (one set for both builds), Andes, Defender 2, Hardcore, Photon Storm; generic user disks get
+Trip-A-Tron, Camels (one set for both builds), Andes, Defender 2, Hardcore, Photon Storm (incl. SMART BOMB RT,
+BOOST LT, SINGLE SHOT LB / RB - triggers as buttons there); generic user disks get
 A / B / X / Y rows (joystick fire, Space, Esc...). Rows that only matter on one screen say so ("X: ONE-STICK START
 (TITLE)"). Andes and Defender 2 have two control schemes (andes_controls / d2_controls): the list follows the one
 selected.

@@ -115,7 +115,7 @@ const std::vector<Item>& Items() {
        "Draws every frame in play and on the attract screens (the original: 25). The game's speed is the same.", true},
 
       {"andes", "CONTROLS", "andes_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
-       "Arcade: left / right only turn round, RT thrust (squeeze = speed), X full thrust. Stick thrust: the push moves you."},
+       "Arcade: left / right only turn round, RT thrust (squeeze = speed), X / Y reverse. Stick thrust: the push moves you."},
       {"andes", "ALTITUDE SPEED", "andes_stick_speed", Kind::kSlider, 3, 1, 8, 0.5, {},
        "Pixels a frame up or down with the stick pushed all the way."},
       {"andes", "ALTITUDE CURVE", "andes_stick_curve", Kind::kSlider, 1.5, 1, 3, 0.25, {},
@@ -126,7 +126,7 @@ const std::vector<Item>& Items() {
        "With direct thrust: how quickly the speed follows the stick.", true},
 
       {"defender2", "CONTROLS", "d2_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
-       "Arcade: left / right only turn round, RT thrust (squeeze = speed), X full thrust. Stick thrust: the push moves you."},
+       "Arcade: left / right only turn round, RT thrust (squeeze = speed), X / Y reverse. Stick thrust: the push moves you."},
       {"defender2", "60 HZ (ARCADE SPEED)", "defender2_60hz", Kind::kToggle, 1, 0, 1, 1, {},
        "The game's 60 Hz mode, as the arcade (its speeds adjusted). Off: 50 Hz.", true},
       {"defender2", "50 FRAMES A SECOND", "d2_50fps", Kind::kToggle, 1, 0, 1, 1, {},

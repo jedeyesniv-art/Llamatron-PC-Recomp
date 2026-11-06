@@ -46,6 +46,8 @@ void UpdateGeneric(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_but
 // Forgets the state of the last game (before starting another).
 void Reset();
 SDL_Gamepad* FirstPad();
+// Pad 2 as joystick bits (left stick / d-pad, A fire; 0 without a second pad): player 2 on joystick 0.
+uint8_t SecondPadJoystick();
 // A line to show over the picture (pause screen help, quit confirmation), or null.
 const char* Hint(st::Machine* m);
 // The hint goes at the top of the picture (Trip-A-Tron: its Control Panel fills the bottom).

@@ -99,10 +99,10 @@ LLAMATRON CONTROLS - KEYBOARD
 SUPER GRIDRUNNER CONTROLS - XBOX PAD
 ------------------------------------
 In the game:
-  Left stick      move the ship (the further you push, the faster; d-pad: slowly)
+  Left stick      move the ship (the further you push, the faster; d-pad left / right: slowly)
   RT or A         fire
   LT or X (hold)  call the nosecone back to the ship
-  RB / LB         turn the nosecone's shot direction one step up / down
+  RB / LB         turn the nosecone's shot direction one step up / down (d-pad up / down too)
   Right stick     the same: flick up or down
   Y               voluntary martyrdom (costs a life)
   Start           pause; B on the pause screen quits to the title
@@ -138,6 +138,7 @@ REVENGE OF THE MUTANT CAMELS - XBOX PAD
 ---------------------------------------
   Left stick / d-pad   move the camel             A, X, RT        fire
   Start                pause                      B (paused)      back to the menu
+  A second pad         player 2 (the goat) in the two-player game
 Keyboard: cursor keys + Space, P pause, O resume. Yak's notes are on the how-to-play page.
 The TT Megamix plays the same way. It was the shareware release: its shareware screen comes first (fire
 goes on).
@@ -145,10 +146,13 @@ goes on).
 
 ANDES ATTACK - XBOX PAD
 -----------------------
-  Left stick up / down   altitude                 Left stick left / right   thrust that way (turns round first)
-  A or RT                fire                     Y                         smart bomb
-  X / LT                 reverse / thrust         Start                     pause
+  Left stick up / down   altitude                 Left stick left / right   face that way
+  RT                     thrust: how far you squeeze sets the speed
+  A or LT                fire                     B                         smart bomb
+  X or Y                 reverse
   LB or RB (hold)        shield (its energy drains while it's up)
+  Start                  pause
+  (Settings: CONTROLS = STICK THRUST: the stick's left / right thrusts that way, the older scheme.)
   High score name: up / down picks a letter, A enters it.
 Mouse and keyboard as the original: mouse up / down, left button thrust, right reverse, Left Shift fire,
 Control smart bomb, Alt (hold) shield, Right Shift pause, Space resume.
@@ -157,9 +161,12 @@ Control smart bomb, Alt (hold) shield, Right Shift pause, Space resume.
 DEFENDER 2 - XBOX PAD
 ---------------------
   Title: the d-pad picks Defender, Defender II or Stargate, A starts it; then A = one player.
-  Left stick up / down   climb / dive             Left stick left / right   thrust that way (turns round first)
-  A or RT                fire                     Y                         smart bomb
-  X / LT                 reverse / thrust         LB                        inviso (Stargate)
+  Left stick up / down   climb / dive             Left stick left / right   face that way
+  RT                     thrust: how far you squeeze sets the speed
+  A or LT                fire                     B                         smart bomb
+  X or Y                 reverse
+  LB                     inviso (Stargate)        RB                        ship type (Defender II)
+  (Settings: CONTROLS = STICK THRUST: the stick's left / right thrusts that way, the older scheme.)
   Start                  pause (freezes it: the game has no pause of its own)
   Initials (a high score): the d-pad picks the letter, A fixes it, X deletes.
 The crack's trainer (invincibility, friendly sprites) is on the how-to-play page, and its notes. It runs in
@@ -169,12 +176,14 @@ its 60 Hz mode (as the arcade did; the game adjusts its speeds), on a 60 / 120 H
 PHOTON STORM - XBOX PAD
 -----------------------
   Left stick       steer the ship (push far: fly)  Right stick     fire in any direction
-  A or RT          fire where the ship points      X or LT         thrust
+  A                fire where the ship points      X               thrust
+  RT               smart bomb                      LT (hold)       boost (while its gauge lasts)
+  LB / RB (hold)   single shots instead of the three-way spread
   Start            pause                           B (paused)      quit to the title
   Title: A = one player, X = two players, Y = controls: 360 twin stick (the default: aim, flight and shots
   at any angle; the ship's picture still has its 16 steps) or the original 16 directions (one stick).
 Mouse as the original: where it points from the middle is the direction; left button fire, right thrust.
-Right Shift pauses (Space resumes, Q quits).
+Control smart bomb, Left Shift boost, Alt single shots. Right Shift pauses (Space resumes, Q quits).
 
 
 HARDCORE - XBOX PAD
