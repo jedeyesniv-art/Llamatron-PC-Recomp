@@ -28,6 +28,7 @@ struct Game {
   // The faster CPU (--cpu) while this long in RAM holds this value (its VBL's play-state hook): only where the
   // game logic is timed by the VBL, so only the drawing speeds up. 0 = never.
   uint32_t play_at = 0, play_value = 0, play_value2 = 0, play_value3 = 0;  // any of these (0 = unused, but the first)
+  std::vector<uint32_t> play_more;                                          // more of them
   bool play_word = false;  // play_at is a word, not a long
   bool ste = false;        // an STE program (STE colours; DMA sound is always there)
   // Boot the ST at 60 Hz when the setting <id>_60hz is 1 (its default): for games that read the sync register

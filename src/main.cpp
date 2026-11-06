@@ -472,6 +472,8 @@ bool PlayRule(const st::Machine& m, const games::Game& g) {
   uint32_t v = g.play_word ? uint32_t(p[0] << 8 | p[1]) : uint32_t(p[0]) << 24 | uint32_t(p[1]) << 16 | uint32_t(p[2]) << 8 | p[3];
   if (g.play_vbl && uint32_t(m.Ram()[0x70] << 24 | m.Ram()[0x71] << 16 | m.Ram()[0x72] << 8 | m.Ram()[0x73]) != g.play_vbl)
     return false;
+  for (uint32_t more : g.play_more)
+    if (v == more) return true;
   return v == g.play_value || (g.play_value2 && v == g.play_value2) || (g.play_value3 && v == g.play_value3);
 }
 
@@ -963,7 +965,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         if (menu::IsOpen()) alpha = 1;  // suspended: the last frame, still
         SetRemasterColour0(machine);
         uint64_t t_draw = SDL_GetTicksNS();
-        remaster::Draw(renderer, shown, view, alpha, machine.LinePalettes(), machine.SteColours());
+        remaster::Draw(renderer, shown, view, alpha, machine.LinePalettes(), machine.SteColours(), machine.Frame());
         slow_draw += since(t_draw);
       } else {
         crt::DrawPicture(renderer, shown, view);

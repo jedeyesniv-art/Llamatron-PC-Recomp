@@ -112,7 +112,7 @@ const std::vector<Item>& Items() {
       {"photonstorm", "360 TWIN STICK", "ps_analog", Kind::kToggle, 1, 0, 1, 1, {},
        "Steer and aim in any direction, the right stick aims and fires (off: the original 16). Also Y on the title."},
       {"photonstorm", "50 FRAMES A SECOND", "photonstorm_50fps", Kind::kToggle, 1, 0, 1, 1, {},
-       "Draws every frame in play (the original: 25). The game's speed is the same.", true},
+       "Draws every frame in play and on the attract screens (the original: 25). The game's speed is the same.", true},
 
       {"andes", "CONTROLS", "andes_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
        "Arcade: left / right only turn round, RT thrust (squeeze = speed), X full thrust. Stick thrust: the push moves you."},

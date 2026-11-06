@@ -56,6 +56,9 @@ Tool: `--survey=F:T:<file>` (each frame's picture + the code that wrote into a s
 --watch-step=1`, then `python -P Tools/survey.py <file> <log> <png folder>`: per state, new pictures a second and
 each change sorted as objects / scroll (band, dx, dy) / palette / redraw, top writers. Dumps ~700 MB a run.
 Runs were mostly without input, so options screens, name entry and high-score tables weren't all reached.
+- **Photon Storm DONE 2026-11-06**: states 12 / 7 / 11 / 8 captured, drawn every VBL (divisor 1) on the faster
+  CPU; pixel-identical but for behind-the-text stars (`Item::behind`, new: drawn under the ST picture's
+  non-zero pixels) that the original erases when two share a 16-px word. Change-overs (state 2) stay the ST picture.
 - **Andes DONE 2026-11-06**: every pass built like play's is captured (title, "know thine enemies", high scores,
   game over, the attract demo), ending at the show routine $15490 (remaster_andes.cpp header); the faster CPU now
   covers states 5 and 4 too (games.cpp play_value2 / 3), so those screens draw 50 a second with or without the

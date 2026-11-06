@@ -48,6 +48,9 @@ struct Item {
   // A repeating pattern (image a whole number of periods wide): x jumps back by `period` when it wraps, so it slides
   // the short way round.
   uint16_t period = 0;
+  // Behind the ST picture: shown only where the picture is colour 0 (Photon Storm's title stars pass behind its
+  // text). Draw needs the picture's pixels for it.
+  bool behind = false;
 };
 
 // A sprite image: colour indices (0 = transparent, kBlack = colour 0 drawn), ox / oy from where the game was told to
@@ -132,9 +135,10 @@ bool Active();
 // Draws the picture into `view` (logical coordinates) through crt::DrawPicture: the ST frame `st_texture` at 4x
 // with the items over it, positions `alpha` (0..1) of the way from the previous frame shown to this one. The items
 // take the colours of the lines they are on (`line_palettes`: Machine::LinePalettes, 200 x 16): an image using a
-// colour that rasters change within the frame is drawn row by row.
+// colour that rasters change within the frame is drawn row by row. `st_pixels` (the frame, 320 x 200 ARGB) is
+// needed for items `behind` the picture: then colour 0, those items, the picture with colour 0 see-through, the rest.
 void Draw(SDL_Renderer* renderer, SDL_Texture* st_texture, const SDL_FRect& view, float alpha,
-          const uint16_t* line_palettes, bool ste_colours);
+          const uint16_t* line_palettes, bool ste_colours, const uint32_t* st_pixels = nullptr);
 void Shutdown();
 // Colour 0 as the machine shows it, when that isn't the register (Machine::CalmBackground: flashes filtered): used
 // for every line's colour 0 (drawn black). Before Draw / ComposeSoftware.

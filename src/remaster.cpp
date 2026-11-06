@@ -51,6 +51,7 @@ constexpr size_t kMaxVariants = 256;
 std::unordered_map<uint64_t, std::unordered_map<uint64_t, SDL_Texture*>> g_textures;
 std::unordered_map<uint64_t, uint16_t> g_used;  // per image: the colours it uses (bit per index)
 SDL_Texture* g_target = nullptr;
+SDL_Texture* g_over = nullptr;  // the ST picture with colour 0 see-through (items behind it)
 
 uint32_t Argb(uint16_t c, bool ste) {
   auto ch = [&](unsigned v) {
@@ -498,7 +499,7 @@ void FrameShown(uint32_t screen) {
 bool Active() { return Enabled() && g_real.capturing && g_have; }
 
 void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float alpha,
-          const uint16_t* line_palettes, bool ste_colours) {
+          const uint16_t* line_palettes, bool ste_colours, const uint32_t* st_pixels) {
   const int W = 320 * kScale, H = 200 * kScale;
   if (!g_target) {
     g_target = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, W, H);
@@ -518,11 +519,26 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
   SDL_SetRenderTarget(r, g_target);
   SDL_SetRenderLogicalPresentation(r, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
   SDL_FRect full{0, 0, float(W), float(H)};
-  SDL_RenderTexture(r, st_texture, nullptr, &full);
+  bool any_behind = false;
+  if (st_pixels)
+    for (const Item& it : g_cur) any_behind |= it.behind;
+  if (!any_behind) {
+    SDL_RenderTexture(r, st_texture, nullptr, &full);
+  } else {  // colour 0 (line by line), then the items behind; the picture comes over them below
+    for (int y = 0; y < 200;) {
+      uint32_t c = lines.pal[y][0];
+      int e = y + 1;
+      while (e < 200 && lines.pal[e][0] == c) ++e;
+      SDL_SetRenderDrawColor(r, uint8_t(c >> 16), uint8_t(c >> 8), uint8_t(c), 255);
+      SDL_FRect band{0, float(y * kScale), float(W), float((e - y) * kScale)};
+      SDL_RenderFillRect(r, &band);
+      y = e;
+    }
+  }
 
   alpha = std::clamp(alpha, 0.0f, 1.0f);
   int clip_top = -1, clip_bottom = -1, clip_left = -1, clip_right = -1;
-  for (int i = 0; i < int(g_cur.size()); ++i) {
+  auto draw_item = [&](int i) {
     const Item& it = g_cur[i];
     float x = it.x + it.fine_x, y = it.y + it.fine_y, angle = it.angle;
     if (i < int(g_match.size()) && g_match[i] >= 0) {
@@ -544,10 +560,10 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
       SDL_SetRenderDrawColor(r, uint8_t(c >> 16), uint8_t(c >> 8), uint8_t(c), 255);
       SDL_FRect d{x * kScale, y * kScale, float(it.w * kScale), float(it.h * kScale)};
       SDL_RenderFillRect(r, &d);
-      continue;
+      return;
     }
     auto found = g_images.find(it.image);
-    if (found == g_images.end()) continue;
+    if (found == g_images.end()) return;
     const Image& im = found->second;
     float top = y + im.oy;
     if (!it.rotate && (g_used[it.image] & lines.varying)) {  // raster colours: each row in its line's colours
@@ -558,14 +574,43 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
         SDL_FRect d{(x + im.ox) * kScale, (top + j) * kScale, float(im.w * kScale), float(kScale)};
         SDL_RenderTexture(r, t, &src, &d);
       }
-      continue;
+      return;
     }
     SDL_Texture* t = TextureFor(r, it.image, lines.At(int(top + im.h / 2)));
-    if (!t) continue;
+    if (!t) return;
     SDL_FRect d{(x + im.ox) * kScale, top * kScale, float(im.w * kScale), float(im.h * kScale)};
     if (it.rotate) SDL_RenderTextureRotated(r, t, nullptr, &d, (angle - it.angle_base) * 57.2957795, nullptr, SDL_FLIP_NONE);
     else SDL_RenderTexture(r, t, nullptr, &d);
+  };
+  if (any_behind) {
+    for (int i = 0; i < int(g_cur.size()); ++i)
+      if (g_cur[i].behind) draw_item(i);
+    // The picture over them, colour 0 see-through.
+    if (!g_over) {
+      g_over = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 200);
+      if (g_over) SDL_SetTextureBlendMode(g_over, SDL_BLENDMODE_BLEND), SDL_SetTextureScaleMode(g_over, SDL_SCALEMODE_NEAREST);
+    }
+    void* px = nullptr;
+    int pitch = 0;
+    if (g_over && SDL_LockTexture(g_over, nullptr, &px, &pitch)) {
+      for (int y = 0; y < 200; ++y) {
+        const uint32_t* src = st_pixels + y * 320;
+        uint32_t* dst = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(px) + y * pitch);
+        uint32_t c0 = lines.pal[y][0] & 0xFFFFFF;
+        for (int x = 0; x < 320; ++x) dst[x] = (src[x] & 0xFFFFFF) == c0 ? 0 : src[x] | 0xFF000000u;
+      }
+      SDL_UnlockTexture(g_over);
+      SDL_SetRenderClipRect(r, nullptr);
+      clip_top = clip_bottom = clip_left = clip_right = -1;
+      SDL_RenderTexture(r, g_over, nullptr, &full);
+    } else {
+      SDL_SetRenderClipRect(r, nullptr);
+      clip_top = clip_bottom = clip_left = clip_right = -1;
+      SDL_RenderTexture(r, st_texture, nullptr, &full);  // no texture: the picture over them, as it is
+    }
   }
+  for (int i = 0; i < int(g_cur.size()); ++i)
+    if (!any_behind || !g_cur[i].behind) draw_item(i);
   SDL_SetRenderClipRect(r, nullptr);
   SDL_SetRenderTarget(r, nullptr);
   SDL_SetRenderLogicalPresentation(r, lw, lh, mode);
@@ -588,10 +633,12 @@ void ComposeSoftware(const uint32_t* st, const uint16_t* line_palettes, bool ste
   out->assign(st, st + 320 * 200);
   static LineColours lines;
   MakeLineColours(line_palettes, ste_colours, &lines);
+  for (int pass = 0; pass < 2; ++pass)  // the items behind the picture first (only where it is colour 0)
   for (const Item& it : g_cur) {
+    if (it.behind != (pass == 0)) continue;
     auto put = [&](int x, int y, int c) {
       if (x >= std::max<int>(0, it.clip_left) && x <= std::min<int>(319, it.clip_right) && y >= std::max<int>(0, it.clip_top) &&
-          y <= std::min<int>(199, it.clip_bottom))
+          y <= std::min<int>(199, it.clip_bottom) && (!it.behind || (st[size_t(y) * 320 + x] & 0xFFFFFF) == (lines.pal[y][0] & 0xFFFFFF)))
         (*out)[size_t(y) * 320 + x] = lines.pal[y][c & 15];
     };
     int x = int(std::lround(it.x)) & -int(it.snap), y = int(std::lround(it.y));
@@ -614,6 +661,7 @@ void SetShownColour0(bool on, uint32_t argb) { g_colour0_on = on, g_colour0 = ar
 void Shutdown() {
   DropTextures();
   if (g_target) SDL_DestroyTexture(g_target), g_target = nullptr;
+  if (g_over) SDL_DestroyTexture(g_over), g_over = nullptr;
 }
 
 }  // namespace remaster

@@ -639,6 +639,10 @@ constexpr uint32_t kPsState = 0x44846, kPsX = 0x4F1C0, kPsY = 0x4F1C2;
 constexpr uint32_t kPsDivisor = 0x466BE;
 bool g_ps_50fps = true;
 constexpr int kPsPlay = 1, kPsPaused = 10, kPsTitle = 7;
+// The screens drawn every VBL with photonstorm_50fps (their animation is in the VBL) and captured by the remaster:
+// play, the ARC logo (12), the title (7), the enemy guide (11), the high scores (8). Not the change-overs (2) or
+// the pause (10). (games.cpp play_more: the faster CPU in the same states.)
+bool PsDrawsEveryVbl(int state) { return state == kPsPlay || state == 12 || state == kPsTitle || state == 11 || state == 8; }
 constexpr uint8_t kKeyQ = 0x10;
 float g_ps_mx = 0, g_ps_my = 0;
 
@@ -837,10 +841,16 @@ constexpr uint32_t kPsClipLeft = 0x57FC0, kPsClipRight = 0x57FC2;  // in 16-pixe
 constexpr uint32_t kPsDrawMode = 0x46420;
 constexpr uint32_t kPsHudPaint = 0x14F30, kPsHudPaintEnd = 0x14F80;  // HUD icons, once into the background + 3 screens  // 0 while the main loop draws (2 while it restores)
 constexpr uint32_t kPsDot1 = 0x440BA, kPsDot2 = 0x44150, kPsDot4 = 0x442F2, kPsDotTop = 0x440B8, kPsDotPlanes = 0x44098;
+// Set (the title: $14506): $442F2's dots go behind the picture, only where the background ($4641C) is colour 0.
+constexpr uint32_t kPsDotBehind = 0x441EA;
+// $442EA: $442F2 without the top line test (the ARC logo's and the title's stars). ($4427C: into every screen and
+// the background - left alone.)
+constexpr uint32_t kPsDot4Any = 0x442EA;
 constexpr uint32_t kPsShipDraw = 0x15C72, kPsShipDone = 0x15D04, kPsShipFrames = 0x2D53E;
 constexpr uint32_t kPsShipBankA = 0x2793E, kPsShipBankB = 0x180BE;
 constexpr uint64_t kPsShipImage = 0x5000000000000000ull;
 bool g_ps_capture = false;  // this frame's drawing goes to remaster
+bool g_ps_remaster_failed = false;  // its hooks' instructions weren't there: don't try again this run
 uint32_t g_ps_capture_screen = 0;
 
 uint32_t Reg(int r) { return cpu::Get(cpu::Reg(r)); }
@@ -853,7 +863,7 @@ uint64_t PsKey(uint32_t caller, uint32_t object) { return remaster::Key(caller, 
 void PsOnDrawCall(st::Machine& m) {
   if (!Decoding(m)) {
     int state = Get16(m, kPsState);
-    g_ps_capture = remaster::Enabled() && state == kPsPlay;
+    g_ps_capture = remaster::Enabled() && PsDrawsEveryVbl(state);
     g_ps_capture_screen = Get32(m, kPsScreen) & 0xFFFFFF;
     if (g_ps_capture) remaster::BeginFrame(g_ps_capture_screen);
     else if (state == kPsPaused && remaster::Enabled()) remaster::Hold();  // the play picture stays
@@ -922,8 +932,9 @@ void PsOnSprite(st::Machine& m) {
 }
 
 // The dot plotters: d0 / d1 the place, d2 the colour; drawn only from line $440B8 to below `bottom`.
-void PsDot(st::Machine& m, int w, int h, int bottom) {
+void PsDot(st::Machine& m, int w, int h, int bottom, bool behind = false, bool any_top = false) {
   remaster::Item it;
+  it.behind = behind;
   it.kind = remaster::kDot;
   uint32_t sp = Reg(cpu::A7) & 0xFFFFFF;
   it.key = PsKey(Get32(m, sp), Reg(cpu::A0 + 5)) ^ 0x8000000000000000ull;
@@ -933,7 +944,7 @@ void PsDot(st::Machine& m, int w, int h, int bottom) {
   int y = RegW(cpu::D0 + 1);
   it.x = float(x), it.y = float(y), it.colour = uint8_t(colour);
   it.w = uint8_t(w), it.h = uint8_t(h);
-  it.clip_top = int16_t(Get16(m, kPsDotTop)), it.clip_bottom = 199;
+  it.clip_top = any_top ? 0 : int16_t(Get16(m, kPsDotTop)), it.clip_bottom = 199;
   if (y >= it.clip_top && y < bottom) remaster::Add(g_ps_capture_screen, it);  // else not drawn at all
   Rts(m);
 }
@@ -953,9 +964,15 @@ void PsOnDot2(st::Machine& m) {
   cpu::Set(cpu::PC, kPsDot2 + 4);
 }
 void PsOnDot4(st::Machine& m) {
-  if (PsDotCaught(m)) return PsDot(m, 2, 2, 0xC6);
+  if (PsDotCaught(m)) return PsDot(m, 2, 2, 0xC6, Get16(m, kPsDotBehind) != 0);
   SetWord(cpu::D0, RegW(cpu::D0) & 0x1FE);
   cpu::Set(cpu::PC, kPsDot4 + 4);
+}
+// $442EA "andi.w #$1FE,d0; bra $44302".
+void PsOnDot4Any(st::Machine& m) {
+  if (PsDotCaught(m)) return PsDot(m, 2, 2, 0xC6, Get16(m, kPsDotBehind) != 0, true);
+  SetWord(cpu::D0, RegW(cpu::D0) & 0x1FE);
+  cpu::Set(cpu::PC, kPsDot4Any + 4);
 }
 
 // $15C72 "move.l #0,d1": the ship, at its exact heading.
@@ -996,11 +1013,14 @@ void PsInstallRemaster(st::Machine* m) {
       {kPsDot1, {0xB2, 0x79, 0x00, 0x04, 0x40, 0xB8}, PsOnDot1},      // cmp.w $440B8,d1
       {kPsDot2, {0x02, 0x40, 0x01, 0xFE}, PsOnDot2},                  // andi.w #$1FE,d0
       {kPsDot4, {0x02, 0x40, 0x01, 0xFE}, PsOnDot4},                  // andi.w #$1FE,d0
+      {kPsDot4Any, {0x02, 0x40, 0x01, 0xFE}, PsOnDot4Any},            // andi.w #$1FE,d0
       {kPsShipDraw, {0x22, 0x3C, 0x00, 0x00, 0x00, 0x00}, PsOnShip},  // move.l #0,d1
   };
+  if (g_ps_remaster_failed || Get16(*m, kPsDrawCall) == 0x4AFC) return;  // already in
   for (const H& h : kHooks)
     if (std::memcmp(m->Ram() + h.at, h.code.data(), h.code.size()) != 0) {
       LOG("photon storm: remaster hooks not installed ($%06X differs)", h.at);
+      g_ps_remaster_failed = true;
       return;
     }
   for (const H& h : kHooks) {
@@ -1068,12 +1088,14 @@ int PsCell(const st::Machine& m, int x, int y) {
 void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   const pad::State& p = pad::Now();
   PsInstallHooks(m);
+  // The remaster's hooks from the ARC logo on (the program has unpacked itself by then; the analog ones wait for play).
+  if (PsDrawsEveryVbl(Get16(*m, kPsState))) PsInstallRemaster(m);
   remaster::DrawQueued(m, "photon storm");
   g_ps_analog = settings::Get("ps_analog", 1) != 0;
   int state = Get16(*m, kPsState);
   uint8_t buttons = mbuttons;
   if (g_ps_50fps && Get16(*m, kPsDivisor) > 0) {
-    int want = state == kPsPlay ? 1 : 2;
+    int want = PsDrawsEveryVbl(state) ? 1 : 2;
     if (Get16(*m, kPsDivisor) != want) Put16(m, kPsDivisor, want);
   }
   if (state == kPsTitle && pad::Pressed(SDL_GAMEPAD_BUTTON_NORTH)) {  // Y at the title: 360 twin stick / original
@@ -1171,6 +1193,7 @@ void Start(Game g) {
   g_docs_frame = g_docs_repeat = 0;
   g_docs_keys.clear();
   g_hc_strobes_done = false;
+  g_ps_remaster_failed = false;
   g_fire_held = false;
   g_alt = -1;
   g_thrust_frac = 0;

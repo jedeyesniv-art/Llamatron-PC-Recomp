@@ -50,8 +50,11 @@ elease\Llamatron-<ver>-windows.zip (no game
 - Setting remaster (1), F8 in a game. Headless runs don't capture unless --remaster-capture. Tests:
   --mshot=N:<bmp> = the composed frame in software (whole pixels, snap, no rotation: compare with --shot of a run
   without capture, ps_analog=0), --remaster-alpha=F, log "remaster: N items a frame, % slid / jumped / new"
-  every 500 frames (~96% slid). Outside play (divisor 2) the skipped drawing shifts the main loop's VBL phase:
-  title / high score animations one VBL apart from the original (game logic unaffected).
+  every 500 frames (~96% slid). 2026-11-06: captured on the attract screens too (states 12 ARC logo, 7 title,
+  11 enemy guide, 8 high scores: PsDrawsEveryVbl), divisor 1 + x8 there (games.cpp play_more; their animation
+  is in the VBL), hooks from the ARC logo on; dot entry $442EA hooked; title stars behind the text ($441EA ->
+  Item::behind: Draw puts colour 0, those items, then the picture with colour 0 see-through). The original's
+  behind plotter rewrites whole background words, erasing other stars in the word (flicker): ours shows them all.
 - Gotcha: CLAUDE.md has raw CR characters inside lines (paths like Private\r...): edit it byte-safely (Python
   open(..., 'rb')), never through text mode.
 - Andes Attack remaster (2026-11-02): src/remaster_andes.cpp (sprite routine $21D6C, draw pass $18DD2..$18E78,
