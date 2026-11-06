@@ -56,6 +56,12 @@ Tool: `--survey=F:T:<file>` (each frame's picture + the code that wrote into a s
 --watch-step=1`, then `python -P Tools/survey.py <file> <log> <png folder>`: per state, new pictures a second and
 each change sorted as objects / scroll (band, dx, dy) / palette / redraw, top writers. Dumps ~700 MB a run.
 Runs were mostly without input, so options screens, name entry and high-score tables weren't all reached.
+- **Andes DONE 2026-11-06**: every pass built like play's is captured (title, "know thine enemies", high scores,
+  game over, the attract demo), ending at the show routine $15490 (remaster_andes.cpp header); the faster CPU now
+  covers states 5 and 4 too (games.cpp play_value2 / 3), so those screens draw 50 a second with or without the
+  remaster (the original: 21-30 in the busy title parts) and the VBL phase catch is gone: pixel-identical to the
+  original at x8 and x1 alike (the title is VBL-timed), game RAM identical but for the screens. Not yet seen:
+  pause, high score name entry. Same trick likely works for the others: x8 outside play removes the phase shift.
 - **Cheap: the screens draw through the core we already hook**; only the capture's state test needs widening (and
   the known catch: skipped drawing outside play shifts the main loop's VBL phase, title animations a VBL apart).
   Andes title / "know thine enemies" (state 5, core $21D6C, 50/s); Camels menus (hook $1084A, the letters

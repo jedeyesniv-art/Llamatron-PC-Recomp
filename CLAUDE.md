@@ -55,7 +55,8 @@ elease\Llamatron-<ver>-windows.zip (no game
 - Gotcha: CLAUDE.md has raw CR characters inside lines (paths like Private\r...): edit it byte-safely (Python
   open(..., 'rb')), never through text mode.
 - Andes Attack remaster (2026-11-02): src/remaster_andes.cpp (sprite routine $21D6C, draw pass $18DD2..$18E78,
-  world -> screen $1B50A for matching the landscape tiles). remaster.cpp matches items to the nearest one of
+  world -> screen $1B50A for matching the landscape tiles). 2026-11-06: captured on every screen (passes 0/2/4/5/6, end
+  at $15490) and x8 in states 5 / 4 too: title / high scores / game over 50 a second, pixel-identical. remaster.cpp matches items to the nearest one of
   the frame before within a key group (Item::world: in world coordinates). Owner on PS: run-ahead 2 is the
   sweet spot, 3 "indefinably odd". Pixel checks need --remaster-ahead=0.
 - Llamatron remaster (2026-11-02): src/remaster_llama.cpp (sprite routine $5E8A, frame $5C10 / $5C12; text

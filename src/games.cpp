@@ -182,7 +182,8 @@ std::vector<Known> KnownGames() {
                            {"friendly", "FRIENDLY SPRITES", {"OFF", "ON"}}};
   wip("andes", "ANDES ATTACK", "ANDES.BOY", "ANDES ATTACK  -  JEFF MINTER",
       "Save the llamas from the invaders.", {0.42f, 0.16f, 0.52f, 1}, {0.95f, 0.85f, 0.20f, 1});
-  k.back().game.play_at = 0x12EEE, k.back().game.play_value = 1, k.back().game.play_word = true;  // state: 1 play
+  k.back().game.play_at = 0x12EEE, k.back().game.play_value = 1, k.back().game.play_word = true;  // states: 1 play,
+  k.back().game.play_value2 = 5, k.back().game.play_value3 = 4;  // 5 title / enemies / high scores, 4 game over
   k.back().game.mode = input::Mode::kAndes;
   k.back().game.help = {"ANDES ATTACK  -  JEFF MINTER, 1988", "",
                         "Save the llamas from the Zzyaxian landers.", "",

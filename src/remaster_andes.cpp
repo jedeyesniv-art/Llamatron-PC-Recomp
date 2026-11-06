@@ -15,6 +15,12 @@
 //     the list entry and calls the sprite routine (return $1B556; the caller of $1B50A at sp + 44 there).
 //   $195C0..$195EC: a HUD sprite drawn into both screens and the background ($22AE4): left alone.
 // Not captured: the scanner (dots in the band at the top) and the HUD.
+//
+// Outside play (2026-11-06): the other passes of the table built the same way are hooked too - each starts
+// "movea.l $2B3F2,a1; move.w #0,$22AE8" and draws through the sprite routine: 2 $18F66, 4 $1907E, 5 $191B4 (game
+// over, state 4), 6 $19322 (state 5: the title, "know thine enemies", the high score table). A pass ends where it
+// shows its screen: $15490 (d0 = the screen), which the other passes (7 $10132, the state 2 change-over) call
+// too - a screen shown without one of our passes before it stops the capture.
 #include "remaster_andes.h"
 
 #include <algorithm>
@@ -29,7 +35,9 @@ namespace {
 
 constexpr uint32_t kState = 0x12EEE;
 constexpr int kPlay = 1, kPaused = 3;
-constexpr uint32_t kBegin = 0x18DD2, kEnd = 0x18E78, kScreen = 0x2B3F2;
+constexpr uint32_t kBegins[] = {0x18DD2, 0x18F6C, 0x19084, 0x191BA, 0x19328};  // passes 0, 2, 4, 5, 6
+constexpr uint32_t kShow = 0x15490, kScreen = 0x2B3F2, kPass = 0x202BA;
+constexpr int kTitle = 5;
 constexpr uint32_t kSprite = 0x21D6C, kSpriteGo = 0x21D72, kSpriteTable = 0x21D5C;
 constexpr uint32_t kMode = 0x22AE8;
 constexpr uint32_t kClipLeft = 0x202BC, kClipRight = 0x202BE, kClipTop = 0x202C0, kClipBottom = 0x202C2;
@@ -39,6 +47,7 @@ constexpr int kWorldWidth = 0x800;
 
 bool g_installed = false;
 bool g_capture = false;  // this frame's drawing goes to remaster
+bool g_began = false;    // one of our passes began since the last screen shown
 uint32_t g_screen = 0;
 uint32_t g_world_sp = 0;  // the last world -> screen call (its stack slot)
 int g_world_x = 0, g_world_y = 0;
@@ -52,25 +61,31 @@ void Put16(st::Machine* m, uint32_t a, int v) { m->Ram()[a] = uint8_t(v >> 8), m
 uint32_t Reg(int r) { return cpu::Get(cpu::Reg(r)); }
 int RegW(int r) { return int16_t(Reg(r)); }
 
-// $18DD2 "move.w #0,$22AE8": play's draw pass starts.
-void OnBegin(st::Machine& m) {
+// "move.w #0,$22AE8" in one of the passes (kBegins): a draw pass starts.
+void OnBegin(st::Machine& m, uint32_t at) {
   if (!remaster::Decoding(m)) {
     int state = Get16(m, kState);
-    g_capture = remaster::Enabled() && state == kPlay;
+    g_capture = remaster::Enabled() && state != kPaused;
     g_screen = Get32(m, kScreen) & 0xFFFFFF;
+    g_began = true;
     if (g_capture) remaster::BeginFrame(g_screen);
     else if (state == kPaused && remaster::Enabled()) remaster::Hold();
     else remaster::Stop();
   }
   Put16(&m, kMode, 0);
-  cpu::Set(cpu::PC, kBegin + 8);
+  cpu::Set(cpu::PC, at + 8);
 }
 
-// $18E78 "movea.l $2B3F2,a1" (the screen is shown next): the pass is complete.
-void OnEnd(st::Machine& m) {
-  if (!remaster::Decoding(m) && g_capture) remaster::EndFrame(g_screen);
-  cpu::Set(cpu::Reg(cpu::A0 + 1), Get32(m, kScreen));
-  cpu::Set(cpu::PC, kEnd + 6);
+// $15490 "lsr.l #8,d0" (d0 = the screen to show): the pass drawing it is complete.
+void OnShow(st::Machine& m) {
+  uint32_t d0 = Reg(cpu::D0);
+  if (!remaster::Decoding(m) && g_capture) {
+    if (g_began && (d0 & 0xFFFFFF) == g_screen) remaster::EndFrame(g_screen);
+    else g_capture = false, remaster::Stop();  // a pass we don't capture
+  }
+  g_began = false;
+  cpu::Set(cpu::D0, d0 >> 8);
+  cpu::Set(cpu::PC, kShow + 2);
 }
 
 // $1B50A "sub.w d7,d1": the object's world position.
@@ -130,34 +145,44 @@ void Install(st::Machine* m) {
     void (*fn)(st::Machine&);
   };
   static const H kHooks[] = {
-      {kBegin, {0x33, 0xFC, 0x00, 0x00, 0x00, 0x02, 0x2A, 0xE8}, OnBegin},  // move.w #0,$22AE8
-      {kEnd, {0x22, 0x79, 0x00, 0x02, 0xB3, 0xF2}, OnEnd},                  // movea.l $2B3F2,a1
-      {kWorld, {0x92, 0x47}, OnWorld},                                      // sub.w d7,d1
-      {kSprite, {0x24, 0x7C, 0x00, 0x02, 0x1D, 0x5C}, OnSprite},            // movea.l #$21D5C,a2
+      {kShow, {0xE0, 0x88}, OnShow},                              // lsr.l #8,d0
+      {kWorld, {0x92, 0x47}, OnWorld},                            // sub.w d7,d1
+      {kSprite, {0x24, 0x7C, 0x00, 0x02, 0x1D, 0x5C}, OnSprite},  // movea.l #$21D5C,a2
   };
+  static const uint8_t kBeginCode[] = {0x33, 0xFC, 0x00, 0x00, 0x00, 0x02, 0x2A, 0xE8};  // move.w #0,$22AE8
   for (const H& h : kHooks)
     if (std::memcmp(m->Ram() + h.at, h.code.data(), h.code.size()) != 0) {
       LOG("andes attack: remaster hooks not installed ($%06X differs)", h.at);
       g_installed = true;  // don't try again
       return;
     }
+  for (uint32_t at : kBegins)
+    if (std::memcmp(m->Ram() + at, kBeginCode, sizeof kBeginCode) != 0) {
+      LOG("andes attack: remaster hooks not installed ($%06X differs)", at);
+      g_installed = true;
+      return;
+    }
   for (const H& h : kHooks) {
     Put16(m, h.at, 0x4AFC);
     m->AddHook(h.at, [fn = h.fn](st::Machine& running) { fn(running); });
+  }
+  for (uint32_t at : kBegins) {
+    Put16(m, at, 0x4AFC);
+    m->AddHook(at, [at](st::Machine& running) { OnBegin(running, at); });
   }
   g_installed = true;
   g_capture = false;
   remaster::Stop();
   struct Saved {
-    bool capture;
+    bool capture, began;
     uint32_t screen, world_sp;
     int world_x, world_y;
   };
   static Saved saved;
   remaster::SetAheadState(
-      [] { saved = {g_capture, g_screen, g_world_sp, g_world_x, g_world_y}; },
+      [] { saved = {g_capture, g_began, g_screen, g_world_sp, g_world_x, g_world_y}; },
       [] {
-        g_capture = saved.capture, g_screen = saved.screen, g_world_sp = saved.world_sp;
+        g_capture = saved.capture, g_began = saved.began, g_screen = saved.screen, g_world_sp = saved.world_sp;
         g_world_x = saved.world_x, g_world_y = saved.world_y;
       });
   LOG("andes attack: remaster hooks installed");
@@ -166,19 +191,20 @@ void Install(st::Machine* m) {
 }  // namespace
 
 void Start() {
-  g_installed = g_capture = false;
+  g_installed = g_capture = g_began = false;
   g_world_sp = 0;
 }
 
 void Update(st::Machine* m) {
   int state = Get16(*m, kState);
-  // From play on (the program is in place by then).
-  if (!g_installed && state == kPlay) Install(m);
+  // From the title or play on (the program is in place by then).
+  if (!g_installed && (state == kPlay || state == kTitle)) Install(m);
   if (!g_installed) return;
   remaster::DrawQueued(m, "andes attack");
   if (state == kPaused && remaster::Enabled()) remaster::Hold();
-  // Left play some other way than through the draw pass (game over, the high score table): the ST picture.
-  if (g_capture && state != kPlay && state != kPaused) g_capture = false, remaster::Stop();
+  // A pass we don't capture that shows its screen some other way than $15490: the ST picture.
+  int pass = Get16(*m, kPass);
+  if (g_capture && pass != 0 && pass != 2 && pass != 4 && pass != 5 && pass != 6) g_capture = false, remaster::Stop();
 }
 
 }  // namespace remaster_andes
