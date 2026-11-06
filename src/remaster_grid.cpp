@@ -12,6 +12,10 @@
 //     code at sp + 18). Snakes: $1655E walks a chain and draws each segment through $4BBFE (a3 = the segment;
 //     gridrunner.cpp's entry-lane hook may skip it first).
 // Restoring something we didn't draw copies background over background: harmless.
+// The wave intro (state 3; 2026-11-06) draws the same way: its pass $18B54 (draw table $12616 entry 3) starts with
+// the same instruction at $18B5A and ends with the same one at $18B92. So does the frame routine $4CE2A ($4CE30 /
+// $4CE4A; the drawing is the callback *$4CE04) that game over's own loop calls (state 8: the rising letters; other
+// screens call it too, but they aren't captured: grid::DrawsEveryVbl).
 #include "remaster_grid.h"
 
 #include <cstring>
@@ -25,7 +29,8 @@
 namespace remaster_grid {
 namespace {
 
-constexpr uint32_t kBegin = 0x144DA, kEnd = 0x145E2, kScreen = 0x54DC2, kShow = 0x4D2E8;
+constexpr uint32_t kBegins[] = {0x144DA, 0x18B5A, 0x4CE30}, kEnds[] = {0x145E2, 0x18B92, 0x4CE4A};  // play, intro, $4CE2A
+constexpr uint32_t kScreen = 0x54DC2, kShow = 0x4D2E8;
 constexpr uint32_t kCore = 0x4BCE4, kCoreGo = 0x4BCEA, kCoreTable = 0x4BCD0;
 constexpr uint32_t kMode = 0x4D046, kAllScreens = 0x4CF30;
 constexpr uint32_t kColour = 0x58054;  // the colour some sprite types draw in (the type-4 handler at $4C206; < 0: their own)
@@ -52,11 +57,13 @@ int RegW(int r) { return int16_t(Reg(r)); }
 // The pause screen (12) is a picture of its own.
 bool Frozen(int state) { return state == 2 || state == grid::kPausing; }
 
-// $144DA "move.w #0,$4D046": play's draw pass starts.
-void OnBegin(st::Machine& m) {
+bool Captured(int state) { return grid::DrawsEveryVbl(state); }
+
+// kBegins "move.w #0,$4D046": a draw pass starts.
+void OnBegin(st::Machine& m, uint32_t at) {
   if (!remaster::Decoding(m)) {
     int state = grid::GameState(m);
-    g_capture = remaster::Enabled() && state == grid::kPlay;
+    g_capture = remaster::Enabled() && Captured(state);
     g_screen = Get32(m, kScreen) & 0xFFFFFF;
     g_in_pass = g_capture;
     if (g_capture) remaster::BeginFrame(g_screen);
@@ -64,15 +71,15 @@ void OnBegin(st::Machine& m) {
     else remaster::Stop();
   }
   Put16(&m, kMode, 0);
-  cpu::Set(cpu::PC, kBegin + 8);
+  cpu::Set(cpu::PC, at + 8);
 }
 
-// $145E2 "move.l $54DC2,$4D2E8" (the screen is to be shown): the pass is complete.
-void OnEnd(st::Machine& m) {
+// kEnds "move.l $54DC2,$4D2E8" (the screen is to be shown): the pass is complete.
+void OnEnd(st::Machine& m, uint32_t at) {
   if (!remaster::Decoding(m) && g_capture) remaster::EndFrame(g_screen);
   if (!remaster::Decoding(m)) g_in_pass = false;
   Put32(&m, kShow, Get32(m, kScreen));
-  cpu::Set(cpu::PC, kEnd + 10);
+  cpu::Set(cpu::PC, at + 10);
 }
 
 // $4BCE4 "movea.l #$4BCD0,a2".
@@ -126,19 +133,33 @@ void Install(st::Machine* m) {
     void (*fn)(st::Machine&);
   };
   static const H kHooks[] = {
-      {kBegin, {0x33, 0xFC, 0x00, 0x00, 0x00, 0x04, 0xD0, 0x46}, OnBegin},                // move.w #0,$4D046
-      {kEnd, {0x23, 0xF9, 0x00, 0x05, 0x4D, 0xC2, 0x00, 0x04, 0xD2, 0xE8}, OnEnd},        // move.l $54DC2,$4D2E8
-      {kCore, {0x24, 0x7C, 0x00, 0x04, 0xBC, 0xD0}, OnCore},                              // movea.l #$4BCD0,a2
+      {kCore, {0x24, 0x7C, 0x00, 0x04, 0xBC, 0xD0}, OnCore},  // movea.l #$4BCD0,a2
   };
+  static const std::vector<uint8_t> kBeginCode = {0x33, 0xFC, 0x00, 0x00, 0x00, 0x04, 0xD0, 0x46};  // move.w #0,$4D046
+  static const std::vector<uint8_t> kEndCode = {0x23, 0xF9, 0x00, 0x05, 0x4D, 0xC2, 0x00, 0x04, 0xD2, 0xE8};  // move.l $54DC2,$4D2E8
   g_installed = true;
+  auto differs = [m](uint32_t at, const std::vector<uint8_t>& code) {
+    if (std::memcmp(m->Ram() + at, code.data(), code.size()) == 0) return false;
+    LOG("gridrunner: remaster hooks not installed ($%06X differs)", at);
+    return true;
+  };
   for (const H& h : kHooks)
-    if (std::memcmp(m->Ram() + h.at, h.code.data(), h.code.size()) != 0) {
-      LOG("gridrunner: remaster hooks not installed ($%06X differs)", h.at);
-      return;
-    }
+    if (differs(h.at, h.code)) return;
+  for (uint32_t at : kBegins)
+    if (differs(at, kBeginCode)) return;
+  for (uint32_t at : kEnds)
+    if (differs(at, kEndCode)) return;
   for (const H& h : kHooks) {
     Put16(m, h.at, 0x4AFC);
     m->AddHook(h.at, [fn = h.fn](st::Machine& running) { fn(running); });
+  }
+  for (uint32_t at : kBegins) {
+    Put16(m, at, 0x4AFC);
+    m->AddHook(at, [at](st::Machine& running) { OnBegin(running, at); });
+  }
+  for (uint32_t at : kEnds) {
+    Put16(m, at, 0x4AFC);
+    m->AddHook(at, [at](st::Machine& running) { OnEnd(running, at); });
   }
   g_capture = false;
   remaster::Stop();
@@ -158,13 +179,13 @@ void Start() { g_installed = g_capture = g_in_pass = false; }
 
 void Update(st::Machine* m) {
   int state = grid::GameState(*m);
-  // From play on (game memory holds the packed program until the title has been seen).
-  if (!g_installed && state == grid::kPlay) Install(m);
+  // From the title on (game memory holds the packed program until the title has been seen).
+  if (!g_installed && (state == grid::kTitle || Captured(state))) Install(m);
   if (!g_installed) return;
   remaster::DrawQueued(m, "gridrunner");
   if (Frozen(state) && remaster::Enabled()) remaster::Hold();
   // Left play some other way than through the draw pass: the ST picture.
-  else if (g_capture && state != grid::kPlay) g_capture = false, remaster::Stop();
+  else if (g_capture && !Captured(state)) g_capture = false, remaster::Stop();
 }
 
 }  // namespace remaster_grid

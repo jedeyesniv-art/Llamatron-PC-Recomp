@@ -67,7 +67,12 @@ elease\Llamatron-<ver>-windows.zip (no game
   windows before the first death or wave change (REMASTER.md "Verification").
 - Gridrunner remaster (2026-11-02): src/remaster_grid.cpp (core $4BCE4, pass $144DA..$145E2). Items now take
   each line's palette (Machine::LinePalettes: rasters), all games.
-  Its image id includes the colour word $58054 (level 4's text came out dark: the owner's report). Next session:
+  Its image id includes the colour word $58054 (level 4's text came out dark: the owner's report).
+  2026-11-06: also the wave intro (state 3, pass $18B5A..$18B92: the flying letters; its star burst is a palette
+  cycle) and game over (8, frame routine $4CE30..$4CE4A); grid::DrawsEveryVbl = play / intro / game over at
+  divisor 1, grid::FastCpu = play / intro (game over's click wait is a CPU loop). Not the title and menus (their
+  timeout counts drawn frames) nor the ship-lost screen (4: a raster cycle). Intro ~0.4 s shorter (its end waits
+  for the letters, which line up with drawn frames); pixel-identical with capture. Next session:
   REMASTER.md "Where we are" (all ports done; its "Polish to-do" list is the plan; no push until the owner says).
 - Camels remaster (2026-11-03): src/remaster_rmc.cpp, STE + TT builds (TT addresses via Tools/mapaddr.py; the 512K
   build not covered). Captures sprites, stars, falling blocks, ground stripes, buildings, the level message;

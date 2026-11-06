@@ -56,6 +56,10 @@ Tool: `--survey=F:T:<file>` (each frame's picture + the code that wrote into a s
 --watch-step=1`, then `python -P Tools/survey.py <file> <log> <png folder>`: per state, new pictures a second and
 each change sorted as objects / scroll (band, dx, dy) / palette / redraw, top writers. Dumps ~700 MB a run.
 Runs were mostly without input, so options screens, name entry and high-score tables weren't all reached.
+- **Gridrunner DONE 2026-11-06** (as far as it goes): the wave intro's letters and game over's letters captured at 50
+  a second (`grid::DrawsEveryVbl`). The title and its menus stay: the title's timeout counts drawn frames (at 50 a
+  second it left for the attract screens 5x sooner), and they only draw the mouse pointer through the main loop.
+  The intro's star burst and the ship-lost screen are palette / raster cycles (nothing to slide).
 - **Photon Storm DONE 2026-11-06**: states 12 / 7 / 11 / 8 captured, drawn every VBL (divisor 1) on the faster
   CPU; pixel-identical but for behind-the-text stars (`Item::behind`, new: drawn under the ST picture's
   non-zero pixels) that the original erases when two share a 16-px word. Change-overs (state 2) stay the ST picture.

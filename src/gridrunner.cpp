@@ -327,6 +327,8 @@ void Ease(float* vx, float* vy) {
 }  // namespace
 
 int GameState(st::Machine& m) { return Get16(m, kStateVar); }
+bool DrawsEveryVbl(int state) { return state == kPlay || state == kIntro || state == kGameOver; }
+bool FastCpu(int state) { return state == kPlay || state == kIntro; }
 
 void LoadSettings() {
   g_tune.speed = settings::Get("grid_stick_speed", 6.5);
@@ -387,7 +389,7 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
   if (g_running && !g_hooked) InstallHooks(m);
   ++g_frame;
   if (g_running && g_hide_entry_lane && GameState(*m) == kPlay && g_frame % kPredictEvery == 0) Predict(m);
-  if (g_running) Put16(*m, kFramesPerDraw, g_tune.draw_50 && GameState(*m) == kPlay ? 1 : 2);
+  if (g_running) Put16(*m, kFramesPerDraw, g_tune.draw_50 && DrawsEveryVbl(GameState(*m)) ? 1 : 2);
   uint8_t buttons = mouse_buttons;
   bool test = g_test;
   g_test = false;

@@ -32,9 +32,16 @@ namespace grid {
 
 // Game states ($4B632, dispatched from the VBL through the table at $12636).
 enum State {
-  kPlay = 1, kIntro = 3, kTitle = 5, kLevelSelect = 6, kNameEntry = 9, kOptions = 10, kPausing = 11, kPause = 12
+  kPlay = 1, kIntro = 3, kTitle = 5, kLevelSelect = 6, kSecrets = 7, kGameOver = 8, kNameEntry = 9, kOptions = 10,
+  kPausing = 11, kPause = 12
 };
 int GameState(st::Machine& m);
+// The states drawn every VBL (grid_50fps; the remaster captures them), their animation being in the VBL: play, the
+// wave intro, game over. Not the title: its timeout counts drawn frames (at 50 a second it goes to the attract
+// screens 5x sooner).
+bool DrawsEveryVbl(int state);
+// The states on the faster CPU: play and the wave intro (game over waits for a click in a CPU-timed loop).
+bool FastCpu(int state);
 
 // Rereads the grid_* settings (on start and when settings.txt changes).
 void LoadSettings();

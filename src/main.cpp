@@ -825,7 +825,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       // The faster CPU only while playing: the drawing keeps up with the sprites (the game logic is in the 50 Hz
       // VBL either way); other screens are timed by CPU speed and keep the original.
       bool playing = llamatron    ? game::Playing(machine)
-                     : gridrunner ? grid::GameState(machine) == grid::kPlay
+                     : gridrunner ? grid::FastCpu(grid::GameState(machine))
                      : c.game && c.game->play_at ? PlayRule(machine, *c.game)
                                                  : false;
       const bool forced = opt.cpu_all && frame >= opt.cpu_all_from;
