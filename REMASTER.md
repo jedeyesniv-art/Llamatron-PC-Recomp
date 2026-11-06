@@ -56,6 +56,10 @@ Tool: `--survey=F:T:<file>` (each frame's picture + the code that wrote into a s
 --watch-step=1`, then `python -P Tools/survey.py <file> <log> <png folder>`: per state, new pictures a second and
 each change sorted as objects / scroll (band, dx, dy) / palette / redraw, top writers. Dumps ~700 MB a run.
 Runs were mostly without input, so options screens, name entry and high-score tables weren't all reached.
+- **Hardcore: not done** (2026-11-06; owner unconvinced it needs it). Tried: its level intro (hook $145D0, draw
+  $145C6, already 50 a second) as kHc's menu1 in remaster_rmc.cpp. Pixel check: a can flying into place vanished
+  on every other frame with capture on (in neither the list nor the ST picture) - another draw path to find.
+  Reverted. The title is a still picture with a colour effect.
 - **Defender 2 DONE 2026-11-06**: title (preview boxes), player select, high scores at 60 a second on the faster
   CPU, captured; pixel-identical. Left: the version screen and the logo (its lightning is pass-timed); the high
   scores' pillars are inline copies (would need the scroll-band piece).
