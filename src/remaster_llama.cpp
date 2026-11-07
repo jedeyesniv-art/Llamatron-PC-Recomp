@@ -37,6 +37,9 @@ constexpr uint32_t kDrawCall = 0x5C10, kDrawDone = 0x5C12, kScreen = 0x52FB4, kD
 constexpr uint32_t kSprite = 0x5E8A, kPlain = 0x5E90, kShaped = 0x5FC4;
 constexpr uint32_t kVblHook = 0x52FC2, kNoHandler = 0x5664;
 constexpr uint32_t kTitleHook = 0x551C, kTitleDraw = 0x5668, kOverHook = 0xC94, kOverDraw = 0xD5A;
+// The wave change's zoom ($AEC, VBL handler $5CC0 meanwhile): rectangles of 2 x 2 dots, each through $5B08
+// ("movem.w d0-d6,-(a7)"; then $59FA: the dot at d0 / d1, colour d2, in the screen a1 - the one shown).
+constexpr uint32_t kZoomVbl = 0x5CC0, kZoomDot = 0x5B08;
 constexpr uint32_t kWrapper = 0x58AA, kMarkFrom = 0x5870, kMarkTo = 0x58A2, kShotsCaller = 0x1D02;
 
 bool g_installed = false;
@@ -150,6 +153,24 @@ void OnSprite(st::Machine& m) {
   remaster::Return(m);  // not drawn
 }
 
+// A zoom dot: each of its 4 pixels handed to remaster::Reveal (colour before, when in the frame), then the original
+// instruction (the game draws it as always).
+void OnZoomDot(st::Machine& m) {
+  uint32_t sp = (Reg(cpu::A7) - 14) & 0xFFFFFF;
+  if (!m.sandbox && Get32(m, kVblHook + g_text) == g_text + kZoomVbl) {
+    int x = int16_t(Reg(cpu::D0)), y = int16_t(Reg(cpu::D0 + 1));
+    uint32_t screen = Reg(cpu::A0 + 1) & 0xFFFFFF;
+    float at = float(m.FramePhase());
+    if (x >= 0 && x < 320 && y >= 0 && y < 200)
+      for (int dy = 0; dy < 2; ++dy)
+        for (int dx = 0; dx < 2; ++dx) remaster::Reveal(x + dx, y + dy, remaster::IndexAt(m, screen, x + dx, y + dy), at);
+  }
+  for (int r = 0; r < 7; ++r) Put16(&m, sp + uint32_t(r) * 2, int(Reg(cpu::D0 + r) & 0xFFFF));  // movem.w d0-d6,-(a7)
+  cpu::Set(cpu::A7, sp);
+  cpu::Set(cpu::PC, g_text + kZoomDot + 4);
+  cpu::UseCycles(32);  // movem.w of 7 registers: 36 cycles, the hook's ILLEGAL 4 of them (the zoom is CPU-timed)
+}
+
 void Install(st::Machine* m) {
   const uint32_t t = m->TextBase();
   struct H {
@@ -161,6 +182,7 @@ void Install(st::Machine* m) {
       {kDrawCall, {0x4E, 0x93}, OnDrawCall},             // jsr (a3)
       {kDrawDone, {0x34, 0xBC, 0xFE, 0x0C}, OnDrawDone},  // move.w #$FE0C,(a2)
       {kSprite, {0x4A, 0x42, 0x6A, 0x00}, OnSprite},     // tst.w d2; bpl.w
+      {kZoomDot, {0x48, 0xA7, 0xFE, 0x00}, OnZoomDot},   // movem.w d0-d6,-(a7)
   };
   g_installed = true;
   for (const H& h : hooks)

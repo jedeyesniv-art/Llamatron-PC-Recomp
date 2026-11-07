@@ -33,6 +33,12 @@ struct Capture {
   uint32_t redrawn = 1;  // a screen whose pass completed since the last frame shown (1: none; screens are even)
 };
 Capture g_real, g_fork;
+struct RevealPixel {
+  int16_t x, y;
+  uint8_t old;
+  float at;
+};
+std::vector<RevealPixel> g_reveal, g_reveal_pending;  // Reveal: the frame shown's / the frame being run's
 Capture* g_cap = &g_real;
 std::vector<Item> g_prev, g_cur;  // the previous frame shown and this one
 std::vector<std::pair<uint64_t, SandboxCall>> g_queue;  // sprite images to draw in the sandbox
@@ -517,7 +523,13 @@ void Return(st::Machine& m) {
   cpu::Set(cpu::A7, sp + 4);
 }
 
+void Reveal(int x, int y, int old_colour, float at) {
+  if (x >= 0 && x < 320 && y >= 0 && y < 200) g_reveal_pending.push_back({int16_t(x), int16_t(y), uint8_t(old_colour & 15), at});
+}
+
 void FrameShown(uint32_t screen) {
+  g_reveal = std::move(g_reveal_pending);  // this frame's (none: an empty list)
+  g_reveal_pending.clear();
   ++g_shown;
   const uint32_t redrawn = g_real.redrawn;
   g_real.redrawn = 1;
@@ -586,7 +598,7 @@ void FrameShown(uint32_t screen) {
   }
 }
 
-bool Active() { return Enabled() && g_real.capturing && g_have; }
+bool Active() { return Enabled() && ((g_real.capturing && g_have) || !g_reveal.empty()); }
 
 void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float alpha,
           const uint16_t* line_palettes, bool ste_colours, const uint32_t* st_pixels) {
@@ -611,8 +623,9 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
   SDL_SetRenderTarget(r, g_target);
   SDL_SetRenderLogicalPresentation(r, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
   SDL_FRect full{0, 0, float(W), float(H)};
+  const bool items = g_real.capturing && g_have;  // (else only the reveal layer: the items are stale)
   bool any_behind = false;
-  if (st_pixels)
+  if (st_pixels && items)
     for (const Item& it : g_cur) any_behind |= it.behind;
   if (!any_behind) {
     SDL_RenderTexture(r, st_texture, nullptr, &full);
@@ -696,9 +709,19 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
       SDL_RenderTexture(r, st_texture, nullptr, &full);  // no texture: the picture over them, as it is
     }
   }
-  for (int i = 0; i < int(g_cur.size()); ++i)
-    if (!any_behind || !g_cur[i].behind) draw_item(i);
+  if (items)
+    for (int i = 0; i < int(g_cur.size()); ++i)
+      if (!any_behind || !g_cur[i].behind) draw_item(i);
   SDL_SetRenderClipRect(r, nullptr);
+  // Reveal: what was drawn after this moment of the frame, undone (the latest first: each pixel ends up as it was
+  // before the first of its draws still to come).
+  for (auto p = g_reveal.rbegin(); p != g_reveal.rend(); ++p) {
+    if (p->at <= alpha) continue;
+    uint32_t c = lines.At(p->y)[p->old];
+    SDL_SetRenderDrawColor(r, uint8_t(c >> 16), uint8_t(c >> 8), uint8_t(c), 255);
+    SDL_FRect d{float(p->x * kScale), float(p->y * kScale), float(kScale), float(kScale)};
+    SDL_RenderFillRect(r, &d);
+  }
   SDL_SetRenderTarget(r, nullptr);
   SDL_SetRenderLogicalPresentation(r, lw, lh, mode);
   SDL_SetTextureScaleMode(g_target, crt::Enabled() ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_PIXELART);

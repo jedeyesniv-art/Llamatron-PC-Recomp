@@ -64,6 +64,8 @@ class Machine {
   const uint16_t* LinePalettes() const { return line_palette_.data(); }
   bool Is60Hz() const { return !(sync_ & 2); }
   double FrameHz() const;
+  // How far the CPU is into the current frame (0 at the VBL .. 1 at the next), for things drawn as fast as it goes.
+  double FramePhase() const;
 
   // Audio produced so far (mono float at the rate given); the caller drains it.
   void SetSampleRate(int rate) { ym_.SetSampleRate(rate), sample_rate_ = rate; }

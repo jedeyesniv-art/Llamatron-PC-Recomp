@@ -17,6 +17,8 @@ void Init(st::Machine* machine);
 int Execute(int cycles);  // runs at least `cycles` (unless ended early); returns cycles run
 int CyclesRun();          // cycles run so far in the current Execute (0 outside)
 void EndSlice();          // makes the current Execute return after this instruction
+// Inside a code hook: CPU time for the instruction it replaced (beyond the hook's own), so CPU-timed code keeps its pace.
+void UseCycles(int cycles);
 void SetIrq(int level);
 uint32_t Get(Reg r);
 void Set(Reg r, uint32_t v);

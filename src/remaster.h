@@ -96,6 +96,11 @@ const Image* FindImage(uint64_t id);  // nullptr: not decoded (yet)
 // as ComposeSoftware), else what the game drew into the screen itself. For pixels the game ORs into planes.
 int IndexAt(const st::Machine& m, uint32_t screen, int x, int y);
 void SetImage(uint64_t id, Image image);
+// Pixels a game draws straight into the screen shown, as fast as the CPU goes (Llamatron's wave change zoom):
+// each one's colour before it was drawn and when in the frame (0..1, Machine::FramePhase). Between two frames
+// the picture then shows only what had been drawn by that moment (the old colours of the rest painted back),
+// so the effect builds up smoothly at the display's rate. Real machine only (not a sandbox or run-ahead copy).
+void Reveal(int x, int y, int old_colour, float at);
 // Not capturing (another screen than play): the next frames are shown as the ST drew them.
 void Stop();
 // Not capturing, but the game keeps its last picture (paused): the last frame's items stay, still.

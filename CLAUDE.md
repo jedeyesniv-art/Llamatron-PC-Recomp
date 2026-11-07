@@ -69,8 +69,10 @@ elease\Llamatron-<ver>-windows.zip (no game
   windows before the first death or wave change (REMASTER.md "Verification").
   2026-11-06: also the title (hook $551C, draw $5668: the parade, the sheep; on the faster CPU too, main.cpp
   game::AtTitle - VBL-timed, at x1 a busy pass took 3 VBLs) and the continue screen (hook $C94, draw $D5A: the
-  last play pass's items added under it each frame - the game leaves that picture in the screens). Not the wave
-  change zoom ($AEC: boxes into the shown screen at CPU speed), version screen / scroller ($CEC, CPU-timed).
+  last play pass's items added under it each frame - the game leaves that picture in the screens). The wave change zoom ($AEC, 2026-11-07):
+  its dots ($5B08 hook) go to remaster::Reveal (old colour, Machine::FramePhase): between frames the picture shows
+  only what was drawn by then, so it builds up at the display's rate (game unchanged; cpu::UseCycles keeps the
+  replaced movem's 36 cycles: 134 frames as before). Not the version screen / scroller ($CEC, CPU-timed).
   remaster.cpp, run-ahead 0: each screen's last complete pass (Capture::done), not the one being built.
 - Gridrunner remaster (2026-11-02): src/remaster_grid.cpp (core $4BCE4, pass $144DA..$145E2). Items now take
   each line's palette (Machine::LinePalettes: rasters), all games.

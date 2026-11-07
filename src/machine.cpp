@@ -309,6 +309,10 @@ bool Machine::EndProcess(uint32_t code) {
 // ST time: the CPU runs speed_ cycles per ST cycle; cpu_rem_ carries the remainder between slices.
 uint64_t Machine::Now() const { return cycles_done_ + uint64_t(cpu::CyclesRun() + cpu_rem_) / uint64_t(speed_); }
 
+double Machine::FramePhase() const {
+  double f = double(Now() - frame_start_) / (Is60Hz() ? 133604.0 : 160256.0);
+  return f < 0 ? 0 : f > 1 ? 1 : f;
+}
 double Machine::FrameHz() const { return Is60Hz() ? kCpuHz / 133604.0 : kCpuHz / 160256.0; }
 
 bool Machine::RunFrame() {

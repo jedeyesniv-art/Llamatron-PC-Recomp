@@ -4,6 +4,7 @@
 #include "machine.h"
 
 extern "C" {
+extern int m68ki_remaining_cycles;  // m68kcpu.c: the current Execute's clocks left (UseCycles)
 #include "m68k.h"
 }
 
@@ -63,6 +64,10 @@ int Execute(int cycles) {
 }
 
 int CyclesRun() { return g_in_execute ? m68k_cycles_run() : 0; }
+
+void UseCycles(int cycles) {
+  if (g_in_execute) m68ki_remaining_cycles -= cycles;
+}
 
 std::vector<uint8_t> SaveContext() {
   std::vector<uint8_t> c(m68k_context_size());
