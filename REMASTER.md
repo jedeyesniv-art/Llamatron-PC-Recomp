@@ -33,9 +33,8 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
    frame of busy stretches (Photon Storm 1700-1850, Andes 600-750), game RAM as before. The stats line counts
    "images first met in play". Catch: an OR-ing plotter (remaster::IndexAt) over a sprite on its first frame sees
    the screen without it (one frame, a pixel or two; none seen).
-4. **Smooth screens outside play**: titles, attract demos, level intros, high-score tables and Defender 2's menus
-   still step at 50 / 60 Hz (capture is play only). Worth it first: the Camels' and Hardcore's level intros, title
-   scrollers.
+4. **Smooth screens outside play: DONE** (2026-11-06 / 07): every game but Hardcore, whose intro stays as it is
+   (owner); see "Outside play" below.
 5. **Run-ahead outside the remaster: NOT NEEDED** (owner 2026-11-07): Trip-A-Tron, the docs readers and user disks
    stay without it.
 6. **Small known glitches**: Photon Storm's pause DONE 2026-11-07 (the held play items are gone; its fountain of
