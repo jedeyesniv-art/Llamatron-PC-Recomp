@@ -59,9 +59,9 @@ elease\Llamatron-<ver>-windows.zip (no game
   behind plotter rewrites whole background words, erasing other stars in the word (flicker): ours shows them all.
   Bonus stage (2026-11-07, owner): state 3 (the quasi-3D tunnel of particles; entered at $18022 when the warp
   $1B102 is open and the ship reaches the world's middle $1D134/$1D136 = $800; VBL handler $1BA22, frame routine
-  $1C060) and 5 (after it, ~290 frames) drawn every VBL on the faster CPU (PsDrawsEveryVbl, play_more); state 3
-  fully captured (its particles and ship go through the hooked routines: the raw ST picture is empty), pixel-
-  identical, same length (720 frames); state 5 not captured (other draw routines), 50 a second. Test: --poke takes
+  $1C060) and 5 (after it, ~290 frames; frame routine $1BE92: the same particles $1BD14, sprites via $44C42) drawn
+  every VBL on the faster CPU (PsDrawsEveryVbl, play_more); both fully captured (the raw ST picture lacks the
+  particles and ship), pixel-identical, same lengths (720 / 290 frames). Test: --poke takes
   @<hex> absolute addresses now: --poke=1900:@1B102:1 --poke=1900:@1D134:800 --poke=1900:@1D136:800 in play.
 - Gotcha: CLAUDE.md has raw CR characters inside lines (paths like Private\r...): edit it byte-safely (Python
   open(..., 'rb')), never through text mode.
