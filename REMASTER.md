@@ -36,8 +36,8 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
 4. **Smooth screens outside play**: titles, attract demos, level intros, high-score tables and Defender 2's menus
    still step at 50 / 60 Hz (capture is play only). Worth it first: the Camels' and Hardcore's level intros, title
    scrollers.
-5. **Run-ahead outside the remaster** (Trip-A-Tron, docs readers, user disks): the run-ahead copy would have to
-   render its picture (the sandbox skips RenderLine).
+5. **Run-ahead outside the remaster: NOT NEEDED** (owner 2026-11-07): Trip-A-Tron, the docs readers and user disks
+   stay without it.
 6. **Small known glitches**: Photon Storm's pause DONE 2026-11-07 (the held play items are gone; its fountain of
    dots is captured, 50 a second on the faster CPU, pixel-identical; a star phase shift for a frame or two on resume, as
    before);
