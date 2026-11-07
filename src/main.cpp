@@ -32,6 +32,8 @@
 #include "remaster_llama.h"
 #include "launcher.h"
 #include "settings_menu.h"
+#include "preview.h"
+#include "rumble.h"
 #include "steam.h"
 #include "log.h"
 #include "machine.h"
@@ -47,7 +49,8 @@ struct Options {
   bool trace_tos = false;  // --trace-tos
   bool fullscreen = true;  // --window / --fullscreen
   int window_w = 0, window_h = 0;
-  bool steam_add = false;  // --steam-add: ADD TO STEAM once, then quit (tests: with LLAMATRON_STEAM_ROOT)  // --window-size=WxH (screenshots for art; default 1280 x 800)
+  bool steam_add = false;
+  std::string preview_test;  // --preview-test=<game id>: its preview's frames to logs\preview, then quit  // --steam-add: ADD TO STEAM once, then quit (tests: with LLAMATRON_STEAM_ROOT)  // --window-size=WxH (screenshots for art; default 1280 x 800)
   bool match_refresh = true;  // --refresh=desktop: keep the desktop's refresh rate in fullscreen
   game::Options game;       // --flashes: keep the original screen flashes
   bool entry_lane = false;  // --entry-lane: Gridrunner shows the edges of enemies in the entry lane (original)
@@ -109,6 +112,8 @@ struct Options {
   int palette_from = -1, palette_to = -1;  // --palette-log=N:M: log the colour registers every frame (tests)
   int dump_frame = -1;     // --dump=N:<file>: write the 1 MB of RAM at frame N (tests, analysis)
   std::string dump_file;
+  int dump_every = 0;      // --dump-every=K:<prefix>: also every K frames to <prefix><frame>.bin (RAM searches)
+  std::string dump_prefix;
   std::string profile_file;  // --watch=<hex text offset | @hex address>[,...]: log these words every 10 frames (tests)
 };
 
@@ -168,6 +173,9 @@ Options ParseArgs(int argc, char** argv) {
     else if (Arg(a, "dump", &v)) {
       o.dump_frame = std::atoi(v.c_str());
       o.dump_file = v.substr(v.find(':') + 1);
+    } else if (Arg(a, "dump-every", &v)) {
+      o.dump_every = std::atoi(v.c_str());
+      o.dump_prefix = v.substr(v.find(':') + 1);
     }
     else if (Arg(a, "profile", &v)) {
       size_t c1 = v.find(':'), c2 = v.find(':', c1 + 1);
@@ -191,6 +199,7 @@ Options ParseArgs(int argc, char** argv) {
     }
     else if (Arg(a, "aspect", &v)) o.pal_aspect = v != "square";
     else if (a == "--steam-add") o.steam_add = true;
+    else if (Arg(a, "preview-test", &v)) o.preview_test = v;
     else if (Arg(a, "window-size", &v)) std::sscanf(v.c_str(), "%dx%d", &o.window_w, &o.window_h);
     else if (a == "--flashes") o.game.flashes = true;
     else if (a == "--entry-lane") o.entry_lane = true;
@@ -522,6 +531,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   input::Reset();
   grid::Reset();
   if (gridrunner && c.in_game_docs) grid::StartDocs(c.docs_screen);
+  rumble::Start(c.game && !c.in_game_docs ? c.game->id : std::string());
   game::g_llamatron = llamatron;
   if (llamatron) game::ApplyPatches(machine, opt.game);
   input::SetMode(mode);
@@ -841,6 +851,10 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
         uint8_t* at = machine.Ram() + ((p.offset & 0x80000000u) ? (p.offset & 0xFFFFFF) : machine.TextBase() + p.offset);
         at[0] = uint8_t(p.value >> 8), at[1] = uint8_t(p.value);
       }
+      if (opt.dump_every > 0 && frame % opt.dump_every == 0) {
+        std::string path = opt.dump_prefix + std::to_string(frame) + ".bin";
+        if (FILE* f = std::fopen(path.c_str(), "wb")) std::fwrite(machine.Ram(), 1, st::kRamSize, f), std::fclose(f);
+      }
       if (frame == opt.dump_frame) {
         if (FILE* f = std::fopen(opt.dump_file.c_str(), "wb")) {
           std::fwrite(machine.Ram(), 1, st::kRamSize, f);
@@ -874,6 +888,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           if (g_survey.f) cpu::g_write_watch = SurveyWatch;
         }
         if (!machine.RunFrame()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
+        rumble::Frame(machine, input::FirstPad());
         // Sprites met for the first time this frame: their images now (outside the CPU's run), so they are shown
         // the remaster's way from their first frame (the hooks kept them instead of letting the game draw them).
         remaster::DrawQueued(&machine, "first sight");
@@ -1394,11 +1409,20 @@ int main(int argc, char** argv) {
     LOG("steam test: %s", steam::AddToSteam().c_str());
     return 0;
   }
+  if (!opt.preview_test.empty()) {
+    preview::Init(nullptr, c.save_dir);
+    std::error_code pec;
+    fs::create_directories("logs/preview", pec);
+    LOG("preview test: %s", preview::Test(c.games, opt.preview_test, 150, 12, "logs/preview") ? "done" : "failed");
+    return 0;
+  }
   // --program (or tests): straight into that game, and leaving it quits. Otherwise the launcher.
   if (opt.program_given || opt.headless || !c.renderer) {
     RunProgram(c);
   } else {
     launcher::Launcher l(c.renderer, &c.games);
+    preview::Init(c.renderer, c.save_dir);
+    preview::SetGames(c.games);
     l.Enter(0);
     auto docs_available = [&]() {
       std::vector<bool> v;
@@ -1415,6 +1439,7 @@ int main(int argc, char** argv) {
       launcher::Action a = RunLauncher(c, l);
       if (a == launcher::Action::kQuit) break;
       if (a == launcher::Action::kSettings) {
+        preview::Pause();
         if (RunSettings(c)) break;
         continue;
       }
@@ -1425,6 +1450,7 @@ int main(int argc, char** argv) {
         continue;
       }
       GameEnd end;
+      preview::Pause();
       if (a == launcher::Action::kDocs && !g.docs_via.empty()) {  // another game's docs screen
         end = GameEnd::kToLauncher;
         for (const games::Game& h : c.games)
@@ -1445,6 +1471,7 @@ int main(int argc, char** argv) {
   if (!opt.wav.empty()) SaveWav(opt.wav, c.wav, kRate);
   input::Shutdown();
   if (c.audio) SDL_DestroyAudioStream(c.audio);
+  preview::Shutdown();
   remaster::Shutdown();
   if (c.texture) SDL_DestroyTexture(c.texture);
   if (c.texture_wide) SDL_DestroyTexture(c.texture_wide);

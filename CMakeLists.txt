@@ -79,6 +79,8 @@ add_executable(llamatron WIN32
   src/settings.cpp
   src/settings_menu.cpp
   src/steam.cpp
+  src/preview.cpp
+  src/rumble.cpp
   src/log.cpp
   src/crash.cpp)
 target_link_libraries(llamatron PRIVATE SDL3::SDL3-static musashi)

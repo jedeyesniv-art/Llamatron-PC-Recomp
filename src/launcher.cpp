@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "crt.h"
+#include "preview.h"
 #include "remap.h"
 
 namespace launcher {
@@ -369,6 +370,11 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
 Action Launcher::Update(SDL_Gamepad* pad, double dt) {
   time_ += dt;
   fade_in_ = std::min(1.0, fade_in_ + dt * 2);
+  // The live preview (preview.h): the picked disk's game, once the carousel has stopped on it a moment.
+  const bool still = std::fabs(scroll_ - target_) < 0.02f && launching_ < 0 && Count() > 0;
+  settled_ = still ? settled_ + dt : 0;
+  preview::Select(settled_ > 0.45 ? &(*games_)[size_t(selected_)] : nullptr);
+  preview::Update(dt);
   if (pad && !text_.empty()) {  // the text viewer: the stick scrolls (repeating)
     float y = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
     float ry = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;  // the right stick: pages
@@ -410,7 +416,9 @@ Action Launcher::Update(SDL_Gamepad* pad, double dt) {
   return Action::kNone;
 }
 
-void Launcher::DrawText(const char* s, float x, float y, float scale, SDL_Color c, bool centred) {
+void Launcher::DrawText(const char* text, float x, float y, float scale, SDL_Color c, bool centred) {
+  const std::string named = remap::UiText(text);  // ({A}... -> the pad's button names)
+  const char* s = named.c_str();
   if (centred) x -= float(SDL_strlen(s)) * 8 * scale / 2;
   SDL_SetRenderScale(r_, scale, scale);
   SDL_SetRenderDrawColor(r_, c.r, c.g, c.b, c.a);
@@ -518,6 +526,7 @@ void Launcher::Render() {
   }
   Camera cam;
   cam.f = h * 1.45f, cam.cx = w / 2, cam.cy = h * 0.47f;
+  preview::Draw(iw, ih);  // the game behind the disks, faint
 
   // Pure black, a pool of light under each disk and a soft bloom behind it (both stronger for the picked one).
   auto glow = [&](V3 centre, float rx, float ry, bool floor, SDL_FColor c) {
@@ -561,11 +570,11 @@ void Launcher::Render() {
     DrawText(pos.c_str(), p.x, p.y + 14 * s, s * 0.9f, {90, 90, 100, 255}, true);
   }
   DrawText("LLAMASOFT ON THE ATARI ST", w / 2, h * 0.06f, s, {120, 120, 135, 255}, true);
-  const char* hint = SDL_GetTicks() < quit_armed_ms_ ? "PRESS B AGAIN TO QUIT"
-                     : picked.settings ? "LEFT/RIGHT CHOOSE    A OPEN    Y WHAT'S HERE    B QUIT"
+  const char* hint = SDL_GetTicks() < quit_armed_ms_ ? "PRESS {B} AGAIN TO QUIT"
+                     : picked.settings ? "LEFT/RIGHT CHOOSE    {A} OPEN    {Y} WHAT'S HERE    {B} QUIT"
                      : size_t(selected_) < docs_.size() && docs_[size_t(selected_)]
-                         ? "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X DOCS   B QUIT"
-                         : "LEFT/RIGHT CHOOSE    A PLAY    Y HOW TO PLAY    B QUIT";
+                         ? "LEFT/RIGHT CHOOSE   {A} PLAY   {Y} HOW TO PLAY   {X} DOCS   {B} QUIT"
+                         : "LEFT/RIGHT CHOOSE    {A} PLAY    {Y} HOW TO PLAY    {B} QUIT";
   DrawText(hint, w / 2, h * 0.92f, s * 0.9f, {150, 150, 165, 255}, true);
 
   if (info_) {
@@ -589,7 +598,7 @@ void Launcher::Render() {
     }
     if (size_t(selected_) < docs_.size() && docs_[size_t(selected_)]) {
       lines.push_back("");
-      lines.push_back("X  READ THE DOCS");
+      lines.push_back("{X}  READ THE DOCS");
     }
     int n = int(lines.size()), longest = 0;
     for (const std::string& l : lines) longest = std::max(longest, int(l.size()));
@@ -626,7 +635,7 @@ void Launcher::Render() {
       DrawText(text_[size_t(text_top_ + i)].c_str(), panel.x + 8 * ts, panel.y + (8 + i * 10) * ts, ts,
                {210, 210, 220, 255}, false);
     char foot[96];
-    std::snprintf(foot, sizeof(foot), "LINES %d-%d OF %d    UP/DOWN SCROLL   LB/RB OR RIGHT STICK PAGES   B BACK", text_top_ + 1,
+    std::snprintf(foot, sizeof(foot), "LINES %d-%d OF %d    UP/DOWN SCROLL   {LB}/{RB} OR RIGHT STICK PAGES   {B} BACK", text_top_ + 1,
                   std::min(int(text_.size()), text_top_ + 20), int(text_.size()));
     DrawText(foot, w / 2, panel.y + ph - 14 * ts, ts, {150, 150, 165, 255}, true);
   }

@@ -64,9 +64,15 @@ const std::vector<Item>& Items() {
       {"general", "EXCLUSIVE FULLSCREEN", "fullscreen_exclusive", Kind::kToggle, 0, 0, 1, 1, {},
        "Switches the display to a 50 / 100 Hz mode for even motion, at the cost of a blink when switching away.",
        true},
+      {"general", "BUTTON NAMES", "button_names", Kind::kChoice, 0, 0, 3, 1, {"AUTO", "XBOX", "PLAYSTATION", "NINTENDO"},
+       "How buttons are named on these pages and the hints: AUTO follows the pad (PlayStation and Switch pads get "
+       "their own names)."},
+      {"general", "RUMBLE", "rumble", Kind::kToggle, 1, 0, 1, 1, {},
+       "The pad rumbles when you lose a life (long) and on smart bombs (short). Trip-A-Tron has its own, on the "
+       "music's beats (its section)."},
       {"general", "ADD TO STEAM", "", Kind::kSteam, 0, 0, 1, 1, {},
-       "Press A: this program becomes a game in your Steam library, with its own library art. Started from Steam "
-       "(Steam Deck), it adds the art to the shortcut you made. A new shortcut needs Steam closed; Steam shows the art once restarted."},
+       "Press {A}: this program becomes a game in your Steam library, with its own library art. Started from Steam "
+       "(Steam Deck), it adds the art to the shortcut you made. Adding a new shortcut needs Steam closed; Steam shows the art once restarted."},
 
       {"crt", "SCANLINES", "crt_scanlines", Kind::kSlider, 0.45, 0, 1, 0.05, {}, "How dark the gaps between the lines are."},
       {"crt", "BEAM, DARK COLOURS", "crt_beam_min", Kind::kSlider, 0.35, 0, 1, 0.05, {}, "How thick the lines of dark colours are."},
@@ -82,7 +88,7 @@ const std::vector<Item>& Items() {
       {"crt", "SATURATION", "crt_saturation", Kind::kSlider, 0.95, 0, 1.5, 0.05, {}, "How strong the colours are."},
       {"crt", "WARMTH", "crt_temperature", Kind::kSlider, 0.3, -1, 1, 0.1, {}, "Cool blue (-1) to warm (1)."},
       {"crt", "BLOOM", "crt_overflow", Kind::kSlider, 0.85, 0, 1, 0.05, {}, "Very bright colours spilling into white."},
-      {"crt", "RESET THE CRT LOOK", "", Kind::kResetCrt, 0, 0, 1, 1, {}, "Press A: every CRT setting back to its default."},
+      {"crt", "RESET THE CRT LOOK", "", Kind::kResetCrt, 0, 0, 1, 1, {}, "Press {A}: every CRT setting back to its default."},
       {"crtpp", "TRAILS", "crt_psy_trails", Kind::kSlider, 0.9, 0, 2, 0.05, {}, "CRT++: how strongly the trails show."},
       {"crtpp", "TRAIL LENGTH", "crt_psy_length", Kind::kSlider, 0.4, 0, 1, 0.01, {}, "Seconds for a trail to fade to half."},
       {"crtpp", "TRAIL ZOOM", "crt_psy_zoom", Kind::kSlider, 0.25, -2, 2, 0.05, {},
@@ -100,10 +106,10 @@ const std::vector<Item>& Items() {
       {"crtpp", "SATURATION BOOST", "crt_psy_saturation", Kind::kSlider, 1.3, 0.5, 2.5, 0.05, {}, "The CRT saturation, multiplied."},
       {"crtpp", "KEEP COLOURS", "crt_psy_keep", Kind::kSlider, 1, 0, 1, 0.05, {},
        "1: trails only where the picture is dark, things keep their own colour. 0: trails over everything."},
-      {"crtpp", "RESET CRT++", "", Kind::kResetCrt, 0, 0, 1, 1, {}, "Press A: every CRT++ setting back to its default."},
+      {"crtpp", "RESET CRT++", "", Kind::kResetCrt, 0, 0, 1, 1, {}, "Press {A}: every CRT++ setting back to its default."},
 
       {"llamatron", "ANALOG AIM", "analog_aim", Kind::kToggle, 0, 0, 1, 1, {},
-       "Twin-stick shots in any direction (off: the original 8). Also RB on the title screen."},
+       "Twin-stick shots in any direction (off: the original 8). Also {RB} on the title screen."},
 
       {"gridrunner", "SHIP SPEED", "grid_stick_speed", Kind::kSlider, 6.0, 2, 12, 0.5, {},
        "Pixels a frame with the stick pushed all the way."},
@@ -124,12 +130,12 @@ const std::vector<Item>& Items() {
        "The level select starts where you died (the original: the level before, from level 6)."},
 
       {"photonstorm", "360 TWIN STICK", "ps_analog", Kind::kToggle, 1, 0, 1, 1, {},
-       "Steer and aim in any direction, the right stick aims and fires (off: the original 16). Also Y on the title."},
+       "Steer and aim in any direction, the right stick aims and fires (off: the original 16). Also {Y} on the title."},
       {"photonstorm", "50 FRAMES A SECOND", "photonstorm_50fps", Kind::kToggle, 1, 0, 1, 1, {},
        "Draws every frame in play and on the attract screens (the original: 25). The game's speed is the same.", true},
 
       {"andes", "CONTROL SCHEME", "andes_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
-       "Arcade: left / right only turn round, RT thrust (squeeze = speed), X / Y reverse. Stick thrust: the push moves you."},
+       "Arcade: left / right only turn round, {RT} thrust (squeeze = speed), {X} / {Y} reverse. Stick thrust: the push moves you."},
       {"andes", "ALTITUDE", "andes_altitude", Kind::kChoice, 1, 0, 1, 1, {"DIRECT", "ORIGINAL"},
        "DIRECT: the stick moves the ship at the speed below. ORIGINAL: the stick is the mouse, as the game was made."},
       {"andes", "ALTITUDE SPEED", "andes_stick_speed", Kind::kSlider, 3, 1, 8, 0.5, {},
@@ -142,7 +148,7 @@ const std::vector<Item>& Items() {
        "With direct thrust: how quickly the speed follows the stick.", true},
 
       {"defender2", "CONTROL SCHEME", "d2_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
-       "Arcade: left / right only turn round, RT thrust (squeeze = speed), X / Y reverse. Stick thrust: the push moves you."},
+       "Arcade: left / right only turn round, {RT} thrust (squeeze = speed), {X} / {Y} reverse. Stick thrust: the push moves you."},
       {"defender2", "60 HZ (ARCADE SPEED)", "defender2_60hz", Kind::kToggle, 1, 0, 1, 1, {},
        "The game's 60 Hz mode, as the arcade (its speeds adjusted). Off: 50 Hz.", true},
       {"defender2", "50 FRAMES A SECOND", "d2_50fps", Kind::kToggle, 1, 0, 1, 1, {},
@@ -165,7 +171,7 @@ const std::vector<Item>& Items() {
       {"tripatron", "FLOW", "trip_flow", Kind::kSlider, 0, 0, 1, 0.1, {},
        "Inertia on the left stick: 0 = direct; higher = the light glides into and out of its moves."},
       {"tripatron", "PAINT PRESSURE", "trip_pressure", Kind::kToggle, 1, 0, 1, 1, {},
-       "RT's squeeze sets how thickly patterns flow: a light touch for sparse pulses, full for a stream."},
+       "{RT}'s squeeze sets how thickly patterns flow: a light touch for sparse pulses, full for a stream."},
       {"tripatron", "GYRO", "trip_gyro", Kind::kToggle, 0, 0, 1, 1, {},
        "Turn the pad to move the light, like a pen (pads with a gyro: Steam Deck, PlayStation, Switch)."},
       {"tripatron", "GYRO SPEED", "trip_gyro_speed", Kind::kSlider, 1, 0.2, 3, 0.1, {},
@@ -178,52 +184,52 @@ const std::vector<Item>& Items() {
        "Moves the light source (LIGHT SPEED, STICK CURVE and FLOW above). On the panel: the pointer."},
       {"tripkeys", "RIGHT STICK", "", Kind::kInfo, 0, 0, 1, 1, {"SPIROGRAPH"},
        "The stick's position is the light's place on the screen. While a starfield runs it flies it: up faster, down backwards, left / right spin."},
-      {"tripkeys", "RT", "", Kind::kInfo, 0, 0, 1, 1, {"PAINT"},
+      {"tripkeys", "{RT}", "", Kind::kInfo, 0, 0, 1, 1, {"PAINT"},
        "Squeeze lightly for sparse pulses, fully for a stream (PAINT PRESSURE). With a starfield: a speed boost."},
-      {"tripkeys", "LT", "", Kind::kInfo, 0, 0, 1, 1, {"RIGHT BUTTON"},
+      {"tripkeys", "{LT}", "", Kind::kInfo, 0, 0, 1, 1, {"RIGHT BUTTON"},
        "The mouse's right button, as set in Global Parameters: VECTOR locks the light into a straight line, CENTRE brings it back, KML #128 runs that."},
-      {"tripkeys", "R3", "", Kind::kInfo, 0, 0, 1, 1, {"LATCH PAINTING"},
-       "Painting stays on until you press R3 again."},
+      {"tripkeys", "{R3}", "", Kind::kInfo, 0, 0, 1, 1, {"LATCH PAINTING"},
+       "Painting stays on until you press {R3} again."},
       {"tripkeys", "D-PAD LEFT / RIGHT", "", Kind::kInfo, 0, 0, 1, 1, {"STEP EFFECT"},
        "The previous / next effect key that does something in the loaded demo (its name shows at the top)."},
       {"tripkeys", "D-PAD UP / DOWN", "", Kind::kInfo, 0, 0, 1, 1, {"STEP SYMMETRY"},
        "The previous / next of the eight symmetries (the ST's cursor keys)."},
-      {"tripkeys", "LB / RB TAP", "", Kind::kInfo, 0, 0, 1, 1, {"STEP PALETTE"},
+      {"tripkeys", "{LB} / {RB} TAP", "", Kind::kInfo, 0, 0, 1, 1, {"STEP PALETTE"},
        "The previous / next palette (the numeric pad)."},
-      {"tripkeys", "LB HOLD", "", Kind::kInfo, 0, 0, 1, 1, {"EFFECT WHEEL"},
-       "Point the right stick at a key and let go of LB to choose it. D-pad left / right: the Q, A and Z rows. Each key says what it does."},
-      {"tripkeys", "RB HOLD", "", Kind::kInfo, 0, 0, 1, 1, {"SYMMETRY WHEEL"},
-       "The eight symmetries round the stick; let go of RB to choose. Hold Y as well to set the pre-symmetry instead."},
-      {"tripkeys", "Y TAP", "", Kind::kInfo, 0, 0, 1, 1, {"CONTROL PANEL"},
+      {"tripkeys", "{LB} HOLD", "", Kind::kInfo, 0, 0, 1, 1, {"EFFECT WHEEL"},
+       "Point the right stick at a key and let go of {LB} to choose it. D-pad left / right: the Q, A and Z rows. Each key says what it does."},
+      {"tripkeys", "{RB} HOLD", "", Kind::kInfo, 0, 0, 1, 1, {"SYMMETRY WHEEL"},
+       "The eight symmetries round the stick; let go of {RB} to choose. Hold {Y} as well to set the pre-symmetry instead."},
+      {"tripkeys", "{Y} TAP", "", Kind::kInfo, 0, 0, 1, 1, {"CONTROL PANEL"},
        "The Control Panel up / down (Esc)."},
-      {"tripkeys", "Y HOLD", "", Kind::kInfo, 0, 0, 1, 1, {"PLOT ROUTINE"},
-       "Shows the six stages ON / OFF: LB pre-sym, A remap, X cube, B shear, Start resize, RB post-sym switch them. D-pad up / down: the pre-symmetry."},
-      {"tripkeys", "A", "", Kind::kInfo, 0, 0, 1, 1, {"SURPRISE ME"},
+      {"tripkeys", "{Y} HOLD", "", Kind::kInfo, 0, 0, 1, 1, {"PLOT ROUTINE"},
+       "Shows the six stages ON / OFF: {LB} pre-sym, {A} remap, {X} cube, {B} shear, {START} resize, {RB} post-sym switch them. D-pad up / down: the pre-symmetry."},
+      {"tripkeys", "{A}", "", Kind::kInfo, 0, 0, 1, 1, {"SURPRISE ME"},
        "A random effect, symmetry and palette."},
-      {"tripkeys", "X", "", Kind::kInfo, 0, 0, 1, 1, {"PANIC"},
+      {"tripkeys", "{X}", "", Kind::kInfo, 0, 0, 1, 1, {"PANIC"},
        "Stops all patterns (the Space bar)."},
-      {"tripkeys", "B", "", Kind::kInfo, 0, 0, 1, 1, {"NUMBER ROW"},
+      {"tripkeys", "{B}", "", Kind::kInfo, 0, 0, 1, 1, {"NUMBER ROW"},
        "Steps through the number row: random palettes in the first demo, the lasers in the other one."},
-      {"tripkeys", "START", "", Kind::kInfo, 0, 0, 1, 1, {"OTHER DEMO"},
+      {"tripkeys", "{START}", "", Kind::kInfo, 0, 0, 1, 1, {"OTHER DEMO"},
        "Loads the other demo (Yak's F10): the starfields (A and Z rows) and lasers (B), or back to the patterns."},
-      {"tripkeys", "L3", "", Kind::kInfo, 0, 0, 1, 1, {"MUSIC MODE"},
+      {"tripkeys", "{L3}", "", Kind::kInfo, 0, 0, 1, 1, {"MUSIC MODE"},
        "Off / pulse / full: reacts to whatever the PC is playing (REACT TO MUSIC above)."},
       {"tripkeys", "GYRO", "", Kind::kInfo, 0, 0, 1, 1, {"MOVE THE LIGHT"},
        "With GYRO on: turn the pad like a pen (pads with a gyro; not through Steam Input)."},
-      {"tripkeys", "BACK", "", Kind::kInfo, 0, 0, 1, 1, {"SETTINGS"},
-       "This panel. Back again: carry on; B: leave to the disks."},
+      {"tripkeys", "{BACK}", "", Kind::kInfo, 0, 0, 1, 1, {"SETTINGS"},
+       "This panel. {BACK} again: carry on; {B}: leave to the disks."},
       {"tripkeys", "PANEL: D-PAD", "", Kind::kInfo, 0, 0, 1, 1, {"JUMP TO AN ICON"},
-       "On the Control Panel: from icon to icon; the hint names it with what A and X do there."},
-      {"tripkeys", "PANEL: A / X", "", Kind::kInfo, 0, 0, 1, 1, {"LEFT / RIGHT CLICK"},
-       "The mouse buttons: most icons do one thing with each (the bottom row: A on / off, X its settings)."},
-      {"tripkeys", "PANEL: B", "", Kind::kInfo, 0, 0, 1, 1, {"BACK"},
+       "On the Control Panel: from icon to icon; the hint names it with what {A} and {X} do there."},
+      {"tripkeys", "PANEL: {A} / {X}", "", Kind::kInfo, 0, 0, 1, 1, {"LEFT / RIGHT CLICK"},
+       "The mouse buttons: most icons do one thing with each (the bottom row: {A} on / off, {X} its settings)."},
+      {"tripkeys", "PANEL: {B}", "", Kind::kInfo, 0, 0, 1, 1, {"BACK"},
        "Out of any tool screen to the Control Panel; closes alerts and the Sym / Cube panels; on the bare panel, puts it away."},
-      {"tripkeys", "PANEL: LB HOLD", "", Kind::kInfo, 0, 0, 1, 1, {"SLOW POINTER"},
+      {"tripkeys", "PANEL: {LB} HOLD", "", Kind::kInfo, 0, 0, 1, 1, {"SLOW POINTER"},
        "For the small buttons. In the tool screens the d-pad nudges the pointer a pixel at a time."},
-      {"tripkeys", "PANEL: Y", "", Kind::kInfo, 0, 0, 1, 1, {"ESC"},
+      {"tripkeys", "PANEL: {Y}", "", Kind::kInfo, 0, 0, 1, 1, {"ESC"},
        "Puts the panel away; leaves the keyboard-driven screens (KML editor, Starfield edit)."},
       {"tripatron", "REACT TO MUSIC", "trip_music", Kind::kChoice, 0, 0, 2, 1, {"OFF", "PULSE", "FULL"},
-       "Follows whatever the PC is playing (L3 / F12). Full also changes palettes and effects on the beat."},
+       "Follows whatever the PC is playing ({L3} / F12). Full also changes palettes and effects on the beat."},
   };
   return items;
 }
@@ -605,7 +611,7 @@ void Render(SDL_Renderer* r) {
   auto text = [&](const std::string& t, float x, float y, SDL_Color c, float scale = 1) {
     SDL_SetRenderScale(r, s * scale, s * scale);
     SDL_SetRenderDrawColor(r, c.r, c.g, c.b, c.a);
-    SDL_RenderDebugText(r, x / (s * scale), y / (s * scale), t.c_str());
+    SDL_RenderDebugText(r, x / (s * scale), y / (s * scale), remap::UiText(t).c_str());
     SDL_SetRenderScale(r, 1, 1);
   };
   const SDL_Color kWhite{255, 255, 255, 255}, kDim{140, 140, 155, 255}, kLabel{205, 205, 215, 255},
@@ -620,18 +626,19 @@ void Render(SDL_Renderer* r) {
   std::string help;
   const Row* sel_row = SelectedRow();
   if (sel_row && sel_row->section >= 0) {
-    help = SectionOpen(sel_row->section) ? "A or left: fold this section away." : "A or right: open this section.";
+    help = SectionOpen(sel_row->section) ? "{A} or left: fold this section away." : "{A} or right: open this section.";
   } else if (sel_row && sel_row->control >= 0) {
-    help = g_listen >= 0 ? "Press the button for this (one already on the row comes off). Start / Back: cancel."
+    help = g_listen >= 0 ? "Press the button for this (one already on the row comes off). {START} / {BACK}: cancel."
                          : std::string(remap::Functions()[size_t(sel_row->control)].help) +
-                               " A: attach a button. X: its own buttons.";
+                               " {A}: attach a button. {X}: its own buttons.";
   } else if (sel_row && sel_row->reset_controls) {
-    help = "Press A: every button back to what the game had.";
+    help = "Press {A}: every button back to what the game had.";
   } else if (const Item* it = Selected()) {
     help = it->help;
     if (it->next_start) help += " Applies when the game next starts.";
   }
   std::vector<std::string> foot;
+  help = remap::UiText(help);  // (the pad's button names before the wrap)
   for (size_t at = 0; at < help.size();) {  // word wrap to the panel
     size_t n = std::min(help.size() - at, size_t(kCols));
     if (at + n < help.size()) {
@@ -642,9 +649,9 @@ void Render(SDL_Renderer* r) {
     at += n;
     while (at < help.size() && help[at] == ' ') ++at;
   }
-  const char* keys1 = "UP/DOWN PICK   LEFT/RIGHT CHANGE   A TOGGLE";
-  const char* keys2 = g_game.empty() ? "X DEFAULT   LB/RB SECTION   B BACK" : "X DEFAULT   LB/RB SECTION";
-  const char* keys3 = g_game.empty() ? nullptr : "BACK RESUME   B QUIT TO THE DISKS";
+  const char* keys1 = "UP/DOWN PICK   LEFT/RIGHT CHANGE   {A} TOGGLE";
+  const char* keys2 = g_game.empty() ? "{X} DEFAULT   {LB}/{RB} SECTION   {B} BACK" : "{X} DEFAULT   {LB}/{RB} SECTION";
+  const char* keys3 = g_game.empty() ? nullptr : "{BACK} RESUME   {B} QUIT TO THE DISKS";
   float foot_h = (float(foot.size()) + (keys3 ? 4.5f : 3.5f)) * row_h;
   float list_bottom = h - pad - foot_h;
   int visible = std::max(1, int((list_bottom - y) / row_h));
@@ -731,7 +738,7 @@ void Render(SDL_Renderer* r) {
       case Kind::kResetCrt:
         break;
       case Kind::kSteam:
-        text(g_steam_status.empty() ? (sel ? "PRESS A" : "") : g_steam_status, vx, ry, g_steam_status.empty() ? kDim : kOn);
+        text(g_steam_status.empty() ? (sel ? "PRESS {A}" : "") : g_steam_status, vx, ry, g_steam_status.empty() ? kDim : kOn);
         break;
       case Kind::kInfo:
         text(it.choices.empty() ? "" : it.choices[0], vx, ry, sel ? kWhite : kOn);

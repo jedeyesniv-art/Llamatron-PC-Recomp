@@ -64,6 +64,7 @@ class Launcher {
   uint64_t quit_armed_ms_ = 0;
   int stick_latch_ = 0;     // stick held left / right: one move per push
   int stick_latch_y_ = 0;
+  double settled_ = 0;      // seconds the carousel has been still (the preview starts after a moment)
 };
 
 }  // namespace launcher

@@ -71,6 +71,14 @@ void SyncEvents(SDL_Gamepad* first);  // no edges from what's held now (the pane
 // (fixed-width columns kept: the next wide gap takes up the difference). RenameHint: a hint line of the game being
 // played, names before ':' or '/' ("A: play", "LB/RB: page"). Unchanged with the default buttons ({} dropped).
 std::string Rename(const std::string& text, const std::string& id, input::Mode mode);
+// The pad's button names (owner 2026-11-07): pad 1's type (SDL), or the setting button_names (0 auto, 1 Xbox,
+// 2 PlayStation, 3 Nintendo). InputName gives a button's (or kLt / kRt's) name in it; UiText rewrites our own UI
+// lines (the launcher's, the panel's: their text drawing calls it): {A} {B} {X} {Y} {LB} {RB} {LT} {RT} {L3} {R3}
+// {START} {BACK} become the pad's names (marked, so prose and keyboard keys are left alone).
+enum class Style { kXbox, kPlayStation, kNintendo };
+Style PadStyle();
+std::string InputName(int input);
+std::string UiText(const std::string& text);
 std::string RenameHint(const std::string& text);
 
 // Tests: --remap-test sends the scripted pad through the map too.

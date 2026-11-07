@@ -21,8 +21,8 @@ const char* const kGenericHelp[] = {
     "LEFT STICK / D-PAD   joystick",
     "{A}                    fire",
     "RIGHT STICK          mouse   ({RT} left button, {LT} right)",
-    "START  Space         {B}  Esc",
-    "BACK                 settings (B there: back to the disks)", "",
+    "{START}  Space         {B}  Esc",
+    "{BACK}                 settings ({B} there: back to the disks)", "",
     "Keyboard and mouse: as on the ST.",
 };
 
@@ -48,9 +48,9 @@ std::vector<Known> KnownGames() {
             "{X} AT THE TITLE       start a one-stick game",
             "{A} IN PLAY            fire / lock the fire angle",
             "{RB} AT THE TITLE      analog aim on / off",
-            "START                pause    ({Y}: the tentacle)",
+            "{START}                pause    ({Y}: the tentacle)",
             "{B} ON THE PAUSE SCREEN  quit to the title",
-            "BACK                 settings   (B there: back to the disks)", "",
+            "{BACK}                 settings   ({B} there: back to the disks)", "",
             "Keyboard: WASD + Space, cursors + Enter, P pause"};
   g.year = 1991;  // version 1.0, 20 March 1991 (its scroller)
   add(g, "TRON1MEG.PRG");
@@ -66,10 +66,10 @@ std::vector<Known> KnownGames() {
             "RIGHT STICK FLICK    nosecone shot direction",
             "{RB} / {LB}, D-PAD U/D   nosecone shot up / down",
             "{Y}                    voluntary martyrdom (a life!)",
-            "START                pause",
+            "{START}                pause",
             "{B} ON THE PAUSE SCREEN  quit to the title",
             "TITLE: {X} OPTIONS   {Y} GAME SECRETS   {LB} MORE INFO",
-            "BACK                 settings   (B there: back to the disks)", "",
+            "{BACK}                 settings   ({B} there: back to the disks)", "",
             "The mouse works too: the original controls."};
   g.year = 1989;  // Atarimania, MobyGames (Wikipedia says 1991)
   g.docs_in_game = true;  // GAME SECRETS: the title's own manual pages (gridrunner.cpp StartDocs)
@@ -81,16 +81,16 @@ std::vector<Known> KnownGames() {
   g.help = {"TRIP-A-TRON  -  JEFF MINTER, 1988 (SHAREWARE 1992)", "",
             "A light synthesiser: play light to your music.", "",
             "LEFT STICK  the light     RIGHT STICK  spirograph",
-            "RT  paint (squeeze = density)   LT  right button",
+            "{RT}  paint (squeeze = density)   {LT}  right button",
             "D-PAD L/R  effect   U/D  symmetry   R3  latch",
-            "LB / RB  tap: palette   hold: effect / symmetry wheel",
-            "Y  tap: control panel   hold: plot routine (F1-F6)",
-            "A surprise  X panic  B number row  START other demo",
-            "ON THE PANEL  d-pad: icons   A / X: left / right",
-            "              B: back   LB: slow pointer",
-            "BACK       settings, and back to the disks",
-            "L3 / F12   music off / pulse / full (hears the PC)",
-            "X on the disks: the manual and Yak's README.DOC."};
+            "{LB} / {RB}  tap: palette   hold: effect / symmetry wheel",
+            "{Y}  tap: control panel   hold: plot routine (F1-F6)",
+            "{A} surprise  {X} panic  {B} number row  {START} other demo",
+            "ON THE PANEL  d-pad: icons   {A} / {X}: left / right",
+            "              {B}: back   {LB}: slow pointer",
+            "{BACK}       settings, and back to the disks",
+            "{L3} / F12   music off / pulse / full (hears the PC)",
+            "{X} on the disks: the manual and Yak's README.DOC."};
   // The manual (Tools/make_trip_manual.py: Piku's 2003 transcription, PDF -> MANUAL.TXT in the game's folder),
   // then Yak's README.DOC (written by the installer).
   g.docs_text = "MANUAL.TXT|README.DOC";
@@ -135,9 +135,9 @@ std::vector<Known> KnownGames() {
                         "RIGHT STICK          aim the spit (it never stops)",
                         "{A}, {X}, {RT}             fire held: no jumping or sitting",
                         "                     (aim with the left stick alone)",
-                        "START                pause",
+                        "{START}                pause",
                         "{B} ON THE PAUSE SCREEN  back to the menu",
-                        "BACK                 settings   (B there: back to the disks)",
+                        "{BACK}                 settings   ({B} there: back to the disks)",
                         "A SECOND PAD         player 2 (the goat) in two-player", "",
                         "Keyboard: cursor keys + Space, P pause, O resume"};
   {  // the STE build (listed just before): the same page (once it is written)
@@ -185,9 +185,9 @@ std::vector<Known> KnownGames() {
                         "{X} OR {Y}              reverse",
                         "{LB} / {RB}             inviso (Stargate) / ship",
                         "(Settings: CONTROL SCHEME = stick thrust, the old way)",
-                        "START               pause",
+                        "{START}               pause",
                         "INITIALS            d-pad letter, {A} fix, {X} delete",
-                        "BACK                 settings   (B there: back to the disks)", "",
+                        "{BACK}                 settings   ({B} there: back to the disks)", "",
                         "60 Hz, as the arcade (defender2_60hz=0: 50).",
                         "Keyboard: Ctrl up, LShift down, Return thrust,",
                         "Alt reverse, # fire, RShift smart bomb."};
@@ -213,9 +213,9 @@ std::vector<Known> KnownGames() {
                         "{X} OR {Y}               reverse",
                         "{LB} OR {RB} (HOLD)      shield (it drains)",
                         "(Settings: CONTROL SCHEME = stick thrust, the old way)",
-                        "START                pause",
+                        "{START}                pause",
                         "HIGH SCORE NAME      up/down letter, {A} enter it",
-                        "BACK                 settings   (B there: back to the disks)", "",
+                        "{BACK}                 settings   ({B} there: back to the disks)", "",
                         "Mouse: up/down, left thrust, right reverse;",
                         "Left Shift fire, Control smart bomb, Alt shield."};
   // Photon Storm (Arc / Llamasoft 1990), PHOTON.YAK (Automation-packed TOS program) on a compilation disk with
@@ -235,9 +235,9 @@ std::vector<Known> KnownGames() {
                         "{RT}                   smart bomb",
                         "{LT} (HOLD)            boost (while its gauge lasts)",
                         "{LB} / {RB} (HOLD)       single shots, not the spread",
-                        "START                pause",
+                        "{START}                pause",
                         "{B} ON THE PAUSE SCREEN  quit to the title",
-                        "BACK                 settings   (B there: back to the disks)",
+                        "{BACK}                 settings   ({B} there: back to the disks)",
                         "TITLE: {A} = 1 PLAYER, {X} = 2 PLAYERS,",
                         "{Y} = 360 TWIN STICK / ORIGINAL CONTROLS", "",
                         "Mouse: where it points from the middle = the",
@@ -260,8 +260,8 @@ std::vector<Known> KnownGames() {
                         "RIGHT STICK          put them at that spot",
                         "{A} OR {RT}              side lasers",
                         "{Y}                    puck intelligence on / off",
-                        "START                pause",
-                        "BACK                 settings   (B there: back to the disks)", "",
+                        "{START}                pause",
+                        "{BACK}                 settings   ({B} there: back to the disks)", "",
                         "Mouse: move, left button lasers; P pause, O resume,",
                         "S strobes (off at the start), N next level."};
   return k;
@@ -421,10 +421,10 @@ std::vector<Game> Discover(const std::string& disk) {
               "Everything worth changing, for every game: the",
               "remaster, run-ahead, the CRT look and its sliders,",
               "and each game's own controls. Saved as you go.", "",
-              "IN A GAME   BACK (F1) suspends it and opens these;",
-              "            BACK again carries on, B leaves the game.", "",
-              "UP/DOWN pick   LEFT/RIGHT change   A toggle",
-              "X default      LB/RB section       B back"};
+              "IN A GAME   {BACK} (F1) suspends it and opens these;",
+              "            {BACK} again carries on, {B} leaves the game.", "",
+              "UP/DOWN pick   LEFT/RIGHT change   {A} toggle",
+              "{X} default      {LB}/{RB} section       {B} back"};
     out.push_back(std::move(s));
   }
   return out;

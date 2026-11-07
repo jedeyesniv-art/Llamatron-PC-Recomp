@@ -436,9 +436,9 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
       g_docs_clicked = g_docs_screen == 1;
     } else if (g_docs_screen == 0 ? GameState(*m) == kSecrets : g_docs_clicked) {
       g_docs_shown = true;
-      LOG("gridrunner: docs screen %d after %d frames", g_docs_screen, g_frame);
+      LOG("gridrunner: docs screen %d after %d frames", g_docs_screen, int(g_frame));
     }
-    if (g_frame > 4000) g_docs_shown = true, LOG("gridrunner: no game secrets after %d frames", g_frame);
+    if (g_frame > 4000) g_docs_shown = true, LOG("gridrunner: no game secrets after %d frames", int(g_frame));
   } else if (g_docs && GameState(*m) == kTitle) {
     g_quit = true;  // the last page read: back to the disks
   }

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "input.h"
 #include "log.h"
 #include "settings.h"
 
@@ -242,7 +243,8 @@ std::string NamesFor(const int logical_of[32], int logical) {
 // A button name token at text[i] (A B X Y LB RB LT RT L3 R3): its input, and its length; -1 if none.
 int ButtonAt(const std::string& t, size_t i, size_t* len) {
   static const std::pair<const char*, int> kNames[] = {
-      {"LB", SDL_GAMEPAD_BUTTON_LEFT_SHOULDER}, {"RB", SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER}, {"LT", kLt}, {"RT", kRt},
+      {"START", SDL_GAMEPAD_BUTTON_START}, {"BACK", SDL_GAMEPAD_BUTTON_BACK}, {"Start", SDL_GAMEPAD_BUTTON_START},
+      {"Back", SDL_GAMEPAD_BUTTON_BACK}, {"LB", SDL_GAMEPAD_BUTTON_LEFT_SHOULDER}, {"RB", SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER}, {"LT", kLt}, {"RT", kRt},
       {"L3", SDL_GAMEPAD_BUTTON_LEFT_STICK}, {"R3", SDL_GAMEPAD_BUTTON_RIGHT_STICK}, {"A", SDL_GAMEPAD_BUTTON_SOUTH},
       {"B", SDL_GAMEPAD_BUTTON_EAST}, {"X", SDL_GAMEPAD_BUTTON_WEST}, {"Y", SDL_GAMEPAD_BUTTON_NORTH}};
   for (const auto& [name, input] : kNames)
@@ -332,7 +334,67 @@ bool Attachable(int input) {
   return !(kFixed >> input & 1);
 }
 
+Style PadStyle() {
+  int forced = int(settings::Get("button_names", 0));
+  if (forced == 1) return Style::kXbox;
+  if (forced == 2) return Style::kPlayStation;
+  if (forced == 3) return Style::kNintendo;
+  SDL_Gamepad* p = input::FirstPad();
+  switch (p ? SDL_GetGamepadType(p) : SDL_GAMEPAD_TYPE_UNKNOWN) {
+    case SDL_GAMEPAD_TYPE_PS3: case SDL_GAMEPAD_TYPE_PS4: case SDL_GAMEPAD_TYPE_PS5: return Style::kPlayStation;
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO: case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT: case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
+      return Style::kNintendo;
+    default: return Style::kXbox;
+  }
+}
+
 std::string InputName(int input) {
+  const Style style = PadStyle();
+  if (style == Style::kPlayStation) {
+    SDL_Gamepad* p = input::FirstPad();
+    const bool ps5 = int(settings::Get("button_names", 0)) == 0 && p && SDL_GetGamepadType(p) == SDL_GAMEPAD_TYPE_PS5;
+    switch (input) {
+      case A: return "CROSS";
+      case B: return "CIRCLE";
+      case X: return "SQUARE";
+      case Y: return "TRIANGLE";
+      case LB: return "L1";
+      case RB: return "R1";
+      case kLt: return "L2";
+      case kRt: return "R2";
+      case SDL_GAMEPAD_BUTTON_START: return "OPTIONS";
+      case SDL_GAMEPAD_BUTTON_BACK: return ps5 ? "CREATE" : "SHARE";
+      case SDL_GAMEPAD_BUTTON_GUIDE: return "PS";
+      default: break;
+    }
+  } else if (style == Style::kNintendo) {
+    // The face buttons by what is printed on them (SDL maps by position: south is B on a Switch pad).
+    SDL_Gamepad* p = input::FirstPad();
+    if (p && input >= A && input <= Y && int(settings::Get("button_names", 0)) == 0) {
+      switch (SDL_GetGamepadButtonLabel(p, SDL_GamepadButton(input))) {
+        case SDL_GAMEPAD_BUTTON_LABEL_A: return "A";
+        case SDL_GAMEPAD_BUTTON_LABEL_B: return "B";
+        case SDL_GAMEPAD_BUTTON_LABEL_X: return "X";
+        case SDL_GAMEPAD_BUTTON_LABEL_Y: return "Y";
+        default: break;
+      }
+    }
+    switch (input) {
+      case A: return "B";  // (a Nintendo layout: south B, east A, west Y, north X)
+      case B: return "A";
+      case X: return "Y";
+      case Y: return "X";
+      case LB: return "L";
+      case RB: return "R";
+      case kLt: return "ZL";
+      case kRt: return "ZR";
+      case SDL_GAMEPAD_BUTTON_START: return "+";
+      case SDL_GAMEPAD_BUTTON_BACK: return "-";
+      case SDL_GAMEPAD_BUTTON_GUIDE: return "HOME";
+      default: break;
+    }
+  }
   switch (input) {
     case A: return "A";
     case B: return "B";
@@ -476,7 +538,8 @@ std::string Rename(const std::string& text, const std::string& id, input::Mode m
     size_t len = 0, close = text.find('}', i);
     int input = text[i] == '{' && close != std::string::npos ? ButtonAt(text, i + 1, &len) : -1;
     if (input >= 0 && i + 1 + len == close) {
-      std::string name = changed ? NamesFor(logical, input) : text.substr(i + 1, len);
+      const bool fixed = input == SDL_GAMEPAD_BUTTON_START || input == SDL_GAMEPAD_BUTTON_BACK;
+      std::string name = changed && !fixed ? NamesFor(logical, input) : InputName(input);
       out += name, debt += int(name.size()) - int(len), i = close + 1;
     } else if (text[i] == ' ' && debt != 0) {
       size_t run = text.find_first_not_of(' ', i);
@@ -496,14 +559,30 @@ std::string Rename(const std::string& text, const std::string& id, input::Mode m
 }
 
 std::string RenameHint(const std::string& text) {
-  if (!g_active) return text;
+  if (!g_active && PadStyle() == Style::kXbox) return text;
   std::string out;
   for (size_t i = 0; i < text.size();) {
     size_t len = 0;
     int input = (i == 0 || !std::isalnum(uint8_t(text[i - 1]))) ? ButtonAt(text, i, &len) : -1;
     char next = i + len < text.size() ? text[i + len] : 0;
     if (input >= 0 && (next == ':' || next == '/' || (next == ' ' && i >= 1 && text[i - 1] == '/'))) {
-      out += NamesFor(g_logical, input), i += len;
+      const bool fixed = input == SDL_GAMEPAD_BUTTON_START || input == SDL_GAMEPAD_BUTTON_BACK;
+      out += g_active && !fixed ? NamesFor(g_logical, input) : InputName(input), i += len;
+    } else {
+      out += text[i++];
+    }
+  }
+  return out;
+}
+
+std::string UiText(const std::string& text) {
+  if (text.find('{') == std::string::npos) return text;
+  std::string out;
+  for (size_t i = 0; i < text.size();) {
+    size_t len = 0, close = text.find('}', i);
+    int input = text[i] == '{' && close != std::string::npos ? ButtonAt(text, i + 1, &len) : -1;
+    if (input >= 0 && i + 1 + len == close) {
+      out += InputName(input), i = close + 1;
     } else {
       out += text[i++];
     }

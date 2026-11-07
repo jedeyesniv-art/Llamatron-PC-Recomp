@@ -201,6 +201,27 @@ elease\Llamatron-<ver>-windows.zip (no game
   unreadable). Package: Extras\Trip-A-Tron manual.pdf. Gotcha fixed: a docs_via disk sent down the text path
   looped the launcher (no text -> kDocs again every frame).
 
+## Launcher previews, rumble, pad button names (2026-11-07, owner)
+- src/preview.cpp: the picked disk's game runs unseen behind the carousel (after 0.45 s still; launcher Update
+  -> preview::Select / Update, Render -> Draw before the pools of light). Per game a Script: input (past crack /
+  shareware screens: Llamatron j1 fire 150, Gridrunner click 600, Camels STE fire 300, TT nag patch + fire,
+  Andes click 300, Hardcore clicks + a wandering pointer (strobes off $10D66), Trip: Esc then a Lissajous light
+  show, palettes 1 2 3 7 8 9 only), when it's ready, the CPU rule (the registry's play rule, Llamatron's title).
+  Machines loaded like RunGame's (saves read, none written: empty save dir), kept per game (resume where they
+  were); each slice switches Musashi's context (cpu::SetMachine + Save/RestoreContext). Warm-up 4 ms a launcher
+  frame, others warmed 1.5 ms when one shows (SetGames). Look: a trail texture (old frame faded 70/255, new at
+  0.55, a flash guard dims frames brighter than the running mean), drawn ~80% of the height at 40%, cool tint,
+  four offset ADD copies (defocus), breathing / drift / flicker, a rounded vignette past the copies. Log:
+  "preview: x ms a launcher frame" (here 0.3-1.2, worst ~6). Test: --preview-test=<id> (frames to logs\preview).
+- src/rumble.cpp (setting rumble, GENERAL): lives counters found by RAM search (--dump-every=K:<prefix>, new):
+  Llamatron $5C0CF, Andes $12BB6 (bombs $12BB4), Photon $1D124 (bombs $1D126), Camels $19264 / TT $1929C,
+  Hardcore $14839; Gridrunner state 1 -> 4; D2 death countdown $2F2DE from 0, bombs $2BA44. Only when pad 1 was
+  used in the last 15 s (attract demos die too). Verified in scripted runs (log "rumble: ...").
+- Button names: remap::PadStyle (pad 1's SDL type, or setting button_names 0 auto / 1 Xbox / 2 PlayStation /
+  3 Nintendo) -> InputName (CROSS CIRCLE SQUARE TRIANGLE L1 R1 L2 R2 OPTIONS SHARE/CREATE; Nintendo by the
+  printed labels, L R ZL ZR + -). How-to-play pages and our UI mark buttons {A} {START}...: Rename / UiText
+  (launcher DrawText, panel text) / RenameHint (game hints: "A:" tokens, Start / Back too). Unmarked = prose.
+
 ## Steam (2026-11-07, owner: art + an ADD TO STEAM option on the Settings disk)
 - Art: Tools/make_steam_art.py <shots> -> res/steam/ capsule (600 x 900), wide (920 x 430), hero (1920 x 620), logo
   (transparent), in make_cover.py's style; tiles = screenshots through each game's own CRT++ look (not in git:
