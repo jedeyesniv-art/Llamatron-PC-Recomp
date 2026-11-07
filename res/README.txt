@@ -131,11 +131,16 @@ TRIP-A-TRON - XBOX PAD
   RT (hold)       make patterns                   LT              latch pattern making on / off
   D-pad L / R     previous / next effect          D-pad U / D     symmetry
   LB / RB         palette                         A               surprise me (effect, symmetry, palette)
-  X               stop all patterns               Y               the Control Panel
-  Start           starfields                      Back            waveforms
+  X               stop all patterns (panic)       Y               the Control Panel up / down
+  Start           the other demo (starfields)     B               the number row in turn (palettes;
+                                                                  the lasers in the starfield demo)
   L3 (or F12)     music: off / pulse / full - it listens to whatever your PC is playing
-On the Control Panel the sticks are the mouse, A / X its buttons. Keyboard and mouse work as on the ST. The
-first time it installs itself into userdata\tripatron (a few seconds). Its README is on the how-to-play page.
+  Back            settings (and leaving, back to the disks)
+On the Control Panel and its screens the sticks are the mouse, A / X its left / right buttons (the icons do
+different things with each), and B goes back: out of any screen (Sillyscope, Colour Cooker, the sequencers,
+Disk...) to the Control Panel, closes an alert or a Sym / Cube panel, and on the bare panel puts it away.
+Keyboard and mouse work as on the ST (F1-F6 are its own: the settings are on the pad's Back only). The first
+time it installs itself into userdata\tripatron (a few seconds). Its README is on the how-to-play page.
 
 
 REVENGE OF THE MUTANT CAMELS - XBOX PAD

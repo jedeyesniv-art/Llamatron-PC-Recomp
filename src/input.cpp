@@ -273,7 +273,7 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m) {
   }
 }
 
-bool QuitRequested() { return g_quit || grid::QuitRequested() || trip::QuitRequested() || stgames::QuitRequested(); }
+bool QuitRequested() { return g_quit || grid::QuitRequested() || stgames::QuitRequested(); }
 
 bool HintAtTop() { return g_mode == Mode::kTripATron; }
 

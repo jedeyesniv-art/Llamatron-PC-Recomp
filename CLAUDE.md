@@ -154,7 +154,7 @@ elease\Llamatron-<ver>-windows.zip (no game
 - Settings disk: games::Game::settings, appended last by Discover (label: make_labels.py STAND_IN, no byline);
   the launcher returns Action::kSettings, main RunSettings shows the panel over c.preview (the last game's
   frame, remaster sprites composed in, saved as userdata\preview.bmp) or TestCard through the CRT look.
-- In a game (not Trip-A-Tron, not a docs reader): Back / F1 suspend the emulation (no frames, audio cleared,
+- In a game (not a docs reader; Trip-A-Tron: Back only, F1 is its own key): Back / F1 suspend the emulation (no frames, audio cleared,
   remaster alpha 1) with the panel (general, the game's section, CRT); Back resumes (pacing resyncs), B / Esc
   leave to the disks. Key releases still reach the ST while it is open.
 - Start = the game's own pause everywhere (Defender 2 in play: host pause, it has none). "B twice" removed
@@ -311,7 +311,7 @@ font doubled with a raster gradient. In README.md.
   right stick = spirograph (writes x/y: centre + stick * trip_spiro_size 0.9 of the half screen), RT hold / LT
   latch = left button, d-pad L/R = letters A-Z (all 26 live with the default KML), U/D = symmetry (cursor
   cluster Up Down Left Right Insert Home Help Undo, all 8 distinct: $102D4), LB/RB = keypad digits (palettes),
-  A = random of the three, X Space, Y Esc, Start F10, Back = number keys (waveforms), B twice = launcher.
+  A = random of the three, X Space, Y Esc, Start F10, B = the number row (was Back; see "Trip-A-Tron B").
   Other states: sticks = mouse, A/RT left, X/LT right, Y Esc. Hint line at the top (HintAtTop). Pad polled with
   edges (test pad: gr<deg>@<mag> right stick, ga gb gx gy gstart gback gup gdown gleft gright, glt grt).
 - Trip-A-Tron flashes (owner 2026-11-01: palettes 4, 5, 6 "particularly aggressive", tone down to pulses):
@@ -336,6 +336,19 @@ font doubled with a raster gradient. In README.md.
   the block, trap #2 at $33808), which our GEM stub ignored. machine.cpp now does v_gtext, vst_height (it asks for
   4 = the small 6 x 6 font: our own 5 x 5 glyphs, kSmallFont, not Atari's), vst_color, vswr_mode, vst_alignment,
   vst_effects (logged, not drawn). The KML key screen and the panel's icons are its own graphics.
+- Trip-A-Tron B (2026-11-07, owner; manual Private\trip-a-tron-manual.pdf, Piku's 2003 transcription):
+  Back = the settings panel (leaving is there; B twice removed). B while performing = the number row 1..0 - =
+  (manual: demo 1 random palettes, demo 2 lasers). B elsewhere = back to the Control Panel (tripatron.cpp
+  Back): state $108B0 per screen -> its exit button clicked (kExits: 5 resize tick, 7 waveform quit-llama, 9
+  osc FX QUIT, 11 event assign QUIT, 12 disk BAA sheep, 13 VSEQ QUIT, 14 IES quit figure, 16 FINITO, 17 QUIT
+  EDIT, 18 NAFF OFF, 19 VAMOS, 20 EXIT) or Esc (10 KML editor, 15 starfield); state 2 + $10A78 = an alert
+  (click 136,47: every alert's button row, a two-button one's "no"), $1036E = a side panel (state 4 while it
+  slides in; $16AFE 1 = Sym: OK 308,131, 0 = Cube: GROOVY 299,194), else Esc (panel away). Clicks repeat every
+  30 frames until the state changes (screens ignore clicks while they slide in / load: Disk ~2 s, its own
+  sub-state $1BB34, buttons table $242BC). Verified all 36 icon / button screens. Pointer = $10692/4 in every
+  screen, buttons $10696. Other manual notes: icons differ by left / right button; F1-F6 plot switches,
+  Delete = next symmetry is presym, ; / ' secondary cursor on / off, ? starfield off, right button steers some
+  starfields - not on the pad yet (owner to choose).
 - Shared (2026-11-01): src/pad.cpp = pad 1 as a per-frame snapshot (real or the test pad from --press=N:g...)
   with edges; src/stgames.cpp = RMC and Andes controls (modes kRmc / kAndes). Registry play rule (games.h
   play_at / play_value / play_word / play_vbl): the faster CPU (--cpu, x8) while that RAM value says "play";

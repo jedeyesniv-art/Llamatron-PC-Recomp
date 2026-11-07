@@ -84,10 +84,11 @@ std::vector<Known> KnownGames() {
             "RT (HOLD) / LT  make patterns / latch them on",
             "D-PAD L/R  effect          D-PAD U/D  symmetry",
             "LB / RB    palette         A  surprise me",
-            "X  stop    Y  control panel    START  starfields",
-            "BACK            waveforms (starfield demos)",
-            "ON THE PANEL    sticks = mouse, A / X = buttons",
-            "B TWICE         back to the disks", "",
+            "X  stop (panic)  Y  control panel  START  other demo",
+            "B          number row (palettes; lasers in demo 2)",
+            "ON THE PANEL    sticks = mouse, A / X = left / right",
+            "                B = back to the panel, then away",
+            "BACK            settings, and back to the disks", "",
             "L3 / F12   music off / pulse / full (hears the PC)",
             "Yak's README.DOC is in userdata\\tripatron."};
   g.docs_text = "README.DOC";  // written by the installer

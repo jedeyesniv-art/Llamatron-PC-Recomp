@@ -569,9 +569,9 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   int vbls_second = 0, vbls_missed = 0;  // VBL interrupts the program didn't take (while playing)
   bool playing_second = true;
   bool running = true, at_title = false;
-  // The settings panel (Back / F1; not Trip-A-Tron, which uses every button, nor a docs reader): the
+  // The settings panel (Back / F1; not a docs reader; Trip-A-Tron: Back only - F1 is its own key): the
   // emulation is suspended while it is open; B there leaves the game.
-  const bool menu_allowed = !tripatron && mode != input::Mode::kDocs;
+  const bool menu_allowed = mode != input::Mode::kDocs;
   bool menu_resync = false;  // closed: the frame clock starts again from now
   int menu_ticks = 0;
   uint64_t menu_last = SDL_GetTicksNS();
@@ -586,6 +586,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
     menu::Result r = menu::HandleEvent(e);
     if (r == menu::Result::kClose) {
       remap::SyncEvents(input::FirstPad());  // (what's held now makes no presses)
+      trip::Resync();
       menu::Close();
       menu_resync = true;
     } else if (r == menu::Result::kQuit) {
@@ -605,7 +606,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       return;
     }
     if (menu_allowed && ((e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) ||
-                         (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.scancode == SDL_SCANCODE_F1))) {
+                         (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.scancode == SDL_SCANCODE_F1 && !tripatron))) {
       open_menu();
       return;
     }

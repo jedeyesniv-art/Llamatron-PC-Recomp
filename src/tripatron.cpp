@@ -18,6 +18,9 @@ namespace {
 constexpr uint32_t kStateVar = 0x108B0;  // 0 performing, 1 title, 2 Control Panel, ...
 constexpr uint32_t kPointerX = 0x10692;  // the light source / pointer: 0..319
 constexpr uint32_t kPointerY = 0x10694;  // 0..199
+// On the Control Panel (state 2): an alert box is up / a side panel (Sym, Cube Face) replaces the colour
+// presets; which side panel (1 = a Sym panel, 0 = Cube Face). Found by RAM diffs, 2026-11-07.
+constexpr uint32_t kAlertUp = 0x10A78, kSidePanel = 0x1036E, kSymPanel = 0x16AFE;
 
 // ST scancodes.
 constexpr uint8_t kSpace = 0x39, kEsc = 0x01, kF10 = 0x44;
@@ -36,9 +39,23 @@ const Key kSymmetries[8] = {{0x48, "UP"},     {0x50, "DOWN"},  {0x4B, "LEFT"}, {
 // Palettes: the numeric pad's digits.
 const Key kPalettes[10] = {{0x6D, "1"}, {0x6E, "2"}, {0x6F, "3"}, {0x6A, "4"}, {0x6B, "5"},
                            {0x6C, "6"}, {0x67, "7"}, {0x68, "8"}, {0x69, "9"}, {0x70, "0"}};
-// Waveforms (the starfield demos): the main keyboard's number keys.
-const Key kWaves[10] = {{0x02, "1"}, {0x03, "2"}, {0x04, "3"}, {0x05, "4"}, {0x06, "5"},
-                        {0x07, "6"}, {0x08, "7"}, {0x09, "8"}, {0x0A, "9"}, {0x0B, "0"}};
+// The main keyboard's number row 1 ... 0 - = (the manual: demo 1 a random palette, demo 2 the lasers).
+const Key kNumbers[12] = {{0x02, "1"}, {0x03, "2"}, {0x04, "3"}, {0x05, "4"}, {0x06, "5"}, {0x07, "6"},
+                          {0x08, "7"}, {0x09, "8"}, {0x0A, "9"}, {0x0B, "0"}, {0x0C, "-"}, {0x0D, "="}};
+
+// B on an edit screen: how that screen is left (the manual's "to leave" for each), by state ($108B0).
+// x < 0: Esc (the keyboard-driven screens); otherwise a left click on its exit button at (x, y).
+struct Exit {
+  int state, x, y;
+  const char* name;
+};
+const Exit kExits[] = {
+    {5, 122, 196, "RESIZE EDIT"},        {7, 303, 60, "WAVEFORM BUILD"},     {9, 87, 177, "OSCILLATOR FX"},
+    {10, -1, 0, "KML EDITOR"},           {11, 257, 166, "EVENT ASSIGN"},     {12, 273, 85, "DISK ACCESS"},
+    {13, 196, 89, "VIDEO SEQUENCER"},    {14, 298, 168, "EVENT SEQUENCER"},  {15, -1, 0, "STARFIELD EDIT"},
+    {16, 276, 191, "PATTERN EDIT"},      {17, 36, 186, "COLOUR COOKER"},     {18, 250, 189, "MIDI"},
+    {19, 281, 166, "GLOBAL PARAMETERS"}, {20, 73, 194, "SILLYSCOPE"},
+};
 
 struct Tune {
   double speed = 5, curve = 2, deadzone = 0.15;  // left stick: pixels per frame at full deflection
@@ -51,14 +68,22 @@ struct Tap {
 };
 std::vector<Tap> g_taps;
 bool g_calm = true;  // trip_calm_background: the background's flashes toned down (owner 2026-11-01)
-int g_effect = -1, g_symmetry = -1, g_palette = -1, g_wave = -1;  // -1: not chosen from the pad yet
+int g_effect = -1, g_symmetry = -1, g_palette = -1, g_number = -1;  // -1: not chosen from the pad yet
 bool g_latch = false;
 uint32_t g_held = 0;                // pad buttons held last frame (edges)
 bool g_lt_held = false;             // (performing: LT toggles the latch on its press)
 float g_px = 0, g_py = 0;           // stick movement not sent yet (sub-pixel)
-uint64_t g_hint_until = 0, g_quit_armed_ms = 0;
-bool g_quit = false;
+uint64_t g_hint_until = 0;
 std::string g_hint;
+bool g_resync = false;   // the settings panel closed: what's held now makes no presses
+bool g_greeted = false;  // the first hint shown
+// A click on an exit button (B): the pointer goes there, the left button is pressed for a few frames. Screens
+// ignore clicks while they slide in / load (the Disk screen: ~2 s), so it is repeated every 30 frames until the
+// state changes (8 tries).
+struct Click {
+  bool active = false;
+  int x = 0, y = 0, frame = 0, state = 0, tries = 0;  // frame < 0: waiting before the next try
+} g_click;
 TestPad g_test_pad;
 bool g_test = false;
 std::mt19937 g_rng(1992);
@@ -77,6 +102,42 @@ void Put16(st::Machine& m, uint32_t a, uint16_t v) { m.Ram()[a] = uint8_t(v >> 8
 void TapKey(st::Machine* m, uint8_t code) {
   m->KeyEvent(code, true);
   g_taps.push_back({code, 3});
+}
+
+void SetHint(const std::string& text, int ms) {
+  g_hint = text;
+  g_hint_until = SDL_GetTicks() + uint64_t(ms);
+}
+
+void StartClick(int x, int y, int state) { g_click = {true, x, y, 0, state, 0}; }
+
+// B everywhere but performing: back towards the Control Panel - an edit screen by its own exit button (or
+// Esc), an alert by its button, a side panel by OK / GROOVY; on the bare panel, put the panel away.
+void Back(st::Machine* m, int state) {
+  if (state == 4 || (state == 2 && Get16(*m, kSidePanel))) {  // a side panel (4: still sliding in)
+    if (Get16(*m, kSymPanel)) StartClick(308, 131, -3);  // OK
+    else StartClick(299, 194, -3);                        // GROOVY
+    return SetHint("BACK TO THE CONTROL PANEL", 1200);
+  }
+  if (state == 2) {
+    if (Get16(*m, kAlertUp)) {
+      StartClick(136, 47, -2);  // every alert's button row (a two-button alert: the left one, the "no")
+      return SetHint("ALERT CLOSED", 1200);
+    }
+    TapKey(m, kEsc);  // the panel itself: away, back to performing
+    return;
+  }
+  for (const Exit& e : kExits) {
+    if (e.state != state) continue;
+    if (e.x < 0) TapKey(m, kEsc);
+    else StartClick(e.x, e.y, state);
+    LOG("Trip-A-Tron: B leaves %s (state %d)", e.name, state);
+    return SetHint(std::string("LEAVING ") + e.name, 1200);
+  }
+  if (state != 1 && state != 3) {
+    LOG("Trip-A-Tron: B in an unknown state %d - Esc", state);
+    TapKey(m, kEsc);
+  }
 }
 
 void ShowState() {
@@ -118,11 +179,12 @@ void LoadSettings() {
 
 void Reset() {
   g_taps.clear();
-  g_effect = g_symmetry = g_palette = g_wave = -1;
-  g_latch = g_lt_held = g_quit = g_test = false;
+  g_effect = g_symmetry = g_palette = g_number = -1;
+  g_latch = g_lt_held = g_test = g_resync = g_greeted = false;
+  g_click = {};
   g_held = 0;
   g_px = g_py = 0;
-  g_hint_until = g_quit_armed_ms = 0;
+  g_hint_until = 0;
   g_hint.clear();
   g_was_music = g_heard = g_music_key = false;
   g_pulse = g_beats = 0;
@@ -134,7 +196,7 @@ void SetTestPad(const TestPad& t) {
   g_test = true;
 }
 
-bool QuitRequested() { return g_quit; }
+void Resync() { g_resync = true; }
 
 // Music (Neon's analysis, music.h) while performing: the light source orbits a centre the player moves (left
 // stick / mouse) - radius from the bass, speed from the mids, a shimmer from the treble; beats pulse pattern
@@ -235,6 +297,7 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
   if (have_pad)
     for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT && b < 32; ++b)
       if (test ? (g_test_pad.buttons >> b & 1) : SDL_GetGamepadButton(pad, SDL_GamepadButton(b))) held |= 1u << b;
+  if (g_resync) g_held = held, g_lt_held = axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 0.5f, g_resync = false;
   uint32_t pressed = held & ~g_held;
   g_held = held;
   auto press = [&](SDL_GamepadButton b) { return (pressed >> b & 1) != 0; };
@@ -244,11 +307,13 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
   g_lt_held = lt;
   auto chose = [&]() { g_manual_until = SDL_GetTicks() + 15000; };
 
-  if (press(SDL_GAMEPAD_BUTTON_EAST)) {  // B twice: back to the launcher
-    if (SDL_GetTicks() < g_quit_armed_ms) g_quit = true;
-    else g_quit_armed_ms = SDL_GetTicks() + 3000;
+  const int state = State(*m);
+  if (!g_greeted && have_pad && state == 1) {
+    g_greeted = true;
+    SetHint("BACK: SETTINGS / LEAVE    B: BACK TO THE PANEL", 6000);
   }
-  if (press(SDL_GAMEPAD_BUTTON_NORTH)) TapKey(m, kEsc);  // the Control Panel (and out of edit screens)
+  if (press(SDL_GAMEPAD_BUTTON_EAST) && !performing && !g_click.active) Back(m, state);
+  if (press(SDL_GAMEPAD_BUTTON_NORTH)) TapKey(m, kEsc);  // the Control Panel up / down
   if (press(SDL_GAMEPAD_BUTTON_LEFT_STICK) || g_music_key) CycleMusic();
   g_music_key = false;
 
@@ -286,9 +351,9 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
       g_hint = "PATTERNS STOPPED", g_hint_until = SDL_GetTicks() + 1500;
     }
     if (press(SDL_GAMEPAD_BUTTON_START)) TapKey(m, kF10);
-    if (press(SDL_GAMEPAD_BUTTON_BACK)) {
-      Step(m, &g_wave, kWaves, 10, 1);
-      g_hint = std::string("WAVEFORM ") + kWaves[g_wave].name, g_hint_until = SDL_GetTicks() + 1500;
+    if (press(SDL_GAMEPAD_BUTTON_EAST)) {  // the number row in turn (on Back until 2026-11-07)
+      Step(m, &g_number, kNumbers, 12, 1);
+      SetHint(std::string("NUMBER KEY ") + kNumbers[g_number].name, 1500);
     }
   } else {
     // A mouse: both sticks move the pointer; A / RT left button, X / LT right button.
@@ -298,7 +363,26 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     if (down(SDL_GAMEPAD_BUTTON_SOUTH) || rt) buttons |= 2;
     if (down(SDL_GAMEPAD_BUTTON_WEST) || lt) buttons |= 1;
     g_latch = false;
+    if (g_click.active) {  // B's click: the pointer held on the exit button, the left button pressed
+      // Still where it was clicked (an alert / side panel: its flag still up)? Try again a little later.
+      bool still = g_click.state == -2   ? Get16(*m, kAlertUp) && state == 2
+                   : g_click.state == -3 ? Get16(*m, kSidePanel) != 0
+                                         : state == g_click.state;
+      if (g_click.frame == 0 && g_click.tries > 0 && !still) g_click.active = false;
+      if (g_click.active) {
+        if (g_click.frame >= 0) {
+          Put16(*m, kPointerX, uint16_t(g_click.x)), Put16(*m, kPointerY, uint16_t(g_click.y));
+          vx = vy = 0, g_px = g_py = 0, mouse_dx = mouse_dy = 0;
+          buttons = g_click.frame >= 2 && g_click.frame < 6 ? 2 : 0;
+        }
+        if (++g_click.frame > 8) {
+          if (++g_click.tries >= 8) g_click.active = false;
+          else g_click.frame = -22;  // (with the 8 above: every 30 frames)
+        }
+      }
+    }
   }
+  if (performing) g_click.active = false;
   g_px += vx, g_py += vy;
   int dx = int(g_px), dy = int(g_py);
   g_px -= float(dx), g_py -= float(dy);
@@ -319,7 +403,6 @@ void MusicKey() { g_music_key = true; }
 int MusicMode() { return g_music_mode; }
 
 const char* Hint(st::Machine* m, bool have_pad) {
-  if (SDL_GetTicks() < g_quit_armed_ms) return "Press B again to leave Trip-A-Tron";
   if (SDL_GetTicks() < g_hint_until) return g_hint.c_str();
   return nullptr;
 }

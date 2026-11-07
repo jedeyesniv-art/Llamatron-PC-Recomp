@@ -1,7 +1,7 @@
-// Trip-A-Tron (TRIP.PRG, Jeff Minter 1992): a light synthesiser, played with the mouse (where the light source
-// is; left button held = pattern generation) and the keyboard (letters = effects, the cursor cluster = symmetry,
-// the numeric pad = palettes, Space = stop, Esc = the Control Panel, F10 = the starfield demos, number keys =
-// waveforms there).
+// Trip-A-Tron (TRIP.PRG, Jeff Minter 1988; shareware 1992): a light synthesiser, played with the mouse (where
+// the light source is; left button held = pattern generation) and the keyboard (letters = effects, the cursor
+// cluster = symmetry, the numeric pad = palettes / strobes, the number row = palettes (demo 1) or lasers (demo
+// 2), Space = panic, Esc = the Control Panel, F10 = the other demo, F1-F6 = the plot routine switches).
 // On a pad, while performing (state $108B0 = 0):
 //   left stick        moves the light source (relative, through a curve: settings trip_stick_*)
 //   right stick       "spirograph": the stick's position is the screen position (centre = middle of the
@@ -10,11 +10,13 @@
 //   d-pad left/right  previous / next effect (A-Z)   d-pad up/down   previous / next symmetry
 //   LB / RB           previous / next palette        A    random effect + symmetry + palette
 //   X                 stop all patterns (Space)      Y    the Control Panel (Esc)
-//   Start             the starfield demos (F10)      Back next waveform (number keys)
-//   B twice           back to the launcher
+//   Start             the other demo (F10)           B    next number-row key (1 ... 0 - =)
+//   Back              the settings panel (main.cpp; leaving to the disks is there)
 //   L3 (or F12)       music: off / pulse / full - reacts to whatever the PC plays, as our Neon port does
 // On the title, the Control Panel and the edit screens (state != 0) the pad is a mouse: either stick moves the
-// pointer, A / RT = left button, X / LT = right button, Y = Esc. The keyboard and PC mouse work throughout.
+// pointer, A / RT = left button, X / LT = right button, Y = Esc; B = back towards the Control Panel (an edit
+// screen's own exit button clicked, an alert's button, a side panel's OK / GROOVY; on the bare panel: put it
+// away). The keyboard and PC mouse work throughout (F1 is the ST's: no settings key here).
 #pragma once
 
 #include <SDL3/SDL.h>
@@ -34,7 +36,8 @@ void LoadSettings();
 // Once per frame: pad 1 (may be null) and the host mouse's movement and buttons (bit 1 left, bit 0 right).
 void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_t mouse_buttons);
 const char* Hint(st::Machine* m, bool have_pad);
-bool QuitRequested();
+// The settings panel closed: buttons held now make no presses.
+void Resync();
 // Music modes (music.h): 0 off, 1 pulse (beats pulse pattern generation, the source orbits to the bass and mids
 // around a centre the player moves), 2 full (also palette / symmetry / effect changes on accents, a clear screen
 // when the music stops). L3 or F12 cycles them (saved: trip_music).
