@@ -356,9 +356,14 @@ font doubled with a raster gradient. In README.md.
   X B Start RB = F1-F6, d-pad U/D = pre-symmetry), overlays trip::DrawOverlay (main.cpp after the hint), panel
   d-pad grid (9 x 3 incl. presets, kIcons names + A / X meanings), tool screens: d-pad nudge, LB slow pointer;
   trip_flow (inertia), trip_gyro / _speed (SDL sensor, yaw / pitch), trip_rumble (music beats). Tests: gr3 / gl3,
-  "trip key $xx" logged when a test pad is used. Pass 2 (research): live keys from the KML key table, the six
-  stages' on / off flags in the Y overlay, Global Parameter banks on Y + d-pad L/R, starfield / laser steering on
-  the right stick (KML variables SVX... named at $2F2E5 region of TRIP.PRG).
+  "trip key $xx" logged when a test pad is used. Pass 2: KML system variables found - names at text $2F2C3
+  ($FF-separated), addresses at $2F3BA (CX $1146C, CY $1146E, BUTTONS $10696, SVX/SVY/SVZ $23AEE/F0/F2,
+  ANG_VELOCITY $23AF4 (reset every frame: no use), ABS_ANGLE $23B04, PATTERN $20C8C, GA..GZ $3F58E..); $23AEC =
+  starfield running. Done: the right stick flies a running starfield (SVZ offset eased back on release, spin by
+  adding to ABS_ANGLE, RT boost). Not done (deeper digs): live keys only (the key tables $15DF4 / $42B86 are
+  identity maps; event programs not located), the stages' on / off (F1 rewrites a routine-pointer chain at
+  $3B848, no flags), Global Parameter banks (KML commands: 114 names from $2ED74, GLOBAL = 54, dispatch not a
+  pointer table), laser steering (Sillyscope parameters aren't KML variables).
 - Shared (2026-11-01): src/pad.cpp = pad 1 as a per-frame snapshot (real or the test pad from --press=N:g...)
   with edges; src/stgames.cpp = RMC and Andes controls (modes kRmc / kAndes). Registry play rule (games.h
   play_at / play_value / play_word / play_vbl): the faster CPU (--cpu, x8) while that RAM value says "play";

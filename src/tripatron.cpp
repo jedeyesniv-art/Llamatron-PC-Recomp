@@ -22,6 +22,9 @@ constexpr uint32_t kPointerY = 0x10694;  // 0..199
 // On the Control Panel (state 2): an alert box is up / a side panel (Sym, Cube Face) replaces the colour
 // presets; which side panel (1 = a Sym panel, 0 = Cube Face). Found by RAM diffs, 2026-11-07.
 constexpr uint32_t kAlertUp = 0x10A78, kSidePanel = 0x1036E, kSymPanel = 0x16AFE;
+// KML's system variables (TRIP.PRG's name table at text $2F2C3, addresses right after it at $2F3BA): the
+// starfield's speed in depth and spin; $23AEC = the starfield running (0 = none; found by a RAM diff).
+constexpr uint32_t kStarSvz = 0x23AF2, kStarAngle = 0x23B04, kStarfieldOn = 0x23AEC;  // (ABS_ANGLE 0..255)
 
 // ST scancodes.
 constexpr uint8_t kSpace = 0x39, kEsc = 0x01, kF1 = 0x3B, kF10 = 0x44, kDelete = 0x53;
@@ -145,6 +148,11 @@ bool g_pre = false;                   // the symmetry wheel sets the pre-symmetr
 int g_cell = -1;                      // the Control Panel's icon picked with the d-pad (row * 9 + column)
 int g_dpad_frames = 0;                // tool screens: d-pad held (nudge repeat)
 SDL_Gamepad* g_gyro_pad = nullptr;    // the pad whose gyro is switched on
+// Flying a starfield: the right stick and RT offset its own speed / spin, which come back when let go.
+bool g_flying = false;
+int16_t g_base_svz = 0;                  // the starfield's own speed (as its KML left it)
+float g_fly_svz = 0, g_fly_spin = 0;      // our speed offset and spin (angle units a frame), eased
+float g_spin_acc = 0;                     // spin not applied yet (fractions of an angle unit)
 // A click on an exit button (B): the pointer goes there, the left button is pressed for a few frames. Screens
 // ignore clicks while they slide in / load (the Disk screen: ~2 s), so it is repeated every 30 frames until the
 // state changes (8 tries).
@@ -310,6 +318,7 @@ void Reset() {
   g_y_used = g_pre = false;
   g_cell = -1, g_dpad_frames = 0;
   g_gyro_pad = nullptr;
+  g_flying = false;
   g_was_music = g_heard = g_music_key = false;
   g_pulse = g_beats = 0;
   g_manual_until = 0;
@@ -556,8 +565,33 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
       g_fvx = vx, g_fvy = vy;
     }
     vx += gx, vy += gy;
+    // A starfield running (patterns can't be drawn meanwhile - the manual): the right stick flies it - up /
+    // down = faster / slower (past the middle: backwards), left / right = spin; RT = a boost. Let go and the
+    // starfield's own speed and spin come back (eased); its KML may change them meanwhile (taken as the new own).
+    const bool stars = Get16(*m, kStarfieldOn) != 0;
+    if (stars && g_wheel == Wheel::kNone) {
+      int16_t svz = int16_t(Get16(*m, kStarSvz));
+      if (!g_flying) g_base_svz = svz, g_fly_svz = g_fly_spin = g_spin_acc = 0, g_flying = true;
+      // What we wrote last frame, unless its KML changed it since: then that is its own value now.
+      if (svz != int16_t(std::lround(g_base_svz + g_fly_svz))) g_base_svz = int16_t(svz - std::lround(g_fly_svz));
+      const float dead = 0.12f;
+      float sy = std::fabs(ry) > dead ? -ry : 0, sx = std::fabs(rx) > dead ? rx : 0;
+      const float own = float(g_base_svz == 0 ? -60 : g_base_svz);  // (a still field: forward = towards you)
+      float want_svz = own * (sy >= 0 ? 2.5f * sy : 2.0f * sy) + own * 2.0f * std::max(0.0f, rt_axis - 0.08f);
+      float want_spin = 2.5f * sx * std::fabs(sx);  // angle units (256 a turn) a frame: ~half a turn a second
+      g_fly_svz += (want_svz - g_fly_svz) * 0.15f, g_fly_spin += (want_spin - g_fly_spin) * 0.15f;
+      Put16(*m, kStarSvz, uint16_t(int16_t(std::clamp<long>(std::lround(g_base_svz + g_fly_svz), -500, 500))));
+      g_spin_acc += g_fly_spin;  // the spin turns the field's own angle on (its KML's turning kept)
+      if (int turn = int(g_spin_acc)) {
+        g_spin_acc -= float(turn);
+        Put16(*m, kStarAngle, uint16_t((Get16(*m, kStarAngle) + turn) & 255));
+      }
+      if (sx != 0 || sy != 0) right_stick = true;  // (no spirograph: the stick is flying)
+    } else if (g_flying) {
+      g_flying = false;
+    }
     // Right stick: the spirograph - the stick's position is the light source's position on the screen.
-    if (g_wheel == Wheel::kNone && rx * rx + ry * ry > 0.08f * 0.08f) {
+    if (!stars && g_wheel == Wheel::kNone && rx * rx + ry * ry > 0.08f * 0.08f) {
       int x = std::clamp(int(std::lround(160 + rx * 160 * g_tune.spiro)), 0, 319);
       int y = std::clamp(int(std::lround(100 + ry * 100 * g_tune.spiro)), 0, 199);
       Put16(*m, kPointerX, uint16_t(x));

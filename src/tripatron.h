@@ -6,6 +6,8 @@
 // a layer on Y, each drawn as an overlay while held (DrawOverlay):
 //   left stick        the light (relative, through a curve; trip_flow adds inertia for long glides)
 //   right stick       "spirograph": the stick's position is the screen position (trip_spiro_size)
+//                     while a starfield runs ($23AEC): flies it - up / down faster / backwards, left / right spin
+//                     (ABS_ANGLE), RT a boost; let go and its own speed comes back
 //   RT (analog)       paint: the squeeze sets the density (light = a pattern every few frames, full = every frame:
 //                     the Global Parameters' ON / OFF time played live; trip_pressure 0 = on / off)
 //   LT                the right mouse button (Global Parameters' "button 2": VECTOR / CENTRE / KML #128)

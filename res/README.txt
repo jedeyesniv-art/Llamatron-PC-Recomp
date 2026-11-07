@@ -129,6 +129,9 @@ TRIP-A-TRON - XBOX PAD
 ----------------------
 Played like an instrument. The basics:
   Left stick      move the light source           Right stick     spirograph: the stick is the position
+  While a starfield is running (the starfield demo: Start, then the A row) the right stick flies it:
+                  push up to speed into the stars, pull back to reverse, left / right to spin, RT to boost;
+                  let go and it settles back to its own speed
   RT              paint - how hard you squeeze sets how thickly patterns flow (light = sparse pulses)
   LT              the right mouse button (what it does is set in Global Parameters: VECTOR locks the light
                   into a dead-straight line, CENTRE brings it back to the middle)
