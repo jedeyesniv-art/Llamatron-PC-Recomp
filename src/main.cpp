@@ -32,6 +32,7 @@
 #include "remaster_llama.h"
 #include "launcher.h"
 #include "settings_menu.h"
+#include "glyphs.h"
 #include "preview.h"
 #include "rumble.h"
 #include "steam.h"
@@ -1039,7 +1040,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
           SDL_RenderFillRect(renderer, &box);
           SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-          SDL_RenderDebugText(renderer, x, y, line.c_str());
+          glyphs::Text(renderer, x, y, line);
           y += 10;
         }
       }

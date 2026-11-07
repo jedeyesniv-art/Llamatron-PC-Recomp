@@ -221,6 +221,11 @@ elease\Llamatron-<ver>-windows.zip (no game
   3 Nintendo) -> InputName (CROSS CIRCLE SQUARE TRIANGLE L1 R1 L2 R2 OPTIONS SHARE/CREATE; Nintendo by the
   printed labels, L R ZL ZR + -). How-to-play pages and our UI mark buttons {A} {START}...: Rename / UiText
   (launcher DrawText, panel text) / RenameHint (game hints: "A:" tokens, Start / Back too). Unmarked = prose.
+  PlayStation names are glyphs (owner: the words ran off screen): src/glyphs.cpp, codes - = cross /
+  circle / square / triangle (pad colours, dimmed with the text) / options (three lines) / share (an arrow), drawn
+  as 8 x 8 pixels in a character cell by glyphs::Text (replaces SDL_RenderDebugText in the launcher, panel, hints).
+- Launcher (owner 2026-11-07): disks 10% smaller (DrawDisk world() x0.9), no pools of light / bloom / spotlight:
+  an even front light (0.35 + 0.55 diffuse) on every disk, the preview behind is the backdrop.
 
 ## Steam (2026-11-07, owner: art + an ADD TO STEAM option on the Settings disk)
 - Art: Tools/make_steam_art.py <shots> -> res/steam/ capsule (600 x 900), wide (920 x 430), hero (1920 x 620), logo

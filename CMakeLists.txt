@@ -81,6 +81,7 @@ add_executable(llamatron WIN32
   src/steam.cpp
   src/preview.cpp
   src/rumble.cpp
+  src/glyphs.cpp
   src/log.cpp
   src/crash.cpp)
 target_link_libraries(llamatron PRIVATE SDL3::SDL3-static musashi)

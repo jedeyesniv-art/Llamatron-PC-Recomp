@@ -8,6 +8,7 @@
 #include "crt.h"
 #include "input.h"
 #include "log.h"
+#include "glyphs.h"
 #include "remap.h"
 #include "settings.h"
 #include "steam.h"
@@ -611,7 +612,7 @@ void Render(SDL_Renderer* r) {
   auto text = [&](const std::string& t, float x, float y, SDL_Color c, float scale = 1) {
     SDL_SetRenderScale(r, s * scale, s * scale);
     SDL_SetRenderDrawColor(r, c.r, c.g, c.b, c.a);
-    SDL_RenderDebugText(r, x / (s * scale), y / (s * scale), remap::UiText(t).c_str());
+    glyphs::Text(r, x / (s * scale), y / (s * scale), remap::UiText(t));
     SDL_SetRenderScale(r, 1, 1);
   };
   const SDL_Color kWhite{255, 255, 255, 255}, kDim{140, 140, 155, 255}, kLabel{205, 205, 215, 255},

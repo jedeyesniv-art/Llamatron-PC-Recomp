@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "glyphs.h"
 #include "input.h"
 #include "log.h"
 #include "settings.h"
@@ -352,19 +353,18 @@ Style PadStyle() {
 std::string InputName(int input) {
   const Style style = PadStyle();
   if (style == Style::kPlayStation) {
-    SDL_Gamepad* p = input::FirstPad();
-    const bool ps5 = int(settings::Get("button_names", 0)) == 0 && p && SDL_GetGamepadType(p) == SDL_GAMEPAD_TYPE_PS5;
     switch (input) {
-      case A: return "CROSS";
-      case B: return "CIRCLE";
-      case X: return "SQUARE";
-      case Y: return "TRIANGLE";
+      // The symbols themselves, a character cell each (glyphs.h: the words ran off the screen).
+      case A: return std::string(1, glyphs::kCross);
+      case B: return std::string(1, glyphs::kCircle);
+      case X: return std::string(1, glyphs::kSquare);
+      case Y: return std::string(1, glyphs::kTriangle);
       case LB: return "L1";
       case RB: return "R1";
       case kLt: return "L2";
       case kRt: return "R2";
-      case SDL_GAMEPAD_BUTTON_START: return "OPTIONS";
-      case SDL_GAMEPAD_BUTTON_BACK: return ps5 ? "CREATE" : "SHARE";
+      case SDL_GAMEPAD_BUTTON_START: return std::string(1, glyphs::kOptions);
+      case SDL_GAMEPAD_BUTTON_BACK: return std::string(1, glyphs::kShare);  // (CREATE on a PS5, SHARE before)
       case SDL_GAMEPAD_BUTTON_GUIDE: return "PS";
       default: break;
     }

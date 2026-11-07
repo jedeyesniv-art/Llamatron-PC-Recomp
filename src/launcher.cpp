@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "crt.h"
+#include "glyphs.h"
 #include "preview.h"
 #include "remap.h"
 
@@ -16,7 +17,6 @@ namespace {
 
 #include "labels.inc"
 
-constexpr float kPi = 3.14159265f;
 
 struct V3 {
   float x, y, z;
@@ -422,7 +422,7 @@ void Launcher::DrawText(const char* text, float x, float y, float scale, SDL_Col
   if (centred) x -= float(SDL_strlen(s)) * 8 * scale / 2;
   SDL_SetRenderScale(r_, scale, scale);
   SDL_SetRenderDrawColor(r_, c.r, c.g, c.b, c.a);
-  SDL_RenderDebugText(r_, x / scale, y / scale, s);
+  glyphs::Text(r_, x / scale, y / scale, s);
   SDL_SetRenderScale(r_, 1, 1);
 }
 
@@ -440,18 +440,15 @@ void Launcher::DrawDisk(int game, float w, float h) {
          pl.z + 14 * sel + 250 * launch * launch};
   float yaw = side * 0.42f * (1 - sel) + 0.07f * std::sin(float(time_) * 0.8f + game * 1.7f) + launch * 0.6f * side;
   float pitch = -0.10f * (1 - sel) + 0.03f * std::sin(float(time_) * 0.6f + game) - launch * 0.5f;
-  auto world = [&](float x, float y, float z) { return RotY(RotX(V3{x, y, z}, pitch), yaw) + pos; };
-  auto normal = [&](V3 n) { return Normalize(RotY(RotX(n, pitch), yaw)); };
-  // The spotlight above, in front; how much of it this disk gets.
-  float spot = (0.18f + 0.95f * sel) * pl.vis;
-  V3 light_pos{pl.x * (1 - launch), 230, 140};
-  auto lit = [&](V3 centre, V3 n, float shine) {
-    V3 l = Normalize(light_pos - centre);
-    float diff = std::max(0.0f, Dot(n, l));
-    V3 view = Normalize(cam.eye - centre), half = Normalize(l + view);
-    float spec = shine > 0 ? std::pow(std::max(0.0f, Dot(n, half)), 24.0f) * shine : 0;
-    return 0.07f * pl.vis + (0.95f * diff + spec) * spot;
+  constexpr float kSize = 0.9f;  // (owner 2026-11-07: 10% smaller, the preview behind them)
+  auto world = [&](float x, float y, float z) {
+    return RotY(RotX(V3{x * kSize, y * kSize, z * kSize}, pitch), yaw) + pos;
   };
+  auto normal = [&](V3 n) { return Normalize(RotY(RotX(n, pitch), yaw)); };
+  // No spotlight (owner 2026-11-07, with the preview behind): an even, soft light from the front, the same for
+  // every disk - just enough shading for their shape.
+  const V3 light_dir = Normalize(V3{0.15f, 0.35f, 1.0f});
+  auto lit = [&](V3, V3 n, float) { return pl.vis * (0.35f + 0.55f * std::max(0.0f, Dot(n, light_dir))); };
 
   // The body: front, back, edges (culled to what faces us), then the parts on the front.
   struct Face {
@@ -528,31 +525,7 @@ void Launcher::Render() {
   cam.f = h * 1.45f, cam.cx = w / 2, cam.cy = h * 0.47f;
   preview::Draw(iw, ih);  // the game behind the disks, faint
 
-  // Pure black, a pool of light under each disk and a soft bloom behind it (both stronger for the picked one).
-  auto glow = [&](V3 centre, float rx, float ry, bool floor, SDL_FColor c) {
-    std::vector<SDL_Vertex> v;
-    v.push_back({cam.Project(centre), c, {0, 0}});
-    const int n = 40;
-    for (int i = 0; i <= n; ++i) {
-      float a = i * 2 * kPi / n;
-      V3 p = floor ? V3{centre.x + rx * std::cos(a), centre.y, centre.z + ry * std::sin(a)}
-                   : V3{centre.x + rx * std::cos(a), centre.y + ry * std::sin(a), centre.z};
-      v.push_back({cam.Project(p), {0, 0, 0, 1}, {0, 0}});
-    }
-    std::vector<int> idx;
-    for (int i = 1; i <= n; ++i) idx.insert(idx.end(), {0, i, i + 1});
-    SDL_RenderGeometry(r_, white_add_, v.data(), int(v.size()), idx.data(), int(idx.size()));
-  };
-  for (int g = 0; g < Count(); ++g) {
-    Place pl = PlaceAt(Offset(g));
-    if (pl.vis <= 0) continue;
-    float launch = launching_ >= 0 && g == selected_ ? Smooth(float(launching_ / 0.75)) : 0.0f;
-    float k = (0.12f + 0.88f * pl.sel) * (1 - launch) * pl.vis;
-    float rx = 62 * (1 - 0.25f * (1 - pl.sel));
-    glow({pl.x, kFloorY, pl.z + 10}, rx, 38, true, {0.30f * k, 0.30f * k, 0.34f * k, 1});
-    float bloom = (0.012f + 0.088f * pl.sel) * (1 - launch) * pl.vis;  // a hint behind the others
-    glow({pl.x, 2 + 7 * pl.sel, pl.z + 14 * pl.sel - 6}, 80, 82, false, {bloom, bloom, bloom * 1.1f, 1});
-  }
+  // Pure black: no pools of light or bloom any more (owner 2026-11-07: the preview is the backdrop).
   // The disks, back to front: the furthest from the middle first.
   std::vector<int> order;
   for (int g = 0; g < Count(); ++g) order.push_back(g);
