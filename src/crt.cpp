@@ -232,7 +232,7 @@ void RunPsy(SDL_Renderer* r, SDL_Texture* picture) {
 
   const Psy& p = g_psy;
   struct {
-    float move[4], tint[4], hue[4];
+    float move[4], tint[4], hue[4], weigh[4];
   } tu{};
   tu.move[0] = std::exp(-p.zoom * dt);
   tu.move[1] = p.twist * dt;
@@ -242,6 +242,22 @@ void RunPsy(SDL_Renderer* r, SDL_Texture* picture) {
   const float h6 = p.hue * 6;
   auto chan = [h6](float o) { return std::clamp(std::fabs(std::fmod(h6 + o, 6.0f) - 3) - 1, 0.0f, 1.0f); };
   tu.tint[0] = chan(0), tu.tint[1] = chan(4), tu.tint[2] = chan(2);
+  // How the trail's brightness is measured for the tint (owner 2026-11-07: the slider should only change the
+  // colour). The tinted trail feeds back into itself, so with plain luminance a colour's own brightness was its gain:
+  // green / cyan / yellow (> 1) grew to white within seconds, red / magenta barely faded. Weights w with
+  // w . colour = the default blue's luminance (every colour fades as blue does) and w . white = 1 (a white flash as
+  // bright in every colour): the luminance weights plus the smallest change across the colour (none at 0.66).
+  {
+    const float lw[3] = {0.3f, 0.59f, 0.11f};
+    auto at = [](float h, float o) { return std::clamp(std::fabs(std::fmod(h * 6 + o, 6.0f) - 3) - 1, 0.0f, 1.0f); };
+    const float b[3] = {at(0.66f, 0), at(0.66f, 4), at(0.66f, 2)};  // the colour at 0.66
+    const float ref = lw[0] * b[0] + lw[1] * b[1] + lw[2] * b[2];
+    const float* c = tu.tint;
+    float lum = lw[0] * c[0] + lw[1] * c[1] + lw[2] * c[2], sum = c[0] + c[1] + c[2];
+    float sq = c[0] * c[0] + c[1] * c[1] + c[2] * c[2], spread = sq - sum * sum / 3;
+    float k = spread > 1e-4f ? (ref - lum) / spread : 0;
+    for (int i = 0; i < 3; ++i) tu.weigh[i] = lw[i] + k * (c[i] - sum / 3);
+  }
   tu.tint[3] = 1 - std::pow(1 - std::clamp(p.tint, 0.0f, 0.999f), dt * 50);
   const float turn = 6.2831853f * p.cycle * dt;
   tu.hue[0] = std::cos(turn), tu.hue[1] = std::sin(turn), tu.hue[2] = float(kPsyW) / kPsyH * 0.92f, tu.hue[3] = p.gain;

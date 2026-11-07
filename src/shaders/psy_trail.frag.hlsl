@@ -6,6 +6,8 @@ cbuffer Params : register(b0, space3) {
   float4 move;    // 1 / zoom (this frame), turn (radians, this frame), fade (this frame), threshold
   float4 tint;    // tint colour rgb, tint amount (this frame)
   float4 hue;     // cos, sin of the hue turn (this frame), picture aspect (w / h), feed gain
+  float4 weigh;   // rgb: how the trail's brightness is measured for the tint (crt.cpp: the same fade and flash
+                  // for every tint colour as for the default blue, where these are the luminance weights)
 };
 
 Texture2D u_texture : register(t0, space2);  // the previous trail
@@ -40,7 +42,7 @@ PSOutput main(PSInput input) {
   float3 trail = 0;
   if (all(uv >= 0) && all(uv <= 1)) trail = u_texture.SampleLevel(u_sampler, uv, 0).rgb;
   trail = max(HueTurn(trail, hue.x, hue.y), 0) * move.z;
-  float l = dot(trail, float3(0.3, 0.59, 0.11));
+  float l = max(dot(trail, weigh.rgb), 0);
   trail = lerp(trail, l * tint.rgb * 2.2, tint.w);
   float3 pic = u_picture.SampleLevel(u_picture_sampler, input.v_uv, 0).rgb;
   float pl = max(pic.r, max(pic.g, pic.b));

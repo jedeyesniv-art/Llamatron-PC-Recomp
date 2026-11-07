@@ -214,7 +214,9 @@ elease\Llamatron-<ver>-windows.zip (no game
   the last trail zoomed / turned about the centre, faded, tinted, hue-turned, bright parts fed in; two float
   textures in turn), then psy_mix.frag (colour bleed, trails screened on where the picture is dark - owner:
   yellow must stay yellow), then the CRT with glow x crt_psy_glow and saturation x crt_psy_saturation.
-  Per-second rates (any refresh). Settings crt_psy_* in the panel's CRT++ section, own reset
+  Per-second rates (any refresh). Trail colour (2026-11-07, owner: any colour but blue went
+  white or bled): the tint measures the trail with per-colour weights (psy_trail weigh, crt.cpp: same fade and white
+  flash as the default blue for every colour; plain luminance at 0.66, so that look is unchanged). Settings crt_psy_* in the panel's CRT++ section, own reset
   (crt_psy_defaults). Tests: a windowed run with --rshot (headless has no renderer).
 - Per game (owner 2026-11-05, after the Deck test: 90 fps, GPU ~35%): the look (<id>_crt) and each CRT++ slider
   (<id>_crt_psy_*) are the game's own once changed in its panel; until then, per key, the shared ones (the
