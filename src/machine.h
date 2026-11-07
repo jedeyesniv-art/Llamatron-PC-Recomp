@@ -153,6 +153,9 @@ class Machine {
   uint32_t logbase_ = 0;  // where TOS (Line-A) draws: Setscreen's logical screen
   std::set<int> gem_seen_;  // GEM calls logged once
   int gem_mouse_x_ = 160, gem_mouse_y_ = 100;
+  // VDI text (v_gtext): colour index, writing mode 1..4, alignments, font (0 6x6, 1 8x8, 2 8x16).
+  int vdi_text_colour_ = 1, vdi_wmode_ = 1, vdi_halign_ = 0, vdi_valign_ = 0, vdi_font_ = 1;
+  void VdiText(int x, int y, const std::vector<uint8_t>& text);
   void SaveFile(const std::string& name);
   std::string ReadString(uint32_t a);
   std::string FileName(uint32_t a);  // a path from the program: upper case, without folders or drive

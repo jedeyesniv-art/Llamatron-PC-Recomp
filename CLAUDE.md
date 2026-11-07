@@ -331,6 +331,11 @@ font doubled with a raster gradient. In README.md.
   15 s after the player chooses something. miniaudio in third_party/miniaudio (copied from Xblades, notices #5).
   Tests: --music=<wav> (decoded, fed at the game's pace, not played) --trip-music=N; log "music: ..." lines.
   Measured on a synthetic 120 bpm track: 10 beats per 5 s. Not yet tried by the owner on real music.
+- Trip-A-Tron text (2026-11-07, owner: tool screens full of blank boxes): every label on its tool screens (Sillyscope,
+  Global Parameters, MIDIlink, Colour Cooker, Pattern Edit, Starfield, VSEQ, alerts) is VDI v_gtext ($396f6 builds
+  the block, trap #2 at $33808), which our GEM stub ignored. machine.cpp now does v_gtext, vst_height (it asks for
+  4 = the small 6 x 6 font: our own 5 x 5 glyphs, kSmallFont, not Atari's), vst_color, vswr_mode, vst_alignment,
+  vst_effects (logged, not drawn). The KML key screen and the panel's icons are its own graphics.
 - Shared (2026-11-01): src/pad.cpp = pad 1 as a per-frame snapshot (real or the test pad from --press=N:g...)
   with edges; src/stgames.cpp = RMC and Andes controls (modes kRmc / kAndes). Registry play rule (games.h
   play_at / play_value / play_word / play_vbl): the faster CPU (--cpu, x8) while that RAM value says "play";

@@ -1325,6 +1325,48 @@ void Machine::Gem(uint32_t d0, uint32_t pb) {
         w16(contrl, 2, 6), w16(contrl, 4, 45);
         break;
       }
+      // Text (Trip-A-Tron's tool screens label every box this way, in the small font).
+      case 8: {  // v_gtext: ptsin x, y; contrl[3] characters in intin, one a word
+        uint32_t intin = Get32(&ram_[pb + 4]), ptsin = Get32(&ram_[pb + 8]);
+        std::vector<uint8_t> text;
+        for (int i = 0, n = std::clamp(r16(contrl, 3), 0, 256); i < n; ++i) text.push_back(uint8_t(r16(intin, i)));
+        if (trace_tos) LOG("VDI v_gtext %d,%d \"%s\"", r16(ptsin, 0), r16(ptsin, 1), std::string(text.begin(), text.end()).c_str());
+        VdiText(r16(ptsin, 0), r16(ptsin, 1), text);
+        break;
+      }
+      case 12: {  // vst_height: the system font for that height (char width / height, cell width / height)
+        int h = r16(Get32(&ram_[pb + 8]), 1);
+        vdi_font_ = h < 6 ? 0 : h < 13 ? 1 : 2;
+        if (first(0x40000 + h)) LOG("VDI vst_height %d (font %d)", h, vdi_font_);
+        static const int16_t kOut[3][4] = {{5, 4, 6, 6}, {7, 6, 8, 8}, {7, 13, 8, 16}};
+        for (int i = 0; i < 4; ++i) w16(ptsout, i, kOut[vdi_font_][i]);
+        w16(contrl, 2, 2);
+        break;
+      }
+      case 22: {  // vst_color
+        int c = r16(Get32(&ram_[pb + 4]), 0);
+        vdi_text_colour_ = c >= 0 && c < 16 ? c : 1;
+        w16(intout, 0, vdi_text_colour_), w16(contrl, 4, 1);
+        break;
+      }
+      case 32: {  // vswr_mode: 1 replace, 2 transparent, 3 xor, 4 reverse transparent
+        int m = r16(Get32(&ram_[pb + 4]), 0);
+        vdi_wmode_ = m >= 1 && m <= 4 ? m : 1;
+        w16(intout, 0, vdi_wmode_), w16(contrl, 4, 1);
+        break;
+      }
+      case 39: {  // vst_alignment: horizontal 0 left / 1 centre / 2 right, vertical 0 baseline ... 5 top
+        uint32_t intin = Get32(&ram_[pb + 4]);
+        vdi_halign_ = std::clamp(r16(intin, 0), 0, 2), vdi_valign_ = std::clamp(r16(intin, 1), 0, 5);
+        w16(intout, 0, vdi_halign_), w16(intout, 1, vdi_valign_), w16(contrl, 4, 2);
+        break;
+      }
+      case 106: {  // vst_effects: not drawn (logged once)
+        int e = r16(Get32(&ram_[pb + 4]), 0);
+        if (e && first(0x50000 + e)) LOG("VDI vst_effects %d (not drawn)", e);
+        w16(intout, 0, e), w16(contrl, 4, 1);
+        break;
+      }
       case 124:  // vq_mouse: buttons, x, y
         w16(intout, 0, (mouse_buttons_ & 2 ? 1 : 0) | (mouse_buttons_ & 1 ? 2 : 0));
         w16(ptsout, 0, gem_mouse_x_), w16(ptsout, 1, gem_mouse_y_);
@@ -1348,7 +1390,135 @@ const uint8_t* Glyph(uint8_t c) {
   if (c > 32 && c < 127) return SDL_RenderDebugTextFontData + (c - 33) * 8;
   return nullptr;
 }
+// A small 5 x 5 font (6 x 6 cells: the ST's small system font's size; our own glyphs, not Atari's), ASCII 32-95
+// and { | } ~ (lower case drawn as capitals). Five rows from the top, a sixth for descenders (, ; _).
+const char* const kSmallFont[] = {
+    ".....|.....|.....|.....|.....",        // space
+    "..#..|..#..|..#..|.....|..#..",        // !
+    ".#.#.|.#.#.|.....|.....|.....",        // "
+    ".#.#.|#####|.#.#.|#####|.#.#.",        // #
+    ".####|#.#..|.###.|..#.#|####.",        // $
+    "##..#|##.#.|..#..|.#.##|#..##",        // %
+    ".##..|#..#.|.##.#|#..#.|.##.#",        // &
+    "..#..|..#..|.....|.....|.....",        // '
+    "...#.|..#..|..#..|..#..|...#.",        // (
+    ".#...|..#..|..#..|..#..|.#...",        // )
+    ".....|.#.#.|..#..|.#.#.|.....",        // *
+    ".....|..#..|.###.|..#..|.....",        // +
+    ".....|.....|.....|..#..|..#..|.#...",  // ,
+    ".....|.....|.###.|.....|.....",        // -
+    ".....|.....|.....|.....|..#..",        // .
+    "....#|...#.|..#..|.#...|#....",        // /
+    ".###.|#..##|#.#.#|##..#|.###.",        // 0
+    "..#..|.##..|..#..|..#..|.###.",        // 1
+    "####.|....#|.###.|#....|#####",        // 2
+    "####.|....#|.###.|....#|####.",        // 3
+    "#..#.|#..#.|#####|...#.|...#.",        // 4
+    "#####|#....|####.|....#|####.",        // 5
+    ".###.|#....|####.|#...#|.###.",        // 6
+    "#####|...#.|..#..|.#...|.#...",        // 7
+    ".###.|#...#|.###.|#...#|.###.",        // 8
+    ".###.|#...#|.####|....#|.###.",        // 9
+    ".....|..#..|.....|..#..|.....",        // :
+    ".....|..#..|.....|..#..|..#..|.#...",  // ;
+    "...#.|..#..|.#...|..#..|...#.",        // <
+    ".....|.###.|.....|.###.|.....",        // =
+    ".#...|..#..|...#.|..#..|.#...",        // >
+    ".###.|....#|..##.|.....|..#..",        // ?
+    ".###.|#.###|#.##.|#....|.###.",        // @
+    ".###.|#...#|#####|#...#|#...#",        // A
+    "####.|#...#|####.|#...#|####.",        // B
+    ".####|#....|#....|#....|.####",        // C
+    "####.|#...#|#...#|#...#|####.",        // D
+    "#####|#....|####.|#....|#####",        // E
+    "#####|#....|####.|#....|#....",        // F
+    ".####|#....|#..##|#...#|.####",        // G
+    "#...#|#...#|#####|#...#|#...#",        // H
+    "#####|..#..|..#..|..#..|#####",        // I
+    "..###|...#.|...#.|#..#.|.##..",        // J
+    "#..#.|#.#..|##...|#.#..|#..#.",        // K
+    "#....|#....|#....|#....|#####",        // L
+    "#...#|##.##|#.#.#|#...#|#...#",        // M
+    "#...#|##..#|#.#.#|#..##|#...#",        // N
+    ".###.|#...#|#...#|#...#|.###.",        // O
+    "####.|#...#|####.|#....|#....",        // P
+    ".###.|#...#|#.#.#|#..#.|.##.#",        // Q
+    "####.|#...#|####.|#..#.|#...#",        // R
+    ".####|#....|.###.|....#|####.",        // S
+    "#####|..#..|..#..|..#..|..#..",        // T
+    "#...#|#...#|#...#|#...#|.###.",        // U
+    "#...#|#...#|#...#|.#.#.|..#..",        // V
+    "#...#|#...#|#.#.#|##.##|#...#",        // W
+    "#...#|.#.#.|..#..|.#.#.|#...#",        // X
+    "#...#|.#.#.|..#..|..#..|..#..",        // Y
+    "#####|...#.|..#..|.#...|#####",        // Z
+    ".##..|.#...|.#...|.#...|.##..",        // [
+    "#....|.#...|..#..|...#.|....#",        // backslash
+    "..##.|...#.|...#.|...#.|..##.",        // ]
+    "..#..|.#.#.|.....|.....|.....",        // ^
+    ".....|.....|.....|.....|.....|#####",  // _
+};
+const char* const kSmallFontBraces[] = {
+    "..##.|..#..|.#...|..#..|..##.",  // {
+    "..#..|..#..|..#..|..#..|..#..",  // |
+    ".##..|..#..|...#.|..#..|.##..",  // }
+    ".....|.#..#|#.##.|.....|.....",  // ~
+};
+
+// The small font's glyph as 6 rows, bit 0 = left (as Glyph); nullptr = blank.
+const uint8_t* SmallGlyph(uint8_t c) {
+  static const auto rows = [] {
+    std::array<std::array<uint8_t, 6>, 128> out{};
+    auto build = [](const char* src, std::array<uint8_t, 6>& glyph) {
+      for (int r = 0, x = 0; *src && r < 6; ++src) {
+        if (*src == '|') {
+          ++r, x = 0;
+          continue;
+        }
+        if (*src == '#') glyph[size_t(r)] |= uint8_t(1 << x);
+        ++x;
+      }
+    };
+    for (int i = 0; i < 64; ++i) build(kSmallFont[i], out[size_t(32 + i)]);
+    for (int i = 0; i < 4; ++i) build(kSmallFontBraces[i], out[size_t(123 + i)]);
+    return out;
+  }();
+  if (c >= 'a' && c <= 'z') c = uint8_t(c - 32);
+  if (c == '`') c = '\'';
+  return c > 32 && c < 127 ? rows[c].data() : nullptr;
+}
 }  // namespace
+
+// v_gtext with the system font vst_height picked (low resolution, as TOS: under 6 the small 6 x 6 font, 6..12
+// the 8 x 8, from 13 the 8 x 16 = the 8 x 8 doubled): (x, y) placed by the alignment; colour = a VDI index
+// (mapped to the pixel value as TOS does).
+void Machine::VdiText(int x, int y, const std::vector<uint8_t>& text) {
+  static const int kVdiToPixel[16] = {0, 15, 1, 2, 4, 6, 3, 5, 7, 8, 9, 10, 12, 14, 11, 13};
+  int colour = kVdiToPixel[vdi_text_colour_ & 15] & (res_ == 1 ? 3 : 15);
+  if (res_ == 1 && vdi_text_colour_ == 1) colour = 3;  // medium resolution: index 1 = pixel 3
+  const int font = vdi_font_;  // 0 small, 1 8 x 8, 2 8 x 16
+  const int cw = font == 0 ? 6 : 8, ch = font == 0 ? 6 : font == 1 ? 8 : 16;
+  // Rows from the alignment line up to the cell's top: baseline, half, ascent, bottom, descent, top.
+  static const int kTop[3][6] = {{4, 1, 0, 5, 5, 0}, {6, 2, 0, 7, 7, 0}, {13, 5, 2, 15, 15, 0}};
+  int width = int(text.size()) * cw;
+  x -= vdi_halign_ == 1 ? width / 2 : vdi_halign_ == 2 ? width : 0;
+  y -= kTop[font][vdi_valign_];
+  for (size_t i = 0; i < text.size(); ++i) {
+    const uint8_t* g = font == 0 ? SmallGlyph(text[i]) : Glyph(text[i]);
+    for (int r = 0; r < ch; ++r)
+      for (int c = 0; c < cw; ++c) {
+        int px = x + int(i) * cw + c, py = y + r;
+        if (px < 0 || py < 0 || px >= (res_ == 1 ? 640 : kScreenW) || py >= kScreenH) continue;
+        bool on = g && (g[font == 2 ? r / 2 : r] >> c & 1);
+        switch (vdi_wmode_) {
+          case 1: SetPixel(px, py, on ? colour : 0); break;
+          case 2: if (on) SetPixel(px, py, colour); break;
+          case 3: if (on) SetPixel(px, py, GetPixel(px, py) ^ (res_ == 1 ? 3 : 15)); break;
+          case 4: if (!on) SetPixel(px, py, colour); break;
+        }
+      }
+  }
+}
 
 void Machine::ConsoleCell(int col, int row, uint8_t c) {
   const uint8_t* g = Glyph(c);
