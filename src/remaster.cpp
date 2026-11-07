@@ -38,7 +38,15 @@ struct RevealPixel {
   uint8_t old;
   float at;
 };
-std::vector<RevealPixel> g_reveal, g_reveal_pending;  // Reveal: the frame shown's / the frame being run's
+std::vector<RevealPixel> g_reveal, g_reveal_pending;
+// SetScroll: the rectangle, the screen shown with the newest step, frames since then, frames a step takes (average).
+struct Scroll {
+  bool on = false;
+  int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+  uint32_t screen = 0;
+  int age = 0;
+  float period = 2;
+} g_scroll;  // Reveal: the frame shown's / the frame being run's
 Capture* g_cap = &g_real;
 std::vector<Item> g_prev, g_cur;  // the previous frame shown and this one
 std::vector<std::pair<uint64_t, SandboxCall>> g_queue;  // sprite images to draw in the sandbox
@@ -530,6 +538,14 @@ void Reveal(int x, int y, int old_colour, float at) {
 void FrameShown(uint32_t screen) {
   g_reveal = std::move(g_reveal_pending);  // this frame's (none: an empty list)
   g_reveal_pending.clear();
+  if (g_scroll.on) {  // a new screen shown = a step (its interval averaged: the scroll's pace)
+    if (screen != g_scroll.screen) {
+      if (g_scroll.screen) g_scroll.period += (std::clamp(float(g_scroll.age + 1), 1.0f, 4.0f) - g_scroll.period) * 0.2f;
+      g_scroll.screen = screen, g_scroll.age = 0;
+    } else {
+      ++g_scroll.age;
+    }
+  }
   ++g_shown;
   const uint32_t redrawn = g_real.redrawn;
   g_real.redrawn = 1;
@@ -598,7 +614,13 @@ void FrameShown(uint32_t screen) {
   }
 }
 
-bool Active() { return Enabled() && ((g_real.capturing && g_have) || !g_reveal.empty()); }
+bool Active() { return Enabled() && ((g_real.capturing && g_have) || !g_reveal.empty() || g_scroll.on); }
+
+void SetScroll(int x0, int y0, int x1, int y1) {
+  if (!g_scroll.on) g_scroll = Scroll{}, g_scroll.on = true;
+  g_scroll.x0 = x0, g_scroll.y0 = y0, g_scroll.x1 = x1, g_scroll.y1 = y1;
+}
+void ClearScroll() { g_scroll.on = false; }
 
 void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float alpha,
           const uint16_t* line_palettes, bool ste_colours, const uint32_t* st_pixels) {
@@ -629,6 +651,17 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
     for (const Item& it : g_cur) any_behind |= it.behind;
   if (!any_behind) {
     SDL_RenderTexture(r, st_texture, nullptr, &full);
+    if (g_scroll.on) {  // the scrolled rectangle, still the rest of a line below its place
+      float f = std::clamp((float(g_scroll.age) + std::clamp(alpha, 0.0f, 1.0f)) / g_scroll.period, 0.0f, 1.0f);
+      float down = (1 - f) * kScale;
+      const Scroll& s = g_scroll;
+      SDL_Rect clip{s.x0 * kScale, s.y0 * kScale, (s.x1 - s.x0 + 1) * kScale, (s.y1 - s.y0 + 1) * kScale};
+      SDL_SetRenderClipRect(r, &clip);
+      SDL_FRect src{float(s.x0), float(s.y0), float(s.x1 - s.x0 + 1), float(s.y1 - s.y0 + 1)};
+      SDL_FRect dst{float(s.x0 * kScale), float(s.y0 * kScale) + down, src.w * kScale, src.h * kScale};
+      SDL_RenderTexture(r, st_texture, &src, &dst);
+      SDL_SetRenderClipRect(r, nullptr);
+    }
   } else {  // colour 0 (line by line), then the items behind; the picture comes over them below
     for (int y = 0; y < 200;) {
       uint32_t c = lines.pal[y][0];

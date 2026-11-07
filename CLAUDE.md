@@ -72,7 +72,9 @@ elease\Llamatron-<ver>-windows.zip (no game
   last play pass's items added under it each frame - the game leaves that picture in the screens). The wave change zoom ($AEC, 2026-11-07):
   its dots ($5B08 hook) go to remaster::Reveal (old colour, Machine::FramePhase): between frames the picture shows
   only what was drawn by then, so it builds up at the display's rate (game unchanged; cpu::UseCycles keeps the
-  replaced movem's 36 cycles: 134 frames as before). Not the version screen / scroller ($CEC, CPU-timed).
+  replaced movem's 36 cycles: 134 frames as before). The version screen / scroller ($7E6E, 2026-11-07: a line a drawn frame, 2 VBLs; draw fn
+  $7F20 = lines 2..197 x 16..303, $7F52 = all): remaster::SetScroll slides that rectangle the rest of a line
+  between steps (step = a new screen shown; pace averaged) - smooth, a step shown up to 2 frames later.
   remaster.cpp, run-ahead 0: each screen's last complete pass (Capture::done), not the one being built.
 - Gridrunner remaster (2026-11-02): src/remaster_grid.cpp (core $4BCE4, pass $144DA..$145E2). Items now take
   each line's palette (Machine::LinePalettes: rasters), all games.

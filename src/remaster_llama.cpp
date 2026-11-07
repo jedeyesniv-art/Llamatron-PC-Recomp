@@ -40,6 +40,9 @@ constexpr uint32_t kTitleHook = 0x551C, kTitleDraw = 0x5668, kOverHook = 0xC94, 
 // The wave change's zoom ($AEC, VBL handler $5CC0 meanwhile): rectangles of 2 x 2 dots, each through $5B08
 // ("movem.w d0-d6,-(a7)"; then $59FA: the dot at d0 / d1, colour d2, in the screen a1 - the one shown).
 constexpr uint32_t kZoomVbl = 0x5CC0, kZoomDot = 0x5B08;
+// The version screen and instruction scroller ($7E6E, before the title): a line a drawn frame (2 VBLs), the draw
+// function $7F20 scrolling lines 2..197 at x 16..303 ($4EE) and adding a row at the bottom; $7F52 the whole screen.
+constexpr uint32_t kScrollText = 0x7F20, kScrollAll = 0x7F52;
 constexpr uint32_t kWrapper = 0x58AA, kMarkFrom = 0x5870, kMarkTo = 0x58A2, kShotsCaller = 0x1D02;
 
 bool g_installed = false;
@@ -219,12 +222,19 @@ void Install(st::Machine* m) {
 
 }  // namespace
 
-void Start() {
+void Start() {  // (every game's start)
+  remaster::ClearScroll();
   g_installed = g_capture = g_play_pass = false;
   g_pass_items.clear(), g_last_play.clear();
 }
 
 void Update(st::Machine* m) {
+  {  // the scroller (no hooks needed: the screen is the game's, only its motion is smoothed)
+    const uint32_t t = m->TextBase(), fn = Get32(*m, t + kDrawFn);
+    if (fn == t + kScrollText) remaster::SetScroll(16, 2, 303, 197);
+    else if (fn == t + kScrollAll) remaster::SetScroll(0, 0, 319, 199);
+    else remaster::ClearScroll();
+  }
   // From the title or play on (the program has unpacked itself by then).
   if (!g_installed && (game::Playing(*m) || game::AtTitle(*m))) Install(m);
   if (!g_installed || !g_text) return;

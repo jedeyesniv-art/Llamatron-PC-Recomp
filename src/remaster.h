@@ -101,6 +101,11 @@ void SetImage(uint64_t id, Image image);
 // the picture then shows only what had been drawn by that moment (the old colours of the rest painted back),
 // so the effect builds up smoothly at the display's rate. Real machine only (not a sandbox or run-ahead copy).
 void Reveal(int x, int y, int old_colour, float at);
+// A text scroller that moves a rectangle of the screen up one line per drawn frame (Llamatron's version screen):
+// between the game's steps the rectangle is drawn the rest of the way up smoothly, at 4x (a step's picture shown
+// first a line lower, rising to its place by the next step). Set every frame while it runs (x / y inclusive).
+void SetScroll(int x0, int y0, int x1, int y1);
+void ClearScroll();
 // Not capturing (another screen than play): the next frames are shown as the ST drew them.
 void Stop();
 // Not capturing, but the game keeps its last picture (paused): the last frame's items stay, still.

@@ -74,8 +74,8 @@ Runs were mostly without input, so options screens, name entry and high-score ta
 - **Llamatron DONE 2026-11-06**: the title (parade, sheep; faster CPU there) and the continue screen (its frozen
   play picture is the last play pass's items, re-added each frame: before, it showed an empty arena - a bug since
   the first port). Wave change zoom DONE 2026-11-07 (remaster::Reveal: each dot's moment in the frame; between frames only
-  what was drawn by then is shown). Left: the CPU-timed
-  version screen / instruction scroller. Run-ahead 0 now shows each screen's last complete pass (the title draws
+  what was drawn by then is shown). The version screen / instruction scroller DONE 2026-11-07 (remaster::SetScroll:
+  the scrolled rectangle slides between the game's one-line steps). Run-ahead 0 now shows each screen's last complete pass (the title draws
   into the screen it shows).
 - **Gridrunner DONE 2026-11-06** (as far as it goes): the wave intro's letters and game over's letters captured at 50
   a second (`grid::DrawsEveryVbl`). The title and its menus stay: the title's timeout counts drawn frames (at 50 a
