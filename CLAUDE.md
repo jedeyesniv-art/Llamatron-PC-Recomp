@@ -93,7 +93,9 @@ elease\Llamatron-<ver>-windows.zip (no game
   over). Left: the high score entry ($8272 / $82C2, "enter something wonderful"), the scrollers (slid already).
 - Andes Attack audit (2026-11-07): passes ($202BA, table $20296) 0 play, 2, 4, 5, 6 captured; 3 = level set-up
   (hands back to pass 0 the same frame: its ATTACK LEVEL intro is pass 0's, captured, pixel-identical); 7 the
-  change-over, 8 the pause (held); 1 never set. Nothing to add.
+  change-over, 8 the pause's set-up; 1 never set. The pause (state 3) was held - the play picture's ship,
+  terrain and llama stayed over GAME PAUSED (owner): now captured like the rest (pass 8 draws the background and
+  text, then pass 4 its arc of dots: captured, sliding), faster CPU there (play_more {3}); pixel-identical.
 - Gridrunner remaster (2026-11-02): src/remaster_grid.cpp (core $4BCE4, pass $144DA..$145E2). Items now take
   each line's palette (Machine::LinePalettes: rasters), all games.
   Its image id includes the colour word $58054 (level 4's text came out dark: the owner's report).

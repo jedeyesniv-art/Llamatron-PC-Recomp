@@ -65,11 +65,13 @@ int RegW(int r) { return int16_t(Reg(r)); }
 void OnBegin(st::Machine& m, uint32_t at) {
   if (!remaster::Decoding(m)) {
     int state = Get16(m, kState);
-    g_capture = remaster::Enabled() && state != kPaused;
+    // (The pause screen too, 2026-11-07, owner: holding the play picture left the ship, terrain and llama over
+    // GAME PAUSED. Pass 8 sets it up - the background, the text - then pass 4 draws its arc of dots: captured.)
+    (void)state;
+    g_capture = remaster::Enabled();
     g_screen = Get32(m, kScreen) & 0xFFFFFF;
     g_began = true;
     if (g_capture) remaster::BeginFrame(g_screen);
-    else if (state == kPaused && remaster::Enabled()) remaster::Hold();
     else remaster::Stop();
   }
   Put16(&m, kMode, 0);
@@ -199,7 +201,6 @@ void Update(st::Machine* m) {
   if (!g_installed && (state == kPlay || state == kTitle)) Install(m);
   if (!g_installed) return;
   remaster::DrawQueued(m, "andes attack");
-  if (state == kPaused && remaster::Enabled()) remaster::Hold();
   // A pass we don't capture that shows its screen some other way than $15490: the ST picture.
   int pass = Get16(*m, kPass);
   if (g_capture && pass != 0 && pass != 2 && pass != 4 && pass != 5 && pass != 6) g_capture = false, remaster::Stop();
