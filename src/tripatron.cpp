@@ -24,6 +24,13 @@ constexpr uint32_t kPointerY = 0x10694;  // 0..199
 constexpr uint32_t kAlertUp = 0x10A78, kSidePanel = 0x1036E, kSymPanel = 0x16AFE;
 // KML's system variables (TRIP.PRG's name table at text $2F2C3, addresses right after it at $2F3BA): the
 // starfield's speed in depth and spin; $23AEC = the starfield running (0 = none; found by a RAM diff).
+// The plot routine's enable mask (bit 0 pre-symmetry ... bit 5 post-symmetry: KML's FXENABLE / FXSTATE).
+constexpr uint32_t kFxMask = 0x15B30;
+// The KML bank in memory: the programs (event n = the n-th, each ended by $FFFF; ROUTINE / JUMP_TO count from 1),
+// the keys' events (a word per ST scancode; $FFFE / $FFFF = none) and the command names (text $2ED74: name, a
+// space, the argument count, $FF). Numbers are 14-bit signed; $8000 | n = system variable n, $4000 | n = the
+// letter variable, $C000 | n = a binary constant.
+constexpr uint32_t kKmlPrograms = 0x3C4DC, kKmlKeys = 0x3E632, kKmlCommands = 0x3EE74;
 constexpr uint32_t kStarSvz = 0x23AF2, kStarAngle = 0x23B04, kStarfieldOn = 0x23AEC;  // (ABS_ANGLE 0..255)
 
 // ST scancodes.
@@ -45,7 +52,7 @@ struct Family {
   int n;
   const char* name;
 };
-const Family kFamilies[3] = {{kRowQ, 12, "Q ROW (DECAY)"}, {kRowA, 12, "A ROW (LINE)"}, {kRowZ, 11, "Z ROW (EXPANDOR)"}};
+const Family kFamilies[3] = {{kRowQ, 12, "Q ROW"}, {kRowA, 12, "A ROW"}, {kRowZ, 11, "Z ROW"}};
 constexpr int kEffectCount = 12 + 12 + 11;
 const Key& EffectKey(int i) { return i < 12 ? kRowQ[i] : i < 24 ? kRowA[i - 12] : kRowZ[i - 24]; }
 int EffectFamily(int i) { return i < 12 ? 0 : i < 24 ? 1 : 2; }
@@ -221,13 +228,187 @@ void Back(st::Machine* m, int state) {
   }
 }
 
+std::string g_effect_text;           // what the current effect key does (the loaded KML)
+std::vector<std::string> g_row_text;  // the effect wheel's row: each key's description ("" = nothing)
+int g_fx_mask = -1;                   // the plot routine's stages on (bits), for the Y layer's picture
+bool g_no_gyro_told = false;          // "this pad has no gyro" shown once
+
 void ShowState() {
-  char buf[128];
-  std::snprintf(buf, sizeof(buf), "EFFECT %s   SYMMETRY %s   PALETTE %s%s",
-                g_effect >= 0 ? EffectKey(g_effect).name : "-", g_symmetry >= 0 ? kSymmetries[g_symmetry].name : "-",
-                g_palette >= 0 ? kPalettes[g_palette].name : "-", g_latch ? "   LATCHED" : "");
+  char buf[160];
+  std::snprintf(buf, sizeof(buf), "%s%s%s   SYMMETRY %s   PALETTE %s%s", g_effect >= 0 ? EffectKey(g_effect).name : "-",
+                g_effect_text.empty() ? "" : ": ", g_effect_text.c_str(),
+                g_symmetry >= 0 ? kSymmetries[g_symmetry].name : "-", g_palette >= 0 ? kPalettes[g_palette].name : "-",
+                g_latch ? "   LATCHED" : "");
   SetHint(buf, 2500);
 }
+
+// ---- What each key does: its KML program, described in a few words ----
+struct Kml {
+  std::vector<std::string> names;  // command names by number
+  std::vector<int> argc;
+  std::vector<std::vector<uint16_t>> programs;  // by event
+};
+
+Kml ReadKml(st::Machine& m) {
+  Kml k;
+  const uint8_t* ram = m.Ram();
+  for (uint32_t a = kKmlCommands; k.names.size() < 200 && ram[a] >= 'A' && ram[a] <= 'Z';) {
+    std::string name;
+    while (ram[a] != 0xFF && name.size() < 24) name += char(ram[a++]);
+    ++a;
+    if (name.size() < 2) break;
+    k.argc.push_back(uint8_t(name.back()));
+    name.pop_back();
+    while (!name.empty() && name.back() == ' ') name.pop_back();
+    k.names.push_back(name);
+  }
+  uint32_t a = kKmlPrograms;
+  for (int ev = 0; ev < 128 && a < kKmlKeys; ++ev) {
+    std::vector<uint16_t> prog;
+    for (uint16_t w; (w = Get16(m, a)) != 0xFFFF && a < kKmlKeys; a += 2) prog.push_back(w);
+    a += 2;
+    k.programs.push_back(std::move(prog));
+  }
+  return k;
+}
+
+int KeyEvent(st::Machine& m, uint8_t code) {
+  uint16_t ev = Get16(m, kKmlKeys + uint32_t(code) * 2);
+  return ev >= 128 ? -1 : int(ev);
+}
+
+int Number(uint16_t w) {  // a 14-bit constant
+  int v = w & 0x3FFF;
+  return v & 0x2000 ? v - 0x4000 : v;
+}
+
+std::string Describe(const Kml& k, int ev, int depth = 0) {
+  if (ev < 0 || ev >= int(k.programs.size()) || k.programs[ev].empty()) return "";
+  const std::vector<uint16_t>& p = k.programs[ev];
+  std::vector<int> atypes;
+  int pattern = -1, patterns = 0, palette = -2, fx = -1, set_binary = -1, laser = 0, scope_off = 0, cursor = -1;
+  bool loop = false, stars = false, stars_off = false, sym = false, strobe = false, random = false, steer = false,
+       button = false, cls = false, macro = false, killall = false, sym_pre = false, fx_toggle = false;
+  bool warp = false, drift = false, spin = false, waves = false;  // how a starfield moves
+  int target = -1;
+  for (size_t i = 0; i < p.size();) {
+    int c = p[i];
+    if (c >= int(k.names.size())) break;
+    const std::string& n = k.names[c];
+    int argc = k.argc[c];
+    auto arg = [&](int j) -> uint16_t { return i + 1 + j < p.size() ? p[i + 1 + j] : 0; };
+    auto is_var = [&](int j, int var) { return (arg(j) & 0xC000) == 0x8000 && (arg(j) & 0x3FFF) == var; };
+    for (int j = 0; j < argc; ++j)
+      if ((arg(j) & 0xC000) == 0x8000) {
+        int v = arg(j) & 0x3FFF;
+        if (v == 0 || v == 1) steer = true;  // CX / CY
+        if (v == 2) button = true;           // BUTTONS
+      }
+    if (n == "SET" && (arg(1) & 0xC000) == 0x8000) {  // a starfield's motion: SVX 3, SVY 4, SVZ 5, ANG 6
+      int v = arg(1) & 0x3FFF;
+      bool moving = (arg(0) & 0xC000) != 0 || Number(arg(0)) != 0;
+      if (moving && v == 5) warp = true;
+      if (moving && (v == 3 || v == 4)) drift = true;
+      if (moving && v == 6) spin = true;
+    }
+    if (n == "SINE" || n == "COSINE" || n == "USER_WAVE") waves = true;
+    if (n == "ATYPE" && (arg(0) & 0xC000) == 0) {
+      int t = Number(arg(0));
+      if (std::find(atypes.begin(), atypes.end(), t) == atypes.end()) atypes.push_back(t);
+    } else if (n == "SET" && is_var(1, 21)) {  // PATTERN
+      ++patterns;
+      if ((arg(0) & 0xC000) == 0) pattern = Number(arg(0));
+      else pattern = -2;
+    } else if (n == "SET" && (arg(0) & 0xC000) == 0xC000) {
+      set_binary = arg(0) & 0xFF;
+    } else if (n == "SET" && (arg(1) & 0xC000) == 0x8000 && (arg(1) & 0x3FFF) >= 24 && (arg(1) & 0x3FFF) < 50) {
+      if ((arg(1) & 0x3FFF) == 24 + ('S' - 'A') && Number(arg(0)) == 1) sym_pre = true;  // SET 1,GS
+    } else if (n == "LOOP" || n == "FOREVER") {
+      loop = true;
+    } else if (n == "STARFIELD") {
+      if ((arg(0) & 0xC000) == 0 && Number(arg(0)) == 0) stars_off = true;
+      else stars = true;
+    } else if (n == "SCOPE") {
+      for (int j = 0; j < 2; ++j)
+        if ((arg(j) & 0xC000) == 0 && Number(arg(j)) == 0) scope_off |= 1 << j;
+    } else if (n == "LASER") {
+      laser |= 1 << std::clamp(Number(arg(0)) - 1, 0, 1);
+    } else if (n == "SYM") {
+      sym = true;
+    } else if (n == "STROBE") {
+      strobe = true;
+    } else if (n == "PALETTE") {
+      palette = (arg(0) & 0xC000) == 0 ? Number(arg(0)) : -1;
+    } else if (n == "RND") {
+      random = true;
+    } else if (n == "FXENABLE") {
+      fx = (arg(0) & 0xC000) == 0xC000 ? (arg(0) & 0x3F) : -1;
+    } else if (n == "FXSTATE") {
+      fx_toggle = true;
+    } else if (n == "CURSOR") {
+      cursor = Number(arg(1));
+    } else if (n == "CLS") {
+      cls = true;
+    } else if (n == "MACRO_LOAD") {
+      macro = true;
+    } else if (n == "KILLALL") {
+      killall = true;
+    } else if ((n == "JUMP_TO" || n == "ROUTINE") && (arg(0) & 0xC000) == 0) {
+      target = Number(arg(0)) - 1;
+    }
+    i += 1 + size_t(argc);
+  }
+  static const char* const kModes[3] = {"DECAY", "LINE", "EXPANDOR"};
+  if (macro) return "LOAD THE OTHER DEMO";
+  if (stars) {
+    std::string d;
+    for (auto [on, word] : {std::pair{warp, "WARP"}, {drift, "DRIFT"}, {spin, "SPIN"}, {waves, "WAVES"}, {random, "RANDOM"}})
+      if (on) d += (d.empty() ? "" : "+") + std::string(word);
+    if (steer) d += d.empty() ? "LIGHT STEERS" : ", LIGHT STEERS";
+    if (button) d += d.empty() ? "BUTTONS TOO" : ", BUTTONS TOO";
+    return "STARFIELD" + (d.empty() ? "" : ": " + d);
+  }
+  if (laser) return std::string("LASER ") + (laser == 3 ? "1+2" : laser == 1 ? "1" : "2") + (steer ? ": LIGHT STEERS" : "");
+  if (stars_off && scope_off == 3) return "STARS AND LASERS OFF";
+  if (stars_off) return "STARFIELD OFF";
+  if (scope_off == 1) return "LASER 1 OFF";
+  if (scope_off == 2) return "LASER 2 OFF";
+  if (scope_off == 3) return "LASERS OFF";
+  if (!atypes.empty()) {
+    std::string mode = atypes.size() > 1 ? "MIXED" : atypes[0] >= 0 && atypes[0] < 3 ? kModes[atypes[0]] : "PATTERN";
+    if (loop) return mode + " ANIMATED";
+    if (pattern >= 0 && patterns == 1) return mode + " SHAPE " + std::to_string(pattern);
+    return mode + " MODE";
+  }
+  if (cursor >= 0) return cursor ? "2ND CURSOR ON" : std::string("2ND CURSOR OFF") + (cls ? " + CLEAR" : "");
+  if (fx_toggle && depth == 0) return "PLOT ROUTINE SWITCH";
+  if (fx >= 0) return "PLOT: POST-SYM ONLY";
+  if (sym) return "SYMMETRY";
+  if (sym_pre) return "NEXT SYMMETRY: PRE";
+  if (strobe) return "STROBE";
+  if (palette >= -1 && random) return "RANDOM PALETTE";
+  if (palette >= 0) return "PALETTE " + std::to_string(palette);
+  if (killall) return "STOP ALL";
+  if (cls) return "CLEAR SCREEN";
+  if (target >= 0 && depth < 2) {
+    // A small program that sets something up and jumps: name it by where it goes (the bit it sets, for FX).
+    const Kml& kk = k;
+    if (target < int(kk.programs.size())) {
+      std::string t = Describe(kk, target, depth + 1);
+      if (t == "PLOT ROUTINE SWITCH" && set_binary > 0) {
+        for (int b = 0; b < 6; ++b)
+          if (set_binary == 1 << b) return std::string("SWITCH ") + kStages[b];
+      }
+      if (!t.empty()) return t;
+      if (fx_toggle) return "PLOT ROUTINE SWITCH";
+    }
+  }
+  if (fx_toggle) return "PLOT ROUTINE SWITCH";
+  return k.names.empty() || p[0] >= k.names.size() ? "?" : k.names[p[0]];
+}
+
+// The key's description in the loaded KML ("" = the key has no program).
+std::string KeyDescription(st::Machine& m, const Kml& k, uint8_t code) { return Describe(k, KeyEvent(m, code)); }
 
 // Steps a choice (-1 = none yet: the first step goes to the first / last) and taps its key.
 void Step(st::Machine* m, int* index, const Key* keys, int n, int dir) {
@@ -235,7 +416,11 @@ void Step(st::Machine* m, int* index, const Key* keys, int n, int dir) {
   TapKey(m, keys[*index].code);
 }
 void StepEffect(st::Machine* m, int dir) {
-  g_effect = g_effect < 0 ? (dir > 0 ? 0 : kEffectCount - 1) : (g_effect + dir + kEffectCount) % kEffectCount;
+  Kml k = ReadKml(*m);
+  for (int tries = 0; tries < kEffectCount; ++tries) {  // the next key that does something in the loaded KML
+    g_effect = g_effect < 0 ? (dir > 0 ? 0 : kEffectCount - 1) : (g_effect + dir + kEffectCount) % kEffectCount;
+    if (!(g_effect_text = KeyDescription(*m, k, EffectKey(g_effect).code)).empty()) break;
+  }
   TapKey(m, EffectKey(g_effect).code);
 }
 // A symmetry key; pre = the pre-symmetry (the manual: Delete makes the next symmetry key set it).
@@ -319,6 +504,8 @@ void Reset() {
   g_cell = -1, g_dpad_frames = 0;
   g_gyro_pad = nullptr;
   g_flying = false;
+  g_effect_text.clear(), g_row_text.clear();
+  g_no_gyro_told = false;
   g_was_music = g_heard = g_music_key = false;
   g_pulse = g_beats = 0;
   g_manual_until = 0;
@@ -371,7 +558,11 @@ void Music(st::Machine* m, SDL_Gamepad* pad, const music::Frame& f, int* dx, int
       ShowState();
       LOG("music: palette %s", kPalettes[g_palette].name);
     } else if (g_beats % 32 == 8) {
-      g_effect = int(g_rng() % kEffectCount);
+      Kml k = ReadKml(*m);
+      for (int tries = 0; tries < 40; ++tries) {
+        g_effect = int(g_rng() % kEffectCount);
+        if (!(g_effect_text = KeyDescription(*m, k, EffectKey(g_effect).code)).empty()) break;
+      }
       TapKey(m, EffectKey(g_effect).code);
       ShowState();
       LOG("music: effect %s", EffectKey(g_effect).name);
@@ -423,6 +614,20 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
   g_test = false;
   const int state = State(*m);
   const bool performing = state == 0;
+  g_fx_mask = m->Ram()[kFxMask] & 0x3F;
+  if (g_log_keys && performing) {  // scripted runs: every effect key's description, when the loaded KML changes
+    static uint32_t last_sum = 0;
+    uint32_t sum = 0;
+    for (uint32_t a = kKmlPrograms; a < kKmlKeys + 256; a += 2) sum = sum * 31 + Get16(*m, a);
+    if (sum != last_sum) {
+      last_sum = sum;
+      Kml k = ReadKml(*m);
+      for (int i = 0; i < kEffectCount; ++i)
+        if (std::string d = KeyDescription(*m, k, EffectKey(i).code); !d.empty()) LOG("kml key %s: %s", EffectKey(i).name, d.c_str());
+      for (const Key& n : kNumbers)
+        if (std::string d = KeyDescription(*m, k, n.code); !d.empty()) LOG("kml number %s: %s", n.name, d.c_str());
+    }
+  }
   // The palettes' background flashes (4: red / green, 5: white, 6: a constant strobe) as soft pulses.
   m->SetCalmBackground(performing && g_calm);
   bool have_pad = pad || test;
@@ -465,6 +670,11 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
   // Gyro (Steam Deck, DualShock / DualSense, Switch pads): turning the pad moves the light / pointer.
   float gx = 0, gy = 0;
   if (g_tune.gyro && pad) {
+    if (!SDL_GamepadHasSensor(pad, SDL_SENSOR_GYRO) && !g_no_gyro_told) {
+      g_no_gyro_told = true;
+      LOG("Trip-A-Tron: %s has no gyro", SDL_GetGamepadName(pad));
+      SetHint("THIS PAD HAS NO GYRO HERE (STEAM INPUT? TURN IT OFF FOR THIS GAME)", 6000);
+    }
     if (g_gyro_pad != pad && SDL_GamepadHasSensor(pad, SDL_SENSOR_GYRO)) {
       SDL_SetGamepadSensorEnabled(pad, SDL_SENSOR_GYRO, true);
       g_gyro_pad = pad;
@@ -528,6 +738,7 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
           if (wheel == Wheel::kEffect) {
             g_effect = FamilyStart(g_family) + g_wheel_sel;
             TapKey(m, EffectKey(g_effect).code);
+            g_effect_text = KeyDescription(*m, ReadKml(*m), EffectKey(g_effect).code);
           } else {
             ChooseSymmetry(m, g_wheel_sel, g_pre);
           }
@@ -547,6 +758,9 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
       if (g_wheel == Wheel::kEffect) {
         if (press(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) g_family = (g_family + 1) % 3, g_wheel_sel = -1;
         if (press(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) g_family = (g_family + 2) % 3, g_wheel_sel = -1;
+        Kml k = ReadKml(*m);
+        g_row_text.clear();
+        for (int i = 0; i < kFamilies[g_family].n; ++i) g_row_text.push_back(KeyDescription(*m, k, kFamilies[g_family].keys[i].code));
       }
       g_pre = g_wheel == Wheel::kSymmetry && down(SDL_GAMEPAD_BUTTON_NORTH);
       if (g_pre) g_y_used = true;  // (Y joined a symmetry wheel: no Control Panel on its release)
@@ -622,14 +836,20 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     if (!layer && g_wheel == Wheel::kNone) {
       if (press(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) StepEffect(m, 1), ShowState(), chose();
       if (press(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) StepEffect(m, -1), ShowState(), chose();
+      if (press(SDL_GAMEPAD_BUTTON_START)) SetHint("LOADING THE OTHER DEMO (STARFIELDS AND LASERS / PATTERNS)", 4000);
       if (press(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) {
         ChooseSymmetry(m, g_symmetry < 0 ? 0 : (g_symmetry + 1) % 8, false), ShowState(), chose();
       }
       if (press(SDL_GAMEPAD_BUTTON_DPAD_UP)) {
         ChooseSymmetry(m, g_symmetry < 0 ? 7 : (g_symmetry + 7) % 8, false), ShowState(), chose();
       }
-      if (press(SDL_GAMEPAD_BUTTON_SOUTH)) {  // surprise me
-        g_effect = int(g_rng() % kEffectCount), g_palette = int(g_rng() % 10);
+      if (press(SDL_GAMEPAD_BUTTON_SOUTH)) {  // surprise me (an effect key that does something)
+        Kml k = ReadKml(*m);
+        for (int tries = 0; tries < 40; ++tries) {
+          g_effect = int(g_rng() % kEffectCount);
+          if (!(g_effect_text = KeyDescription(*m, k, EffectKey(g_effect).code)).empty()) break;
+        }
+        g_palette = int(g_rng() % 10);
         TapKey(m, EffectKey(g_effect).code), TapKey(m, kPalettes[g_palette].code);
         ChooseSymmetry(m, int(g_rng() % 8), false);
         ShowState(), chose();
@@ -638,7 +858,8 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
       if (press(SDL_GAMEPAD_BUTTON_START)) TapKey(m, kF10);
       if (press(SDL_GAMEPAD_BUTTON_EAST)) {  // the number row in turn (on Back until 2026-11-07)
         Step(m, &g_number, kNumbers, 12, 1);
-        SetHint(std::string("NUMBER KEY ") + kNumbers[g_number].name, 1500);
+        std::string d = KeyDescription(*m, ReadKml(*m), kNumbers[g_number].code);
+        SetHint(std::string("NUMBER KEY ") + kNumbers[g_number].name + (d.empty() ? "" : ": " + d), 2000);
       }
     }
   } else {
@@ -769,8 +990,28 @@ void DrawOverlay(SDL_Renderer* r, float view_h) {
       const char* label = effect ? kFamilies[g_family].keys[i].name : kSymmetries[i].name;
       float w = float(std::strlen(label)) * 8;
       bool sel = i == g_wheel_sel;
-      box(x - w / 2 - 3, y - 5, w + 6, 10, sel ? 255 : 40, sel ? 220 : 40, sel ? 0 : 60, 230);
-      centred(x, y - 4, label, sel);
+      bool live = !effect || (i < int(g_row_text.size()) && !g_row_text[i].empty());
+      box(x - w / 2 - 3, y - 5, w + 6, 10, sel ? 255 : live ? 40 : 20, sel ? 220 : live ? 40 : 20, sel ? 0 : live ? 60 : 20,
+          230);
+      if (live || sel) {
+        centred(x, y - 4, label, sel);
+      } else {
+        SDL_SetRenderDrawColor(r, 90, 90, 90, 255);
+        SDL_RenderDebugText(r, x - w / 2, y - 4, label);
+      }
+    }
+    // What the chosen key does (the loaded KML), in the middle, in the half-size font (4 px a letter).
+    if (effect && g_wheel_sel >= 0 && g_wheel_sel < int(g_row_text.size())) {
+      std::string d = g_row_text[g_wheel_sel].empty() ? "(NOTHING ON THIS KEY)" : g_row_text[g_wheel_sel];
+      SDL_SetRenderScale(r, 0.5f, 0.5f);
+      size_t cut = d.size() > 22 ? d.rfind(' ', 22) : std::string::npos;
+      if (cut == std::string::npos || cut == 0) {
+        centred(2 * cx, 2 * cy - 4, d);
+      } else {
+        centred(2 * cx, 2 * cy - 10, d.substr(0, cut));
+        centred(2 * cx, 2 * cy + 2, d.substr(cut + 1));
+      }
+      SDL_SetRenderScale(r, 1, 1);
     }
     centred(cx, cy + 74, effect ? "D-PAD: ROW   RELEASE: CHOOSE" : "RELEASE: CHOOSE");
   } else if (g_y_frames >= kHold) {
@@ -780,10 +1021,11 @@ void DrawOverlay(SDL_Renderer* r, float view_h) {
     centred(cx, top + 3, "PLOT ROUTINE (Y HELD)");
     for (int i = 0; i < 6; ++i) {
       float x = 8 + float(i) * 51.5f;
-      box(x, top + 15, 48, 22, 40, 40, 70, 230);
+      bool on = g_fx_mask >= 0 && (g_fx_mask >> i & 1);
+      box(x, top + 15, 48, 22, on ? 20 : 40, on ? 120 : 40, on ? 40 : 70, 230);  // on: green, as the panel's borders
       centred(x + 24, top + 17, kStageButtons[i]);
       SDL_SetRenderScale(r, 0.5f, 0.5f);  // (the names in a half-size font: 4 px a letter)
-      centred(2 * (x + 24), 2 * (top + 28), kStages[i]);
+      centred(2 * (x + 24), 2 * (top + 28), std::string(kStages[i]) + (on ? " ON" : " OFF"));
       SDL_SetRenderScale(r, 1, 1);
     }
     centred(cx, top + 42, "D-PAD UP/DOWN: PRE-SYMMETRY");

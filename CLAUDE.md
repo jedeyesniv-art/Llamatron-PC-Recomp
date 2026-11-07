@@ -364,6 +364,16 @@ font doubled with a raster gradient. In README.md.
   identity maps; event programs not located), the stages' on / off (F1 rewrites a routine-pointer chain at
   $3B848, no flags), Global Parameter banks (KML commands: 114 names from $2ED74, GLOBAL = 54, dispatch not a
   pointer table), laser steering (Sillyscope parameters aren't KML variables).
+- Trip-A-Tron effect labels + stage on/off (2026-11-07): the loaded KML is in RAM - programs from $3C4DC (event
+  n = the n-th, $FFFF-ended), key -> event words at $3E632 (by scancode, >= 128 none; the "identity" table was it),
+  command names / argument counts at $3EE74 (TRIP.PRG text $2ED74). The .KML file: programs, offsets at $1F46, keys
+  at $2156. tripatron.cpp Describe() names each key from its program (DECAY / LINE / EXPANDOR SHAPE n or ANIMATED,
+  STARFIELD: WARP / DRIFT / SPIN / WAVES / RANDOM + LIGHT STEERS (reads CX / CY), LASER n, PALETTE, STROBE, 2ND
+  CURSOR, SWITCH <stage>, LOAD THE OTHER DEMO); wheel greys keys with none, d-pad / surprise / music skip them;
+  scripted runs log "kml key X: ..." when the KML changes. Plot stages on / off: the FX mask byte $15B30 (bit 0
+  pre-sym .. 5 post-sym; KML FXENABLE / FXSTATE) - green in the Y strip. Gyro: SDL's HIDAPI Steam Controller
+  driver is on by default on Windows (gyro reported); under Steam Input only Steam's virtual pad (no gyro) is
+  seen - a hint says so once.
 - Shared (2026-11-01): src/pad.cpp = pad 1 as a per-frame snapshot (real or the test pad from --press=N:g...)
   with edges; src/stgames.cpp = RMC and Andes controls (modes kRmc / kAndes). Registry play rule (games.h
   play_at / play_value / play_word / play_vbl): the faster CPU (--cpu, x8) while that RAM value says "play";

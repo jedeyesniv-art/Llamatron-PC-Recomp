@@ -129,7 +129,9 @@ TRIP-A-TRON - XBOX PAD
 ----------------------
 Played like an instrument. The basics:
   Left stick      move the light source           Right stick     spirograph: the stick is the position
-  While a starfield is running (the starfield demo: Start, then the A row) the right stick flies it:
+  The starfields and lasers are in the other demo: press Start to load it, then pick from the A or Z row
+  (effect wheel or d-pad) for starfields, or B for the lasers on the number row; Start again goes back.
+  While a starfield is running the right stick flies it:
                   push up to speed into the stars, pull back to reverse, left / right to spin, RT to boost;
                   let go and it settles back to its own speed
   RT              paint - how hard you squeeze sets how thickly patterns flow (light = sparse pulses)
@@ -144,9 +146,10 @@ Played like an instrument. The basics:
   Back            settings (and leaving, back to the disks)
 Hold to choose (a picture shows the choices while you hold):
   LB held         the effect wheel: point the right stick at an effect, let go of LB to choose it;
-                  the d-pad left / right changes keyboard row
+                  the d-pad left / right changes keyboard row. Each key is labelled with what it does in the
+                  demo that's loaded (read from its KML program); greyed keys do nothing there
   RB held         the symmetry wheel, the same way; hold Y too and it sets the pre-symmetry instead
-  Y               a tap: the Control Panel up / down. Held: the plot routine - LB pre-symmetry, A remap,
+  Y               a tap: the Control Panel up / down. Held: the plot routine (each stage shown on / off) - LB pre-symmetry, A remap,
                   X cube, B shear, Start resize, RB post-symmetry on / off (F1-F6); d-pad up / down steps
                   the pre-symmetry
 On the Control Panel the d-pad jumps from icon to icon and names it, with what A (left button) and X (right
