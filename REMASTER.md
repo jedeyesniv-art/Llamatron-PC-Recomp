@@ -39,7 +39,9 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
    scrollers.
 5. **Run-ahead outside the remaster** (Trip-A-Tron, docs readers, user disks): the run-ahead copy would have to
    render its picture (the sandbox skips RenderLine).
-6. **Small known glitches**: Photon Storm's paused picture keeps the last frame's shots (the original drops them);
+6. **Small known glitches**: Photon Storm's pause DONE 2026-11-07 (the held play items are gone; its fountain of
+   dots is captured, 50 a second on the faster CPU, pixel-identical; a star phase shift for a frame or two on resume, as
+   before);
    Hardcore's trail rings (cosmetic timing, see its notes); the owner's one-off 108 ms stutter (2026-11-03, not
    reproduced - the slow present line is waiting for it; a scripted run's 121 ms gap at a wave change fell outside
    every timed phase: events, settings reload, audio or the pacing wait next).

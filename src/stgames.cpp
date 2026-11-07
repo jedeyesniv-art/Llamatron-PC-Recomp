@@ -657,7 +657,10 @@ constexpr int kPsPlay = 1, kPsPaused = 10, kPsTitle = 7;
 // The screens drawn every VBL with photonstorm_50fps (their animation is in the VBL) and captured by the remaster:
 // play, the ARC logo (12), the title (7), the enemy guide (11), the high scores (8). Not the change-overs (2) or
 // the pause (10). (games.cpp play_more: the faster CPU in the same states.)
-bool PsDrawsEveryVbl(int state) { return state == kPsPlay || state == 12 || state == kPsTitle || state == 11 || state == 8; }
+// (10: the pause screen - a fountain of dots the stick moves; owner 2026-11-07: the held play items didn't belong.)
+bool PsDrawsEveryVbl(int state) {
+  return state == kPsPlay || state == 12 || state == kPsTitle || state == 11 || state == 8 || state == kPsPaused;
+}
 constexpr uint8_t kKeyQ = 0x10;
 float g_ps_mx = 0, g_ps_my = 0;
 
@@ -882,7 +885,6 @@ void PsOnDrawCall(st::Machine& m) {
     g_ps_capture = remaster::Enabled() && PsDrawsEveryVbl(state);
     g_ps_capture_screen = Get32(m, kPsScreen) & 0xFFFFFF;
     if (g_ps_capture) remaster::BeginFrame(g_ps_capture_screen);
-    else if (state == kPsPaused && remaster::Enabled()) remaster::Hold();  // the play picture stays
     else remaster::Stop();
   }
   uint32_t sp = Reg(cpu::A7) - 4;
