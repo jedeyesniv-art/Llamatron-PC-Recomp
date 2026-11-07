@@ -56,6 +56,9 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
   the routine) and sort them into clips / mode / colour / internal; check new sprites
   with run-ahead 2 as well as the run-ahead 0 pixel check.
 
+Owner 2026-11-07: Defender 2's version screen / logo and Hardcore's level intro stay as they are (D2 "looks really
+good already"; Hardcore's vanishing cans "don't read strange"). Not to-dos any more.
+
 ### Outside play: the survey (2026-11-05; polish item 4, owner: Andes, Camels, D2, Llamatron first, Hardcore last)
 Tool: `--survey=F:T:<file>` (each frame's picture + the code that wrote into a screen) with `--watch=<state>
 --watch-step=1`, then `python -P Tools/survey.py <file> <log> <png folder>`: per state, new pictures a second and
