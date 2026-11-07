@@ -122,6 +122,8 @@ const std::vector<Item>& Items() {
 
       {"andes", "CONTROL SCHEME", "andes_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
        "Arcade: left / right only turn round, RT thrust (squeeze = speed), X / Y reverse. Stick thrust: the push moves you."},
+      {"andes", "ALTITUDE", "andes_altitude", Kind::kChoice, 0, 0, 1, 1, {"DIRECT", "ORIGINAL"},
+       "DIRECT: the stick moves the ship at the speed below. ORIGINAL: the stick is the mouse, as the game was made."},
       {"andes", "ALTITUDE SPEED", "andes_stick_speed", Kind::kSlider, 3, 1, 8, 0.5, {},
        "Pixels a frame up or down with the stick pushed all the way."},
       {"andes", "ALTITUDE CURVE", "andes_stick_curve", Kind::kSlider, 1.5, 1, 3, 0.25, {},

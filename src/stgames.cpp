@@ -182,6 +182,7 @@ float g_alt = -1;
 float g_andes_speed = 3, g_andes_curve = 1.5f;
 float g_andes_ease = 0.5f, g_thrust_frac = 0;  // speed steps a frame (direct thrust)
 bool g_andes_direct = false;
+bool g_andes_stock_alt = false;  // andes_altitude 1: the stick is the mouse (the game's own altitude handling)
 bool g_shield_held = false;
 constexpr uint8_t kKeyAlt = 0x38;
 
@@ -247,7 +248,7 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   }
   uint8_t buttons = mbuttons;
   int dy = 0;
-  if (play && p.connected) {
+  if (play && p.connected && !g_andes_stock_alt) {
     // Altitude: the game takes it straight from the mouse ($2B682 = y - mouse dy, 0x20..0xBE; the ship follows
     // the next frame, no easing), so it's written directly: the stick is its speed, through a gentle curve
     // (andes_stick_speed px a frame at full - 3, owner: 6 too sensitive - and andes_stick_curve).
@@ -263,11 +264,15 @@ void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     g_alt = std::clamp(g_alt, 32.0f, 190.0f);
     Put16(m, kAndesAlt, int(g_alt));
   } else {
-    float y = std::fabs(p.ly) > 0.15f ? p.ly : 0;  // other screens: the mouse, as before
+    // Other screens - and play with ALTITUDE ORIGINAL (andes_altitude 1, owner 2026-11-07): the stick moves the
+    // ST mouse (4 px a frame at full, quadratic) and the game moves the ship as it does for the mouse.
+    float y = std::fabs(p.ly) > 0.15f ? p.ly : 0;
     if (y != 0) {
       float k = (std::fabs(y) - 0.15f) / 0.85f;
       g_mouse_y += (y < 0 ? -1 : 1) * 4.0f * k * k;
     }
+    if (play && p.Held(SDL_GAMEPAD_BUTTON_DPAD_UP)) g_mouse_y -= 3;
+    if (play && p.Held(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) g_mouse_y += 3;
     dy = int(g_mouse_y);
     g_mouse_y -= float(dy);
     g_alt = -1;
@@ -1250,6 +1255,7 @@ void LoadSettings() {
   g_andes_curve = float(settings::Get("andes_stick_curve", 1.5));
   // Off by default (owner: "left and right feel wrong" with it): the game's own thrust and glide.
   g_andes_direct = settings::Get("andes_direct_thrust", 0) != 0;
+  g_andes_stock_alt = settings::Get("andes_altitude", 0) != 0;
   g_andes_arcade = settings::Get("andes_controls", 1) != 0;
   g_d2_arcade = settings::Get("d2_controls", 1) != 0;
   g_rmc_twin = std::clamp(int(settings::Get("rmc_twin_stick", 2)), 0, 2);
