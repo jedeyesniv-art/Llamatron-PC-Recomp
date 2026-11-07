@@ -547,6 +547,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   if (renderer) SDL_SetRenderLogicalPresentation(renderer, st::kScreenW, view_h, SDL_LOGICAL_PRESENTATION_LETTERBOX);
   if (audio) SDL_ClearAudioStream(audio);
   remaster::Stop();
+  remaster::FreeTextures();  // the last game's sprites
   remaster::LoadSettings();
   remaster::SetRenderer(renderer != nullptr || opt.remaster_headless);
   remaster::SetProbe(opt.remaster_probe);

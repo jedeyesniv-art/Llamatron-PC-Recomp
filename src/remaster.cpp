@@ -64,7 +64,11 @@ std::unordered_map<uint64_t, Image> g_images;
 // Per image: a texture per set of colours it was made with (only the colours its image uses count), so an image
 // seen in a few palettes (rasters, flashes) isn't rebuilt every frame.
 constexpr size_t kMaxVariants = 256;
-std::unordered_map<uint64_t, std::unordered_map<uint64_t, SDL_Texture*>> g_textures;
+struct Baked {
+  SDL_Texture* t = nullptr;
+  int last = 0;  // the draw frame it was last drawn in
+};
+std::unordered_map<uint64_t, std::unordered_map<uint64_t, Baked>> g_textures;
 std::unordered_map<uint64_t, uint16_t> g_used;  // per image: the colours it uses (bit per index)
 SDL_Texture* g_target = nullptr;
 SDL_Texture* g_over = nullptr;  // the ST picture with colour 0 see-through (items behind it)
@@ -78,14 +82,24 @@ uint32_t Argb(uint16_t c, bool ste) {
   return 0xFF000000u | ch((c >> 8) & 15) << 16 | ch((c >> 4) & 15) << 8 | ch(c & 15);
 }
 
-void DropTextures(std::unordered_map<uint64_t, SDL_Texture*>& variants) {
-  for (auto& [sig, t] : variants) SDL_DestroyTexture(t);
+// Live sprite textures (baked + layers), capped: the least recently drawn go once there are more than kMaxLive
+// (owner's Deck 2026-11-07: Camels TT crashed in the D3D12 driver - vkd3d-proton - after ~1850 textures made in
+// 80 s, none freed; they also piled up from every game played since the start). Re-made when needed again.
+constexpr int kMaxLive = 1024, kIdle = 1000;
+int g_live = 0, g_evict_next = 0;
+void Destroy(SDL_Texture* t) {
+  SDL_DestroyTexture(t);
+  --g_live;
+}
+void DropTextures(std::unordered_map<uint64_t, Baked>& variants) {
+  for (auto& [sig, b] : variants) Destroy(b.t);
   variants.clear();
 }
 // Each image also as layers: a white mask per colour index it uses, drawn tinted (SDL_SetTextureColorMod) - any
 // colours without making a texture. Used while an image's colours keep changing (a flash, a colour cycle, rasters
 // moving under it: made per frame, ~200 textures a frame cost the owner 50-150 ms frames in the TT Megamix).
 std::unordered_map<uint64_t, std::vector<std::pair<int, SDL_Texture*>>> g_layers;
+std::unordered_map<uint64_t, int> g_layers_last;  // per image: the draw frame its layers were last drawn in
 // Per image: in how many frames each set of its colours was asked for; one is baked into a texture from the third.
 struct Seen {
   int frames = 0, last = -1;
@@ -100,24 +114,59 @@ int g_bake_budget = kBakesPerFrame;
 
 void DropLayers(uint64_t id) {
   if (auto l = g_layers.find(id); l != g_layers.end()) {
-    for (auto& [c, t] : l->second) SDL_DestroyTexture(t);
+    for (auto& [c, t] : l->second) Destroy(t);
     g_layers.erase(l);
   }
+  g_layers_last.erase(id);
   g_seen.erase(id);
 }
 void DropTextures() {
   for (auto& [id, v] : g_textures) DropTextures(v);
   g_textures.clear();
   for (auto& [id, l] : g_layers)
-    for (auto& [c, t] : l) SDL_DestroyTexture(t);
+    for (auto& [c, t] : l) Destroy(t);
   g_layers.clear();
+  g_layers_last.clear();
   g_seen.clear();
+}
+
+// Over the cap: the least recently drawn textures go until 3/4 of it is left - only ones not drawn for kIdle draw
+// frames (~10 s): a soft cap (freeing recent ones made the TT Megamix re-make them, 4x the textures, 16 ms frames).
+void Evict() {
+  if (g_live <= kMaxLive || g_draw_frame < g_evict_next) return;
+  g_evict_next = g_draw_frame + 100;  // at most every ~1 s when nothing can go
+  struct Old {
+    int last;
+    uint64_t id, sig;
+    bool layers;
+  };
+  std::vector<Old> old;
+  for (auto& [id, v] : g_textures)
+    for (auto& [sig, b] : v) old.push_back({b.last, id, sig, false});
+  for (auto& [id, l] : g_layers) old.push_back({g_layers_last[id], id, 0, true});
+  std::sort(old.begin(), old.end(), [](const Old& a, const Old& b) { return a.last < b.last; });
+  int before = g_live;
+  for (const Old& o : old) {
+    if (g_live <= kMaxLive * 3 / 4 || o.last >= g_draw_frame - kIdle) break;
+    if (o.layers) {
+      if (auto l = g_layers.find(o.id); l != g_layers.end()) {
+        for (auto& [c, t] : l->second) Destroy(t);
+        g_layers.erase(l);
+        g_layers_last.erase(o.id);
+      }
+    } else if (auto v = g_textures.find(o.id); v != g_textures.end()) {
+      if (auto b = v->second.find(o.sig); b != v->second.end()) Destroy(b->second.t), v->second.erase(b);
+      if (v->second.empty()) g_textures.erase(v);
+    }
+  }
+  if (g_live != before) LOG("remaster: %d textures, the least recently drawn freed -> %d", before, g_live);
 }
 
 int g_count_decoded = 0, g_count_textures = 0;
 int g_first_sights = 0;  // images first met by the real machine (not the run-ahead copy): stats
 
 const std::vector<std::pair<int, SDL_Texture*>>* LayersFor(SDL_Renderer* r, uint64_t id) {
+  g_layers_last[id] = g_draw_frame;
   if (auto l = g_layers.find(id); l != g_layers.end()) return &l->second;
   auto im = g_images.find(id);
   if (im == g_images.end() || im->second.w <= 0 || im->second.h <= 0) return nullptr;
@@ -131,6 +180,7 @@ const std::vector<std::pair<int, SDL_Texture*>>* LayersFor(SDL_Renderer* r, uint
     ++g_count_textures;
     SDL_Texture* t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, image.w, image.h);
     if (!t) continue;
+    ++g_live;
     SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
     SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
     SDL_UpdateTexture(t, nullptr, px.data(), image.w * 4);
@@ -150,7 +200,10 @@ SDL_Texture* TextureFor(SDL_Renderer* r, uint64_t id, const uint32_t* pal) {
   for (int i = 0; i < 16; ++i)
     if (used >> i & 1) sig = (sig ^ pal[i]) * 1099511628211ull;
   auto& variants = g_textures[id];
-  if (auto t = variants.find(sig); t != variants.end()) return t->second;
+  if (auto t = variants.find(sig); t != variants.end()) {
+    t->second.last = g_draw_frame;
+    return t->second.t;
+  }
   auto& seen = g_seen[id];
   if (seen.size() > 1024) seen.clear();
   Seen& s = seen[sig];
@@ -163,10 +216,11 @@ SDL_Texture* TextureFor(SDL_Renderer* r, uint64_t id, const uint32_t* pal) {
   ++g_count_textures;
   SDL_Texture* t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, image.w, image.h);
   if (!t) return nullptr;
+  ++g_live;
   SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
   SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
   SDL_UpdateTexture(t, nullptr, px.data(), image.w * 4);
-  variants[sig] = t;
+  variants[sig] = Baked{t, g_draw_frame};
   return t;
 }
 
@@ -627,6 +681,7 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
   const int W = 320 * kScale, H = 200 * kScale;
   ++g_draw_frame;
   g_bake_budget = kBakesPerFrame;
+  Evict();  // before this frame's draws: nothing queued uses what goes
   if (!g_target) {
     g_target = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, W, H);
     if (!g_target) {
@@ -800,6 +855,11 @@ void ComposeSoftware(const uint32_t* st, const uint16_t* line_palettes, bool ste
 }
 
 void SetShownColour0(bool on, uint32_t argb) { g_colour0_on = on, g_colour0 = argb; }
+
+void FreeTextures() {
+  if (g_live > 0) LOG("remaster: %d textures freed", g_live);
+  DropTextures();
+}
 
 void Shutdown() {
   DropTextures();

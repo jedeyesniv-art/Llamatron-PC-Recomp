@@ -114,6 +114,7 @@ elease\Llamatron-<ver>-windows.zip (no game
   the menus (games.cpp play_more; the change-overs $1AC3C are CPU-timed). TT: $1085E / $10C5E, $10EFC / $10E32,
   $112CA / $115D2. Pixel-identical but for a TT bonus frame where a stretched (type 1) streak is clipped at
   line 16 (the sandbox image sliced vs the routine's own clipping).
+- Sprite textures capped (2026-11-07, the owner's Deck: Camels TT crashed in d3d12core.dll = vkd3d-proton, in CopyDescriptorsSimple from our glow pass's flush, ~80 s into play): remaster.cpp never freed its baked / layer textures (TT ~1850 made in 80 s; and every earlier game's stayed). Now FreeTextures at each game's start and a soft cap (kMaxLive 1024: the least recently drawn, idle >= 1000 draw frames, go; TT settles ~1500 live). Not reproduced here: vkd3d-proton 3.1 on this PC (DLLs next to a copy of the exe, logsk) ran TT 4 min without the cap, 4327 textures, no crash - the Deck's AMD driver differs. If it crashes again, the cap wasn't it. Measured SDL's GPU descriptor heap use: ~257 of 2048 a command buffer (not an overflow).
 - Defender 2 remaster (2026-11-03): src/remaster_d2.cpp - many small draw routines hooked (sprites, plotters,
   OR-ed stars / particles / lasers via remaster::IndexAt, ground bands, terrain, planet); HUD and radar left.
   --remaster-writers=N logs what still writes into the screen (any game).

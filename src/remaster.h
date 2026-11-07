@@ -151,6 +151,8 @@ bool Active();
 void Draw(SDL_Renderer* renderer, SDL_Texture* st_texture, const SDL_FRect& view, float alpha,
           const uint16_t* line_palettes, bool ste_colours, const uint32_t* st_pixels = nullptr);
 void Shutdown();
+// Frees every sprite texture (re-made as they are drawn again): at the start of each game.
+void FreeTextures();
 // Colour 0 as the machine shows it, when that isn't the register (Machine::CalmBackground: flashes filtered): used
 // for every line's colour 0 (drawn black). Before Draw / ComposeSoftware.
 void SetShownColour0(bool on, uint32_t argb);
