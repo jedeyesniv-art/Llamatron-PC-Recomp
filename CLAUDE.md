@@ -217,6 +217,13 @@ elease\Llamatron-<ver>-windows.zip (no game
   Llamatron $5C0CF, Andes $12BB6 (bombs $12BB4), Photon $1D124 (bombs $1D126), Camels $19264 / TT $1929C,
   Hardcore $14839; Gridrunner state 1 -> 4; D2 death countdown $2F2DE from 0, bombs $2BA44. Only when pad 1 was
   used in the last 15 s (attract demos die too). Verified in scripted runs (log "rumble: ...").
+  2026-11-07 more (owner): kills (score digits up: Andes $12B96.., D2 $4B098..; Photon: its score digits on the
+  screen shown change - RAM score not found - not for 150 frames after a death; Llamatron: the kill flash list
+  *(text+$25EA) set to text+$25E6, stronger), thrust hums (Andes speed $14BC4 / 19, D2 |$1B4B4| / 9 px: 0.05..0.18
+  low motor), Photon boost hum (Kbshift copy $27C51 bit 1 + gauge $1D12C: 0.06), Hardcore's puck ($1B714 / $1B718,
+  16.16: the motor on its side, with its speed, <= ~0.2), Camels pickups (the pickup flash: $3D5D0 = $3D636 /
+  $3D736 with level $3D5D4 jumping; TT $3D960 / $3D9C6 / $3DAC6 / $3D964: a 2-frame blip). Pulses + hum mixed per
+  motor, sent when changed or every 5 frames (150 ms). Log: "kills so far" every 10, "hum up to" every 500 frames.
 - Button names: remap::PadStyle (pad 1's SDL type, or setting button_names 0 auto / 1 Xbox / 2 PlayStation /
   3 Nintendo) -> InputName (CROSS CIRCLE SQUARE TRIANGLE L1 R1 L2 R2 OPTIONS SHARE/CREATE; Nintendo by the
   printed labels, L R ZL ZR + -). How-to-play pages and our UI mark buttons {A} {START}...: Rename / UiText
