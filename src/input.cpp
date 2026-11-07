@@ -382,12 +382,15 @@ void Update(st::Machine* m) {
   if (key(SDL_SCANCODE_RETURN)) j0 |= st::kJoyFire;
 
   bool aim = false;
+  // A second pad is player 2 (joystick 0) only in TEAM; otherwise pad 1's right stick stays its twin stick
+  // (before 2026-11-07 any second pad took joystick 0, so twin-stick play needed exactly one pad).
+  const bool team = g_pads.size() >= 2 && game::Mode(*m) == 3;
   if (!g_pads.empty()) {
     SDL_Gamepad* p = g_pads[0];
     auto button = [&](SDL_GamepadButton b) { return remap::Button(p, b); };
     j1 |= StickBits(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY) | DpadBits(p);
     if (button(SDL_GAMEPAD_BUTTON_WEST)) j1 |= st::kJoyFire;  // X: always stick 1 (a one-stick game)
-    if (g_pads.size() == 1) {  // twin-stick: the right stick is joystick 0
+    if (!team) {  // twin-stick: the right stick is joystick 0
       j0 |= StickBits(p, SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY);
       float ax = SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
       float ay = SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
@@ -406,7 +409,7 @@ void Update(st::Machine* m) {
       j1 |= st::kJoyFire;
     }
   }
-  j0 |= SecondPadJoystick();
+  if (team) j0 |= SecondPadJoystick();
   if (!aim) game::SetAim(false, 0, 0);
   m->SetJoystick(0, Clean(j0));
   m->SetJoystick(1, Clean(j1));

@@ -621,7 +621,7 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
 - Our mapping (src\input.h): pad 1 left stick/d-pad = joystick 1; right stick = joystick 0. A = joystick 1 fire,
   except on the title screen, where A = joystick 0 fire = starts the twin-stick game (decided when pressed; not
   in PLAYER + DROID, where the game ignores it). X = joystick 1 fire (title: one-stick game). Start/RB/RT =
-  joystick 0 fire. Back = pause/unpause (P/O). A second pad = joystick 0 (TEAM). Keyboard: WASD + Space =
+  joystick 0 fire. Back = pause/unpause (P/O). A second pad = joystick 0 only in TEAM (title mode 3; before 2026-11-07 any second pad took it, so two pads connected broke twin-stick). Keyboard: WASD + Space =
   joystick 1, cursors + Enter = joystick 0, other keys = ST keys.
 - Quitting (owner: "a way to exit to the menu from a run, and then to exit the game"): the game's own X key
   ($78, VBL hook $1F46 -> $2BBA = 3 -> $21E title) aborts to the title, but only in play, not on the pause
