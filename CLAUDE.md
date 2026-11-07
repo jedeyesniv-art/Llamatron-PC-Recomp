@@ -176,7 +176,10 @@ elease\Llamatron-<ver>-windows.zip (no game
   the game's own = panel_open_game, default open; others closed; the Settings disk its own panel_disk_open_*,
   all closed). Controls rows: A = listen 5 s (a button / trigger toggles it on that row, moving it from another;
   Start / Back / Esc cancel), X = the row's defaults, RESET CONTROLS. Andes / D2 "CONTROLS" choice renamed
-  CONTROL SCHEME. Launcher how-to-play page says CONTROLS CHANGED when the game has a remap.
+  CONTROL SCHEME. Button names (2026-11-07): how-to-play
+  pages mark them {A} {RT}... (games.cpp help; remap::Rename, columns kept), hint lines by "A:" / "LB/RB" (RenameHint
+  in main), both showing the physical buttons that act as each (X/LB; -- none). Not marked: Start, Back, d-pad, the
+  panel's "B there", Trip-A-Tron.
 - Tests: --remap-test sends scripted pad input (g..., pad<button>) through the remap. Verified: panel driven by
   --mpress (Y attached to Photon Storm's SMART BOMB), then gy in play -> bombs 3 -> 2; Andes scheme switch
   rebuilds the list; smoke all 12 pass. Owner tested the build: works. Gridrunner's d-pad up / down are now listed

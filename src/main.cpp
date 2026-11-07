@@ -987,6 +987,8 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       const char* hint = menu::IsOpen()       ? nullptr
                          : remaster::Message() ? remaster::Message()
                                                : input::Hint(&machine);
+      std::string renamed;  // the hint's button names for the player's own buttons (remap)
+      if (hint && !remaster::Message()) renamed = remap::RenameHint(hint), hint = renamed.c_str();
       if (hint) {  // 8x8 debug font in the logical space, lines at the bottom
         std::vector<std::string> lines;
         for (const char* p = hint; *p;) {

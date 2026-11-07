@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 
 #include "log.h"
 #include "settings.h"
@@ -194,26 +195,52 @@ const std::vector<Function>& ListFor(const std::string& id, input::Mode mode, st
 
 std::string Key(const std::string& prefix, const Function& f) { return prefix + "_controls_" + f.key; }
 
-void Build() {
-  g_sets.clear();
-  for (const Function& f : *g_fns) {
-    std::string k = Key(g_prefix, f);
-    g_sets.push_back(settings::Has(k) ? uint32_t(settings::Get(k, 0)) & ~kFixed : f.DefaultMask());
+// A list's saved sets and the physical -> logical map they make (true: not the identity).
+bool MakeMap(const std::vector<Function>& fns, const std::string& prefix, std::vector<uint32_t>* sets, int logical[32]) {
+  sets->clear();
+  for (const Function& f : fns) {
+    std::string k = Key(prefix, f);
+    sets->push_back(settings::Has(k) ? uint32_t(settings::Get(k, 0)) & ~kFixed : f.DefaultMask());
   }
   uint32_t defaults = 0;  // a default of some function
-  for (const Function& f : *g_fns) defaults |= f.DefaultMask();
-  g_active = false;
+  for (const Function& f : fns) defaults |= f.DefaultMask();
+  bool changed = false;
   for (int p = 0; p < 32; ++p) {
     int to = defaults >> p & 1 ? -1 : p;  // listed somewhere but attached nowhere: nothing; never listed: itself
-    for (size_t i = 0; i < g_fns->size(); ++i)
-      if (g_sets[i] >> p & 1) {
-        const Function& f = (*g_fns)[i];
+    for (size_t i = 0; i < fns.size(); ++i)
+      if ((*sets)[i] >> p & 1) {
+        const Function& f = fns[i];
         to = f.DefaultMask() >> p & 1 ? p : f.defaults[0];
       }
     if (kFixed >> p & 1) to = p;
-    g_logical[p] = to;
-    if (to != p) g_active = true;
+    logical[p] = to;
+    if (to != p) changed = true;
   }
+  return changed;
+}
+
+void Build() { g_active = MakeMap(*g_fns, g_prefix, &g_sets, g_logical); }
+
+// The physical buttons that act as `logical` ("A", "X/LB"; "--": none).
+std::string NamesFor(const int logical_of[32], int logical) {
+  uint32_t mask = 0;
+  for (int p = 0; p < 32; ++p)
+    if (logical_of[p] == logical && Attachable(p)) mask |= 1u << p;
+  std::string s = MaskNames(mask);
+  for (char& c : s)
+    if (c == ' ') c = '/';
+  return s.empty() ? "--" : s;
+}
+
+// A button name token at text[i] (A B X Y LB RB LT RT L3 R3): its input, and its length; -1 if none.
+int ButtonAt(const std::string& t, size_t i, size_t* len) {
+  static const std::pair<const char*, int> kNames[] = {
+      {"LB", SDL_GAMEPAD_BUTTON_LEFT_SHOULDER}, {"RB", SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER}, {"LT", kLt}, {"RT", kRt},
+      {"L3", SDL_GAMEPAD_BUTTON_LEFT_STICK}, {"R3", SDL_GAMEPAD_BUTTON_RIGHT_STICK}, {"A", SDL_GAMEPAD_BUTTON_SOUTH},
+      {"B", SDL_GAMEPAD_BUTTON_EAST}, {"X", SDL_GAMEPAD_BUTTON_WEST}, {"Y", SDL_GAMEPAD_BUTTON_NORTH}};
+  for (const auto& [name, input] : kNames)
+    if (t.compare(i, std::strlen(name), name) == 0) return *len = std::strlen(name), input;
+  return -1;
 }
 
 void Save() {
@@ -428,6 +455,53 @@ void SyncEvents(SDL_Gamepad* first) {
   float lt, rt;
   Logical(first, &g_event_held, &lt, &rt);
   g_event_held &= ~kFixed;
+}
+
+std::string Rename(const std::string& text, const std::string& id, input::Mode mode) {
+  std::string prefix;
+  const std::vector<Function>& fns = ListFor(id, mode, &prefix);
+  std::vector<uint32_t> sets;
+  int logical[32];
+  bool changed = !fns.empty() && MakeMap(fns, prefix, &sets, logical);
+  std::string out;
+  int debt = 0;  // characters the line has gained against its unmarked self (taken out of the next wide gap)
+  for (size_t i = 0; i < text.size();) {
+    size_t len = 0, close = text.find('}', i);
+    int input = text[i] == '{' && close != std::string::npos ? ButtonAt(text, i + 1, &len) : -1;
+    if (input >= 0 && i + 1 + len == close) {
+      std::string name = changed ? NamesFor(logical, input) : text.substr(i + 1, len);
+      out += name, debt += int(name.size()) - int(len), i = close + 1;
+    } else if (text[i] == ' ' && debt != 0) {
+      size_t run = text.find_first_not_of(' ', i);
+      run = (run == std::string::npos ? text.size() : run) - i;
+      if (run >= 2) {
+        int keep = std::max(2, int(run) - debt);
+        debt -= int(run) - keep, out.append(size_t(keep), ' ');
+      } else {
+        out.append(run, ' ');
+      }
+      i += run;
+    } else {
+      out += text[i++];
+    }
+  }
+  return out;
+}
+
+std::string RenameHint(const std::string& text) {
+  if (!g_active) return text;
+  std::string out;
+  for (size_t i = 0; i < text.size();) {
+    size_t len = 0;
+    int input = (i == 0 || !std::isalnum(uint8_t(text[i - 1]))) ? ButtonAt(text, i, &len) : -1;
+    char next = i + len < text.size() ? text[i + len] : 0;
+    if (input >= 0 && (next == ':' || next == '/' || (next == ' ' && i >= 1 && text[i - 1] == '/'))) {
+      out += NamesFor(g_logical, input), i += len;
+    } else {
+      out += text[i++];
+    }
+  }
+  return out;
 }
 
 void SetTestThrough(bool on) { g_test_through = on; }

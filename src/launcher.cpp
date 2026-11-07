@@ -564,10 +564,10 @@ void Launcher::Render() {
 
   if (info_) {
     std::vector<std::string> lines = picked.help;
-    if (!picked.settings && remap::Changed(picked.id, picked.mode)) {  // the page names the game's own buttons
+    for (std::string& l : lines) l = remap::Rename(l, picked.id, picked.mode);  // the player's buttons
+    if (!picked.settings && remap::Changed(picked.id, picked.mode)) {
       lines.push_back("");
-      lines.push_back("CONTROLS CHANGED: the buttons above are the game's");
-      lines.push_back("own. Yours: Settings (Back in the game), CONTROLS.");
+      lines.push_back("THE BUTTONS ABOVE ARE YOURS (SETTINGS, CONTROLS).");
     }
     int first_option = -1;
     if (!picked.options.empty()) {

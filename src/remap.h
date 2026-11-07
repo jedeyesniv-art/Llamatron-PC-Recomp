@@ -63,6 +63,12 @@ bool DropEvent(const SDL_Event& e);
 std::vector<SDL_Event> Events(SDL_Gamepad* first);
 void SyncEvents(SDL_Gamepad* first);  // no edges from what's held now (the panel closed)
 
+// Button names in text for the player's buttons. Rename: a how-to-play page, its names marked {A} {RT}...
+// (fixed-width columns kept: the next wide gap takes up the difference). RenameHint: a hint line of the game being
+// played, names before ':' or '/' ("A: play", "LB/RB: page"). Unchanged with the default buttons ({} dropped).
+std::string Rename(const std::string& text, const std::string& id, input::Mode mode);
+std::string RenameHint(const std::string& text);
+
 // Tests: --remap-test sends the scripted pad through the map too.
 void SetTestThrough(bool on);
 bool TestThrough();
