@@ -91,6 +91,9 @@ elease\Llamatron-<ver>-windows.zip (no game
   the last play items under the ST picture (was an empty arena: the capture had kept them out of the screens);
   sprites are captured only inside a draw pass (g_in_pass: GAME OVER is drawn by the continue VBL as it hands
   over). Left: the high score entry ($8272 / $82C2, "enter something wonderful"), the scrollers (slid already).
+- Andes Attack audit (2026-11-07): passes ($202BA, table $20296) 0 play, 2, 4, 5, 6 captured; 3 = level set-up
+  (hands back to pass 0 the same frame: its ATTACK LEVEL intro is pass 0's, captured, pixel-identical); 7 the
+  change-over, 8 the pause (held); 1 never set. Nothing to add.
 - Gridrunner remaster (2026-11-02): src/remaster_grid.cpp (core $4BCE4, pass $144DA..$145E2). Items now take
   each line's palette (Machine::LinePalettes: rasters), all games.
   Its image id includes the colour word $58054 (level 4's text came out dark: the owner's report).
@@ -117,6 +120,13 @@ elease\Llamatron-<ver>-windows.zip (no game
   next to the registry rule), captured. Not the version screen ($1EB24) nor the logo ($1E92A: its lightning
   grows per drawn frame). The high scores' side pillars are copied inline ($11C90): not slid, but now 1 px a
   frame (were 2 every other).
+  Audit 2026-11-07 (every frame routine stored to $4CC46, every state of $4B086): also the end-of-wave screen
+  (state 4, frame $12848: ATTACK LEVEL n COMPLETED, bonus humanoids, a wireframe pyramid) and the fade when the
+  ship is lost (state 5 with play's frame) - Attract(): every VBL, faster CPU, captured. Both are partly timed by
+  their drawing: they end 4 / 3 frames (of 340 / 38) sooner than the original, capture on or off alike (captured
+  at the original pace their length changed with the capture instead). Known: the pyramid's lines cross the
+  humanoids in the original, pass behind them here (~10 pixels). Left: state 3 (frame $12C9C, not reached
+  scripted), the logo (owner).
 - Hardcore remaster (2026-11-03): the Camels port with Hardcore addresses (remaster_rmc.cpp kHc) + compiled
   sprites (type 6) and one-plane plotters. Trail rings $1A1F8/$1A4F8 advance per drawn frame (cosmetic).
 - Run-ahead (2026-11-02; setting remaster_ahead 0..3, default 2; F7 cycles, a message line for 2.5 s):
