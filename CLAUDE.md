@@ -61,7 +61,10 @@ elease\Llamatron-<ver>-windows.zip (no game
   $1B102 is open and the ship reaches the world's middle $1D134/$1D136 = $800; VBL handler $1BA22, frame routine
   $1C060) and 5 (after it, ~290 frames; frame routine $1BE92: the same particles $1BD14, sprites via $44C42) drawn
   every VBL on the faster CPU (PsDrawsEveryVbl, play_more); both fully captured (the raw ST picture lacks the
-  particles and ship), pixel-identical, same lengths (720 / 290 frames). Test: --poke takes
+  particles and ship), pixel-identical, same lengths (720 / 290 frames). The bonus won (its script's 'e', $1C634):
+  4 (score counts up, ~275 frames) then 6 (WARP: 3D streaks, $1C866 / $1C9F4, ~405) - captured the same way,
+  verified (--poke=2100:@44846:4 mid-bonus). Every state now: 0 boot, 2 change-overs and 9 (high-score initials,
+  an input screen) are the only ones not drawn every VBL / captured. Test: --poke takes
   @<hex> absolute addresses now: --poke=1900:@1B102:1 --poke=1900:@1D134:800 --poke=1900:@1D136:800 in play.
 - Gotcha: CLAUDE.md has raw CR characters inside lines (paths like Private\r...): edit it byte-safely (Python
   open(..., 'rb')), never through text mode.
