@@ -52,12 +52,13 @@ std::vector<Known> KnownGames() {
             "B ON THE PAUSE SCREEN  quit to the title",
             "BACK                 settings   (B there: back to the disks)", "",
             "Keyboard: WASD + Space, cursors + Enter, P pause"};
+  g.year = 1991;  // version 1.0, 20 March 1991 (its scroller)
   add(g, "TRON1MEG.PRG");
 
   g = {};
   g.id = "gridrunner", g.name = "SUPER GRIDRUNNER", g.program = "GRIDRUNR.PRG", g.shared_saves = true;
   g.mode = input::Mode::kGridrunner, g.body = {0.60f, 0.10f, 0.10f, 1}, g.band = {0.62f, 0.25f, 0.85f, 1};
-  g.help = {"SUPER GRIDRUNNER  -  JEFF MINTER", "",
+  g.help = {"SUPER GRIDRUNNER  -  JEFF MINTER, 1989", "",
             "Shoot the snakes. Mind the zappers.", "",
             "LEFT STICK           move the ship (d-pad L/R: slowly)",
             "RT OR A              fire",
@@ -70,12 +71,13 @@ std::vector<Known> KnownGames() {
             "TITLE: X OPTIONS   Y GAME SECRETS   LB MORE INFO",
             "BACK                 settings   (B there: back to the disks)", "",
             "The mouse works too: the original controls."};
+  g.year = 1989;  // Atarimania, MobyGames (Wikipedia says 1991)
   add(g, "GRIDRUNR.PRG");
 
   g = {};
   g.id = "tripatron", g.name = "TRIP-A-TRON", g.program = "TRIP.PRG", g.install = "TRIP1.TOS";
   g.mode = input::Mode::kTripATron, g.body = {0.10f, 0.42f, 0.22f, 1}, g.band = {0.95f, 0.30f, 0.75f, 1};
-  g.help = {"TRIP-A-TRON  -  JEFF MINTER, 1992", "",
+  g.help = {"TRIP-A-TRON  -  JEFF MINTER, 1988 (SHAREWARE 1992)", "",
             "A light synthesiser: play light to your music.", "",
             "LEFT STICK      move the light source",
             "RIGHT STICK     spirograph: stick = position",
@@ -89,6 +91,7 @@ std::vector<Known> KnownGames() {
             "L3 / F12   music off / pulse / full (hears the PC)",
             "Yak's README.DOC is in userdata\\tripatron."};
   g.docs_text = "README.DOC";  // written by the installer
+  g.year = 1988;  // this disk: the shareware release of 24/08/92 (README.DOC)
   add(g, "TRIP1.TOS", true);
 
   // Being worked on (PLAN-ST-GAMES.md): generic controls for now.
@@ -112,6 +115,7 @@ std::vector<Known> KnownGames() {
   k.back().game.mode = input::Mode::kRmc;
   k.back().game.docs_text = "README.TXT";
   k.back().game.ste = true;
+  k.back().game.year = 1991;  // "created autumn 1991" (its credits)
   wip("rmc", "MUTANT CAMELS", "REVENGE.TOS", "REVENGE OF THE MUTANT CAMELS  -  JEFF MINTER",
       "Giant camels against the forces of evil.", {0.62f, 0.40f, 0.10f, 1}, {0.20f, 0.65f, 0.90f, 1});
   // VBL $1B4B6 calls the hook at $42E18: $1118E play, $11252 the end-of-wave bonus, $193F0 the high score name
@@ -119,13 +123,9 @@ std::vector<Known> KnownGames() {
   k.back().game.play_at = 0x42E18, k.back().game.play_value = 0x1118E;
   k.back().game.play_value2 = 0x11252, k.back().game.play_value3 = 0x193F0;
   k.back().game.mode = input::Mode::kRmc;
+  k.back().game.year = 1991;
   k.back().game.docs_program = "DOX.TOS";  // D-Bug's document displayer: Yak's notes
-  {  // the STE build (listed just before): the same page
-    Game& ste = k[k.size() - 2].game;
-    ste.help = k.back().game.help;
-    ste.help[0] = "REVENGE OF THE MUTANT CAMELS  -  1 MB STE";
-  }
-  k.back().game.help = {"REVENGE OF THE MUTANT CAMELS  -  JEFF MINTER", "",
+  k.back().game.help = {"REVENGE OF THE MUTANT CAMELS  -  JEFF MINTER, 1991", "",
                         "Giant camels against the forces of evil.", "",
                         "LEFT STICK / D-PAD   move: up jumps, down sits",
                         "RIGHT STICK          aim the spit (it never stops)",
@@ -136,6 +136,11 @@ std::vector<Known> KnownGames() {
                         "BACK                 settings   (B there: back to the disks)",
                         "A SECOND PAD         player 2 (the goat) in two-player", "",
                         "Keyboard: cursor keys + Space, P pause, O resume"};
+  {  // the STE build (listed just before): the same page (once it is written)
+    Game& ste = k[k.size() - 2].game;
+    ste.help = k.back().game.help;
+    ste.help[0] = "REVENGE OF THE MUTANT CAMELS  -  1 MB STE, 1991";
+  }
   // Revenge, TT Megamix (REVTT.TOS in a folder; the .st has 10 sectors a track, its boot sector says 9): 32
   // bullets instead of 8, twice the objects, the STE extras (DMA sound, colours).
   wip("rmctt", "CAMELS TT", "REVTT.TOS", "REVENGE OF THE MUTANT CAMELS  -  TT MEGAMIX",
@@ -150,6 +155,7 @@ std::vector<Known> KnownGames() {
   k.back().game.ste = true;
   k.back().game.help = k[k.size() - 2].game.help;  // the Revenge page (listed just before: the STE build first)
   k.back().game.help[0] = "REVENGE OF THE MUTANT CAMELS  -  TT MEGAMIX";
+  k.back().game.year = 1991;
   k.back().game.help[2] = "32 bullets, twice the camels' foes: the TT version.";
   wip("defender2", "DEFENDER 2", "DEFENDR2.PRG", "DEFENDER 2  -  JEFF MINTER, ARCADIA 1990",
       "Defender, Stargate and Defender II.", {0.16f, 0.16f, 0.18f, 1}, {0.30f, 0.85f, 0.30f, 1});
@@ -161,6 +167,7 @@ std::vector<Known> KnownGames() {
   // At boot it reads $FF820A ($1EC04): 60 Hz -> "60 hz game speeds adjusted" ($2043F = 1). The arcade ran at
   // 60; owner 2026-11-01: 60 Hz by default (setting defender2_60hz).
   k.back().game.boot_60hz = true;
+  k.back().game.year = 1990;
   k.back().game.docs_program = "READ_ME.PP";  // The Alien's DOC displayer: the crack's notes, the controls
   k.back().game.help = {"DEFENDER 2  -  JEFF MINTER, ARCADIA 1990", "",
                         "Defender, Defender II and Stargate.", "",
@@ -187,6 +194,7 @@ std::vector<Known> KnownGames() {
   k.back().game.play_at = 0x12EEE, k.back().game.play_value = 1, k.back().game.play_word = true;  // states: 1 play,
   k.back().game.play_value2 = 5, k.back().game.play_value3 = 4;  // 5 title / enemies / high scores, 4 game over
   k.back().game.mode = input::Mode::kAndes;
+  k.back().game.year = 1988;
   k.back().game.help = {"ANDES ATTACK  -  JEFF MINTER, 1988", "",
                         "Save the llamas from the Zzyaxian landers.", "",
                         "LEFT STICK UP/DOWN   altitude",
@@ -209,6 +217,7 @@ std::vector<Known> KnownGames() {
   k.back().game.play_at = 0x44846, k.back().game.play_value = 1, k.back().game.play_word = true;
   k.back().game.play_more = {12, 7, 11, 8};  // the ARC logo, title, enemy guide, high scores (remaster: 50 a second)
   k.back().game.mode = input::Mode::kPhotonStorm;
+  k.back().game.year = 1990;
   k.back().game.help = {"PHOTON STORM  -  JEFF MINTER, ARC 1990", "",
                         "Blast the alien swarms in deep space.", "",
                         "LEFT STICK           point the ship; push far to fly",
@@ -232,6 +241,7 @@ std::vector<Known> KnownGames() {
   // VBL $168F2 calls the hook at $338BA: $104EA title, $145D0 level intro, $10C82 play, $11242 paused.
   k.back().game.play_at = 0x338BA, k.back().game.play_value = 0x10C82;
   k.back().game.mode = input::Mode::kHardcore;
+  k.back().game.year = 1992;
   k.back().game.docs_program = "DOC100E.PRG", k.back().game.docs_keys = "b";  // B = Yak's notes for testers
   k.back().game.help = {"HARDCORE  -  YAK, 1992 (UNFINISHED)", "",
                         "A 5-level evaluation demo, never released.",
@@ -388,6 +398,9 @@ std::vector<Game> Discover(const std::string& disk) {
         found[i] ? known[i].game.source.string().c_str() : "not found", found[i] && !use ? " (not used)" : "");
     if (use) out.push_back(std::move(known[i].game));
   }
+  // In the order they were made (owner 2026-11-07); within a year, as listed above. Added disks and the
+  // Settings disk after them.
+  std::stable_sort(out.begin(), out.end(), [](const Game& a, const Game& b) { return a.year < b.year; });
   for (Game& u : users) {
     LOG("another disk: %s (%zu programs)", u.source.string().c_str(), u.options[0].values.size());
     out.push_back(std::move(u));

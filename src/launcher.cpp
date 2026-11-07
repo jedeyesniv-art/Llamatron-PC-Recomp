@@ -549,7 +549,8 @@ void Launcher::Render() {
   SDL_FPoint p = cam.Project({0, kFloorY - 8, 40});
   DrawText(picked.name.c_str(), p.x, p.y, s * 1.3f, {255, 255, 255, 255}, true);
   if (Count() > 1) {
-    std::string pos = "< " + std::to_string(selected_ + 1) + " / " + std::to_string(Count()) + " >";
+    std::string pos = "< " + (picked.year ? std::to_string(picked.year) + "   " : std::string()) +
+                      std::to_string(selected_ + 1) + " / " + std::to_string(Count()) + " >";
     DrawText(pos.c_str(), p.x, p.y + 14 * s, s * 0.9f, {90, 90, 100, 255}, true);
   }
   DrawText("LLAMASOFT ON THE ATARI ST", w / 2, h * 0.06f, s, {120, 120, 135, 255}, true);

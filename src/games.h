@@ -20,6 +20,7 @@ struct Game {
   std::string id;       // short name: settings keys, the save folder (userdata\<id>), the built-in label
   std::string name;     // the launcher's caption
   std::string program;  // the program to run (upper case, as on the disk)
+  int year = 0;         // when it was made (first release on the ST): the carousel's order, its caption
   std::string install;  // optional: an installer run first, writing `program` into the save folder
   bool shared_saves = false;  // saves in userdata\ itself (Llamatron and Gridrunner: where they always were)
   input::Mode mode = input::Mode::kGeneric;
