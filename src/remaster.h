@@ -91,6 +91,7 @@ void BeginFrame(uint32_t screen);
 void EndFrame(uint32_t screen);  // the draw pass for `screen` is complete
 void Add(uint32_t screen, Item item);
 bool HaveImage(uint64_t id);
+const Image* FindImage(uint64_t id);  // nullptr: not decoded (yet)
 // The colour index at (x, y) of `screen` as drawn so far this pass: the last captured item over it (whole pixels,
 // as ComposeSoftware), else what the game drew into the screen itself. For pixels the game ORs into planes.
 int IndexAt(const st::Machine& m, uint32_t screen, int x, int y);

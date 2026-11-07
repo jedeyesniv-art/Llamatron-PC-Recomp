@@ -377,6 +377,10 @@ const Point kD2Boxes[6] = {{75, 143}, {160, 149}, {243, 143}, {22, 190}, {160, 1
 const Point kD2PlayerBoxes[2] = {{75, 60}, {190, 60}};  // the figures (the words don't take clicks)
 int g_d2_sel = 1, g_d2_players = 0;
 int g_d2_frame = 0, g_d2_space_at = -1;  // on the title: when we sent Space (-1: not yet)
+// The title's "press Space" wait: 1 until it has taken Space and shows the pointer, then 0. A Space sent the moment
+// the title appears can be missed (owner 2026-11-07: no pointer, A did nothing): so it is sent again while this is 1.
+constexpr uint32_t kD2WaitSpace = 0x1E6BE;
+int g_d2_title_at = -1;  // when the title came up (g_d2_frame): the flag is only set a few frames in
 const char* const kD2BoxNames[6] = {"DEFENDER", "DEFENDER II", "STARGATE", "TRAINER", "OPTIONS", "HISTORY"};
 int g_d2_click_in = 0, g_d2_click_frames = 0;  // a click due in n frames / held for n more
 Point g_d2_click_at{0, 0};
@@ -411,7 +415,13 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   if (g_host_paused) return;
   uint8_t buttons = mbuttons;
   // A click on its way: the pointer to the spot, the left button held for a few frames.
-  if (g_d2_click_in > 0 && --g_d2_click_in == 0) g_d2_click_frames = 5;
+  if (g_d2_click_in > 0 && --g_d2_click_in == 0) {
+    if (state == kD2Title && Get16(*m, kD2WaitSpace) != 0) {  // the title missed its Space: again, then the click
+      TapKey(m, kKeySpace), g_d2_space_at = g_d2_frame, g_d2_click_in = 50;
+    } else {
+      g_d2_click_frames = 5;
+    }
+  }
   if (g_d2_click_frames > 0) {
     Put16(m, kD2PtrX, g_d2_click_at.x), Put16(m, kD2PtrY, g_d2_click_at.y);
     if (--g_d2_click_frames < 4) buttons |= 2;
@@ -492,13 +502,16 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   } else {
     ReleaseAll(m);
     g_stick_dir = 0;
-    if (state != kD2Title) g_d2_space_at = -1;
+    if (state != kD2Title) g_d2_space_at = g_d2_title_at = -1;
     if (state == kD2Title) {
       // The pointer only shows after "PRESS SPACE": the first d-pad press sends Space, so the choice is seen.
       bool dpad = pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ||
                   pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_UP) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_DOWN);
       bool a = pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START);
-      if ((dpad || a) && g_d2_space_at < 0) TapKey(m, kKeySpace), g_d2_space_at = g_d2_frame;
+      if (g_d2_title_at < 0) g_d2_title_at = g_d2_frame;
+      const bool waiting = Get16(*m, kD2WaitSpace) != 0 || g_d2_frame - g_d2_title_at < 30;
+      if ((dpad || a) && waiting && (g_d2_space_at < 0 || g_d2_frame - g_d2_space_at > 25))
+        TapKey(m, kKeySpace), g_d2_space_at = g_d2_frame;
       ++g_d2_frame;
       int sel = g_d2_sel;
       if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) sel = sel % 3 == 0 ? sel + 2 : sel - 1;
@@ -506,10 +519,11 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
       if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_UP) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) sel = (sel + 3) % 6;
       g_d2_sel = sel;
       // Keep the pointer on the choice (the title may put it back after Space).
-      if (g_d2_space_at >= 0 && g_d2_click_frames == 0)
+      if (!waiting && g_d2_click_frames == 0)
         Put16(m, kD2PtrX, kD2Boxes[sel].x), Put16(m, kD2PtrY, kD2Boxes[sel].y);
       // A: click the choice once the pointer is up (about a second after Space).
-      if (a && g_d2_click_in == 0) D2Click(kD2Boxes[g_d2_sel], std::max(1, g_d2_space_at + 50 - g_d2_frame));
+      if (a && g_d2_click_in == 0)
+        D2Click(kD2Boxes[g_d2_sel], waiting ? std::max(1, g_d2_space_at + 50 - g_d2_frame) : 1);
     } else if (state == kD2Screen && Get32(*m, kD2Sub) == kD2SubPlayers) {
       int sel = g_d2_players;
       if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) sel ^= 1;
@@ -1192,7 +1206,7 @@ void Start(Game g) {
   g_mouse_x = g_mouse_y = 0;
   g_stick_dir = g_reverse_frames = 0;
   g_d2_sel = 1, g_d2_players = 0;
-  g_d2_frame = 0, g_d2_space_at = -1;
+  g_d2_frame = 0, g_d2_space_at = g_d2_title_at = -1;
   g_d2_click_in = g_d2_click_frames = 0;
   g_host_paused = false;
   std::fill(std::begin(g_d2_held), std::end(g_d2_held), uint8_t(0));

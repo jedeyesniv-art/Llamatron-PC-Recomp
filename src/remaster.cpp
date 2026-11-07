@@ -349,6 +349,10 @@ int IndexAt(const st::Machine& m, uint32_t screen, int x, int y) {
 }
 
 bool HaveImage(uint64_t id) { return g_images.count(id) != 0; }
+const Image* FindImage(uint64_t id) {
+  auto it = g_images.find(id);
+  return it == g_images.end() ? nullptr : &it->second;
+}
 void SetImage(uint64_t id, Image image) {
   if (image.opaque)
     for (uint8_t& c : image.pixels)

@@ -49,6 +49,10 @@ bool g_capture = false;  // this frame's drawing goes to remaster
 bool g_in_pass = false;  // inside play's frame routine
 uint32_t g_screen = 0;
 std::vector<std::pair<int, std::vector<uint8_t>>> g_rows;  // the lasers' rows this pass: row, 320 colours (OnSpan)
+// The planet drawn this pass (OnPlanet): its image and top-left, for the lasers over it (FlushSpans).
+uint64_t g_planet_image = 0;
+constexpr uint8_t kLaserBit = 0x20;  // in g_rows: a laser's pixel (OnSpan; the other OR-ed pixels stay OR-ed)
+int g_planet_x = 0, g_planet_y = 0;
 const st::Machine* g_m = nullptr;  // the machine of the pass (a run-ahead copy too): AddPlaneDot, FlushSpans
 
 int Get16(const st::Machine& m, uint32_t a) { return int16_t(m.Ram()[a] << 8 | m.Ram()[a + 1]); }
@@ -98,6 +102,7 @@ void OnLoopCall(st::Machine& m) {
     if (g_capture) remaster::BeginFrame(g_screen);
     else remaster::Stop();
     g_rows.clear();
+    g_planet_image = 0;
   }
   uint32_t sp = Reg(cpu::A7) - 4;
   cpu::Set(cpu::Reg(cpu::A7), sp);
@@ -300,6 +305,7 @@ void OnPlanet(st::Machine& m) {
     it.image = id;
     it.clip_top = 0, it.clip_bottom = 199;
     Put(it);
+    g_planet_image = id, g_planet_x = int(it.x), g_planet_y = int(it.y);
   }
   cpu::Set(cpu::PC, kPlanetDone);  // not drawn
 }
@@ -343,7 +349,7 @@ void OnSpan(st::Machine& m) {
     for (auto& r : g_rows)
       if (r.first == y) row = &r.second;
     if (!row) g_rows.push_back({y, std::vector<uint8_t>(320)}), row = &g_rows.back().second;
-    uint8_t bit = uint8_t(1 << (Reg(cpu::D0 + 2) & 3));
+    uint8_t bit = uint8_t(1 << (Reg(cpu::D0 + 2) & 3)) | kLaserBit;
     for (int x = x0; x <= x1; ++x) (*row)[size_t(x)] |= bit;
   }
   remaster::Return(m);
@@ -386,13 +392,27 @@ void OnPlanePixel(st::Machine& m) {
   remaster::Return(m);
 }
 
+// Over the planet's own pixels, not OR-ed: its greys already have the lasers' plane bits, so in the original a
+// shot crossing the moon vanishes as if behind it (owner 2026-11-07: they should go over it - a remaster liberty).
+bool OnPlanetPixel(int x, int y) {
+  if (!g_planet_image) return false;
+  const remaster::Image* im = remaster::FindImage(g_planet_image);
+  int px = x - g_planet_x - (im ? im->ox : 0), py = y - g_planet_y - (im ? im->oy : 0);
+  if (!im || px < 0 || py < 0 || px >= im->w || py >= im->h) return false;
+  uint8_t c = im->pixels[size_t(py) * size_t(im->w) + size_t(px)];
+  return c != 0 && c != remaster::kBlack;
+}
+
 void FlushSpans() {
   if (g_rows.empty()) return;
   auto rows = std::move(g_rows);
   g_rows.clear();
   for (auto& [y, row] : rows) {  // OR-ed into what is under them (IndexAt), as the game does
     for (int x = 0; x < 320; ++x)
-      if (row[size_t(x)]) row[size_t(x)] = uint8_t(row[size_t(x)] | remaster::IndexAt(*g_m, g_screen, x, y) | 16);
+      if (uint8_t v = row[size_t(x)]) {
+        bool own = (v & kLaserBit) && OnPlanetPixel(x, y);
+        row[size_t(x)] = uint8_t((v & 15) | (own ? 0 : remaster::IndexAt(*g_m, g_screen, x, y)) | 16);
+      }
     for (int x = 0; x < 320;) {
       int c = row[size_t(x)], e = x + 1;
       while (e < 320 && row[size_t(e)] == c) ++e;

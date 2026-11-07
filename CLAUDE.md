@@ -396,7 +396,9 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   Fullscreen re-picks the display mode when the game's rate changes (Context::mode_hz: 120 Hz on a 120 Hz
   screen at 60, 100 Hz at 50). The title comes at frame ~1500 (1400 at 50 Hz). Play draws 60 a second.
   Revenge (bchg $FF820A at $10852 / $10802) and Hardcore (h) only flip the register: 20% faster - not used.
-  Title on the pad: the first d-pad press sends Space (the pointer only shows after it); the hint line
+  Title on the pad: the first d-pad press sends Space (the pointer only shows after it); $1E6BE = 1 while
+  the title waits for Space (set a few frames in): Space is sent again on presses while it is 1 and a due click
+  retries (2026-11-07: a Space sent as the title appeared was missed - no pointer, A did nothing); the hint line
   names the choice.
 - Defender 2: boots from the launcher (the crack's "T for trainer" prompt answered by TypeAhead from the
   options INVINCIBLE / FRIENDLY SPRITES: "" or "t" + y/n + y/n). VBL $4AF1A dispatches on $4B086 (table
