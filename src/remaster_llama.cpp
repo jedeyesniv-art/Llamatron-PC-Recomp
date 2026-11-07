@@ -37,6 +37,11 @@ constexpr uint32_t kDrawCall = 0x5C10, kDrawDone = 0x5C12, kScreen = 0x52FB4, kD
 constexpr uint32_t kSprite = 0x5E8A, kPlain = 0x5E90, kShaped = 0x5FC4;
 constexpr uint32_t kVblHook = 0x52FC2, kNoHandler = 0x5664;
 constexpr uint32_t kTitleHook = 0x551C, kTitleDraw = 0x5668, kOverHook = 0xC94, kOverDraw = 0xD5A;
+// The pause screen ($1D32) with the Ozric tentacle toy drawing ($88BC: 20 sprites through $58A2). $CEC: the VBL
+// that types text - under the continue screen's draw for its last 10 frames before the scroller, where the ST's
+// screens lack the frozen arena the capture drew and nothing is drawn (its VBL writes GAME OVER into the screen
+// itself): the screen shown gets the last play picture's items under it (Update), as during the continue screen.
+constexpr uint32_t kPauseHook = 0x1D32, kTentacleDraw = 0x88BC, kTypeHook = 0xCEC;
 // The wave change's zoom ($AEC, VBL handler $5CC0 meanwhile): rectangles of 2 x 2 dots, each through $5B08
 // ("movem.w d0-d6,-(a7)"; then $59FA: the dot at d0 / d1, colour d2, in the screen a1 - the one shown).
 constexpr uint32_t kZoomVbl = 0x5CC0, kZoomDot = 0x5B08;
@@ -64,17 +69,27 @@ int RegW(int r) { return int16_t(Reg(r)); }
 // draws nothing new: the last picture stays (the colours still cycle).
 bool Frozen(st::Machine& m) { return Get32(m, g_text + kVblHook) == g_text + kNoHandler; }
 
-// The screens captured: play, the title, game over (each with its own draw function).
+// The screens captured: play, the title, game over (the continue screen and its hand-over), the pause screen's
+// tentacle (each with its own draw function).
+bool OverScreen(st::Machine& m) {
+  const uint32_t t = g_text, fn = Get32(m, t + kDrawFn), hook = Get32(m, t + kVblHook);
+  return fn == t + kOverDraw && hook == t + kOverHook;
+}
 bool CapturedScreen(st::Machine& m) {
   const uint32_t t = g_text, fn = Get32(m, t + kDrawFn), hook = Get32(m, t + kVblHook);
   return (game::Playing(m) && fn == t + kGameDraw) || (hook == t + kTitleHook && fn == t + kTitleDraw) ||
-         (hook == t + kOverHook && fn == t + kOverDraw);
+         OverScreen(m) || (hook == t + kPauseHook && fn == t + kTentacleDraw);
 }
+
+// Between the draw call and its end: sprites drawn outside a pass (a VBL's - the continue screen's GAME OVER as it
+// hands over) go into the screen as the game drew them.
+bool g_in_pass = false;
 
 // $5C10 "jsr (a3)": the screen's drawing starts.
 void OnDrawCall(st::Machine& m) {
   const uint32_t t = g_text;
   if (!remaster::Decoding(m)) {
+    g_in_pass = true;
     bool game_screen = Get32(m, t + kDrawFn) == t + kGameDraw;
     g_capture = remaster::Enabled() && CapturedScreen(m);
     g_screen = Get32(m, t + kScreen) & 0xFFFFFF;
@@ -83,7 +98,7 @@ void OnDrawCall(st::Machine& m) {
     if (g_capture) {
       remaster::BeginFrame(g_screen);
       // The continue screen: the last play picture under it, still.
-      if (Get32(m, t + kVblHook) == t + kOverHook)
+      if (OverScreen(m))
         for (const remaster::Item& it : g_last_play) remaster::Add(g_screen, it);
     } else if ((game::Paused(m) || Frozen(m)) && game_screen && remaster::Enabled()) {
       remaster::Hold();
@@ -101,6 +116,7 @@ void OnDrawCall(st::Machine& m) {
 
 // $5C12 "move.w #$FE0C,(a2)": the pass is complete.
 void OnDrawDone(st::Machine& m) {
+  if (!remaster::Decoding(m)) g_in_pass = false;
   if (!remaster::Decoding(m) && g_capture) {
     remaster::EndFrame(g_screen);
     if (g_play_pass) g_last_play.swap(g_pass_items);
@@ -116,7 +132,8 @@ void OnSprite(st::Machine& m) {
   auto original = [t, d2] { cpu::Set(cpu::PC, t + (d2 >= 0 ? kShaped : kPlain)); };
   // Shaped draws (d2 >= 0: the llama warping in, enemies materialising: a new shape every frame, briefly) are
   // left to the game.
-  if (remaster::Decoding(m) || !g_capture || d2 >= 0 || (Reg(cpu::A0 + 1) & 0xFFFFFF) != g_screen) return original();
+  if (remaster::Decoding(m) || !g_capture || !g_in_pass || d2 >= 0 || (Reg(cpu::A0 + 1) & 0xFFFFFF) != g_screen)
+    return original();
   uint32_t a0 = Reg(cpu::A0) & 0xFFFFFF, sp = Reg(cpu::A7) & 0xFFFFFF, ret = (Get32(m, sp) & 0xFFFFFF) - t;
   uint32_t caller = ret, object = Reg(cpu::A0 + 6);
   if (ret == kWrapper) {
@@ -224,7 +241,7 @@ void Install(st::Machine* m) {
 
 void Start() {  // (every game's start)
   remaster::ClearScroll();
-  g_installed = g_capture = g_play_pass = false;
+  g_installed = g_capture = g_play_pass = g_in_pass = false;
   g_pass_items.clear(), g_last_play.clear();
 }
 
@@ -239,9 +256,20 @@ void Update(st::Machine* m) {
   if (!g_installed && (game::Playing(*m) || game::AtTitle(*m))) Install(m);
   if (!g_installed || !g_text) return;
   remaster::DrawQueued(m, "llamatron");
-  if (game::Paused(*m) && remaster::Enabled()) remaster::Hold();
-  // Left the captured screens some other way than through the draw call (wave changes...): the ST picture.
+  const uint32_t t = g_text;
+  const bool hand_over = Get32(*m, t + kVblHook) == t + kTypeHook && Get32(*m, t + kDrawFn) == t + kOverDraw;
+  if (hand_over && remaster::Enabled() && !g_last_play.empty()) {  // the frozen arena under the ST's own picture
+    const uint32_t screen = m->FrameBase() & 0xFFFFFF;
+    remaster::BeginFrame(screen);
+    for (const remaster::Item& it : g_last_play) remaster::Add(screen, it);
+    remaster::EndFrame(screen);
+    g_capture = true;
+    return;
+  }
+  // Paused (not the tentacle: that's captured and moves) or frozen: the picture held.
+  if (game::Paused(*m) && !game::Tentacle(*m) && remaster::Enabled()) remaster::Hold();
   else if (Frozen(*m)) remaster::Hold();
+  // Left the captured screens some other way than through the draw call (wave changes...): the ST picture.
   else if (g_capture && !CapturedScreen(*m)) g_capture = false, remaster::Stop();
 }
 

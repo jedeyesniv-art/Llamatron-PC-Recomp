@@ -839,7 +839,8 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       if (frame == opt.profile_to) cpu::g_profile = nullptr, WriteProfile(opt.profile_file);
       // The faster CPU only while playing: the drawing keeps up with the sprites (the game logic is in the 50 Hz
       // VBL either way); other screens are timed by CPU speed and keep the original.
-      bool playing = llamatron    ? game::Playing(machine) || game::AtTitle(machine)  // (the title is VBL-timed)
+      bool playing = llamatron    ? game::Playing(machine) || game::AtTitle(machine) ||
+                                    (game::Paused(machine) && game::Tentacle(machine))  // (VBL-timed: the tentacle's motion is in the pause VBL)
                      : gridrunner ? grid::FastCpu(grid::GameState(machine))
                      : c.game && c.game->play_at ? PlayRule(machine, *c.game) || stgames::FastCpu(machine)
                                                  : false;

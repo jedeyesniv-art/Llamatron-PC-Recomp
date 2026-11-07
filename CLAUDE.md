@@ -85,6 +85,12 @@ elease\Llamatron-<ver>-windows.zip (no game
   $7F20 = lines 2..197 x 16..303, $7F52 = all): remaster::SetScroll slides that rectangle the rest of a line
   between steps (step = a new screen shown; pace averaged) - smooth, a step shown up to 2 frames later.
   remaster.cpp, run-ahead 0: each screen's last complete pass (Capture::done), not the one being built.
+  Audit 2026-11-07 (every value stored to the VBL hook $52FC2 / draw fn $52FBE): also the pause screen's Ozric
+  tentacle (hook $1D32 + draw $88BC: captured, faster CPU there - its motion is in the pause VBL - so it draws every
+  VBL; was the ST picture at x1); game over's 10-frame hand-over ($CEC typing VBL under draw $D5A, no passes) gets
+  the last play items under the ST picture (was an empty arena: the capture had kept them out of the screens);
+  sprites are captured only inside a draw pass (g_in_pass: GAME OVER is drawn by the continue VBL as it hands
+  over). Left: the high score entry ($8272 / $82C2, "enter something wonderful"), the scrollers (slid already).
 - Gridrunner remaster (2026-11-02): src/remaster_grid.cpp (core $4BCE4, pass $144DA..$145E2). Items now take
   each line's palette (Machine::LinePalettes: rasters), all games.
   Its image id includes the colour word $58054 (level 4's text came out dark: the owner's report).
