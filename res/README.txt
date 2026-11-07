@@ -279,8 +279,8 @@ Written on the first run with every setting and its default. Edit it while the g
   hc_strobes              1 = keep Hardcore's strobes on
   andes_direct_thrust     1 = Andes Attack's speed follows how far the stick is pushed (experimental);
                           0 = the original build-up and glide (the default)
-  andes_altitude          Andes Attack's altitude: 0 = direct (the stick moves the ship), 1 = original (the stick
-                          is the mouse, as the game was made); also in Settings
+  andes_altitude          Andes Attack's altitude: 1 = original (default: the stick is the mouse), 0 = direct (the stick
+                          moves the ship at andes_stick_speed); also in Settings
   andes_stick_speed, andes_stick_curve   Andes Attack's climb / dive speed (3 px a frame at full) and curve
   andes_thrust_ease       with andes_direct_thrust: how quickly the speed follows (0.5 = full in ~0.8 s)
   photonstorm_50fps       1 = Photon Storm at 50 frames a second (0 = the original 25)

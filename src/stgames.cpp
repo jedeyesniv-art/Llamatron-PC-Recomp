@@ -182,7 +182,7 @@ float g_alt = -1;
 float g_andes_speed = 3, g_andes_curve = 1.5f;
 float g_andes_ease = 0.5f, g_thrust_frac = 0;  // speed steps a frame (direct thrust)
 bool g_andes_direct = false;
-bool g_andes_stock_alt = false;  // andes_altitude 1: the stick is the mouse (the game's own altitude handling)
+bool g_andes_stock_alt = true;  // andes_altitude 1 (default, owner 2026-11-07): the stick is the mouse (the game's own altitude handling)
 bool g_shield_held = false;
 constexpr uint8_t kKeyAlt = 0x38;
 
@@ -1255,7 +1255,7 @@ void LoadSettings() {
   g_andes_curve = float(settings::Get("andes_stick_curve", 1.5));
   // Off by default (owner: "left and right feel wrong" with it): the game's own thrust and glide.
   g_andes_direct = settings::Get("andes_direct_thrust", 0) != 0;
-  g_andes_stock_alt = settings::Get("andes_altitude", 0) != 0;
+  g_andes_stock_alt = settings::Get("andes_altitude", 1) != 0;
   g_andes_arcade = settings::Get("andes_controls", 1) != 0;
   g_d2_arcade = settings::Get("d2_controls", 1) != 0;
   g_rmc_twin = std::clamp(int(settings::Get("rmc_twin_stick", 2)), 0, 2);

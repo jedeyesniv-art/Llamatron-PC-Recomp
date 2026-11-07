@@ -171,7 +171,7 @@ elease\Llamatron-<ver>-windows.zip (no game
   ~4.8 s; owner: keep it as the original),
   andes_altitude (owner 2026-11-07, panel ALTITUDE: DIRECT / ORIGINAL): 1 = the stick moves the ST mouse again
   (4 px a frame, quadratic; d-pad 3) and the game's own mouse handling moves the ship - the mapping before the
-  direct write; default 0 (direct). eased 17 -> 5 in ~2 s.
+  direct write; default 1 since 2026-11-07 (owner: "original feels perfect"); 0 = direct. eased 17 -> 5 in ~2 s.
 - Tests: --press=N:grt@<0..1> (part squeeze), --watch=@<hex> (absolute address). Scripted runs die often:
   defender2_invincible=1 in the test userdata's settings.txt; Andes dies around frame 1150 with the smoke input.
 
