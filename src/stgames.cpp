@@ -918,9 +918,7 @@ void PsOnSprite(st::Machine& m) {
                     {kPsClipLeft, 0}, {kPsClipRight, 19}};
       remaster::QueueImage(id, call);
     }
-    // In the run-ahead copy the item is kept anyway (decoded right after the copy's run): what it draws is never
-    // shown, so drawing it there would lose the sprite for a frame.
-    if (!m.ahead) return original();
+    // (Kept at first sight too: main decodes the image right after the frame - remaster::DrawQueued - before it is shown.)
   }
   remaster::Item it;
   it.key = PsKey(ret == kPsCentred ? Get32(m, sp + 6) : ret, Reg(cpu::A0 + 5));

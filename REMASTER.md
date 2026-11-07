@@ -29,8 +29,11 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
    remaster is Photon Storm's only) - all seven games, the CRT glow.
 2. **Steam Deck test of the whole stack** (remaster + run-ahead + the new glow) with the test build: the log's
    timing / slow present lines, and "crt: glow levels in float" vs "in 8 bits".
-3. **No first-sight frame**: a sprite's first appearance is still drawn by the game (under the captured items, one
-   frame). Decode a game's sprites up front (at level start) instead.
+3. **No first-sight frame: DONE 2026-11-07.** The hooks keep a new sprite's item (as the run-ahead copy did) and
+   main decodes its image right after the frame (remaster::DrawQueued), before it is shown. Pixel-identical on every
+   frame of busy stretches (Photon Storm 1700-1850, Andes 600-750), game RAM as before. The stats line counts
+   "images first met in play". Catch: an OR-ing plotter (remaster::IndexAt) over a sprite on its first frame sees
+   the screen without it (one frame, a pixel or two; none seen).
 4. **Smooth screens outside play**: titles, attract demos, level intros, high-score tables and Defender 2's menus
    still step at 50 / 60 Hz (capture is play only). Worth it first: the Camels' and Hardcore's level intros, title
    scrollers.

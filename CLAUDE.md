@@ -42,8 +42,9 @@ elease\Llamatron-<ver>-windows.zip (no game
   src 320 x 200 (the shader's supersampled mode: colour.w = 1, continuous taps, lines averaged). Presents every
   vsync while active (main.cpp pacing). Interpolation = 1 frame (20 ms) of extra delay (run-ahead would offset).
 - Sprite images: the game's own routine run in a sandbox copy of the machine between frames
-  (remaster::DrawInSandbox: cleared screen, ILLEGAL return address past it); the first sight of a sprite is drawn
-  by the game, then cached (~0.5 ms each). Colour indices; a texture is rebuilt only if a colour it uses changes.
+  (remaster::DrawInSandbox: cleared screen, ILLEGAL return address past it); a sprite seen for the first time is kept too and its image
+  decoded right after that frame (main: remaster::DrawQueued, 2026-11-07; before: the game drew it once), then
+  cached (~0.5 ms each). Colour indices; a texture is rebuilt only if a colour it uses changes.
 - Photon Storm capture (stgames.cpp, "Photon Storm: the remaster"): $4620C draw call (BeginFrame), sprite routine
   $44BA8 (sandbox needs $46420 = 0, clips $57FC0/2/6/8, colour $57FD0; types 0/2/5 snap x even: Item::snap,
   we draw at the exact x), plotters $440BA/$44150/$442F2, ship $15C72 (frames decoded from RAM). Not captured:

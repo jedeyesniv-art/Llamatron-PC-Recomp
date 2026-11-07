@@ -101,6 +101,7 @@ void DropTextures() {
 }
 
 int g_count_decoded = 0, g_count_textures = 0;
+int g_first_sights = 0;  // images first met by the real machine (not the run-ahead copy): stats
 
 const std::vector<std::pair<int, SDL_Texture*>>* LayersFor(SDL_Renderer* r, uint64_t id) {
   if (auto l = g_layers.find(id); l != g_layers.end()) return &l->second;
@@ -485,6 +486,7 @@ void QueueImage(uint64_t id, const SandboxCall& call) {
   for (const auto& q : g_queue)
     if (q.first == id) return;
   g_queue.push_back({id, call});
+  if (g_cap == &g_real) ++g_first_sights;
 }
 
 void DrawQueued(st::Machine* m, const char* game) {
@@ -571,10 +573,12 @@ void FrameShown(uint32_t screen) {
     }
   }
   if (++frames == 500) {
-    LOG("remaster: %.1f items a frame: %.1f%% slid from the frame before (%.1f%% moving), %.1f%% jumped, %.1f%% new",
+    LOG("remaster: %.1f items a frame: %.1f%% slid from the frame before (%.1f%% moving), %.1f%% jumped, %.1f%% new; "
+        "%d images first met in play (not the run-ahead copy)",
         items / 500.0, 100.0 * slid / std::max(items, 1), 100.0 * moved / std::max(items, 1),
-        100.0 * jumped / std::max(items, 1), 100.0 * (items - slid - jumped) / std::max(items, 1));
+        100.0 * jumped / std::max(items, 1), 100.0 * (items - slid - jumped) / std::max(items, 1), g_first_sights);
     frames = items = slid = jumped = moved = 0;
+    g_first_sights = 0;
   }
 }
 

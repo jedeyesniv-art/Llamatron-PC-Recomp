@@ -161,9 +161,7 @@ bool Capture(st::Machine& m, uint32_t routine, uint64_t id, int type) {
     call.at_x = kAtX + shift, call.at_y = kAtY;
     call.regs[0] = uint32_t(left ? call.at_x + half_w : call.at_x), call.regs[1] = uint32_t(kAtY);
     remaster::QueueImage(id, call);
-    if (!m.ahead) return false;  // drawn by the game this once
-  // In the run-ahead copy the item is kept anyway (its image is decoded right after the copy's run): what that copy
-  // draws is never shown, so letting it draw there would lose the sprite for a frame (a flicker).
+    // (Kept at first sight too: main decodes the image right after the frame - remaster::DrawQueued - before it is shown.)
   }
   remaster::Item it;
   it.key = remaster::Key(caller, object);
@@ -244,9 +242,9 @@ void OnPosts(st::Machine& m) {
       call.at_x = 160, call.at_y = y;
       call.regs[0] = 160;
       call.opaque_black = true;  // each row clears a 16-px strip, then draws: black there covers the stars
-      remaster::QueueImage(id, call);  // drawn by the game this once (kept in the run-ahead copy: see Capture)
+      remaster::QueueImage(id, call);  // decoded right after the frame (main: remaster::DrawQueued)
     }
-    if (remaster::HaveImage(id) || m.ahead) {
+    {
       remaster::Item it;
       it.key = remaster::Key(Get32(m, Reg(cpu::A7)) & 0xFFFFFF, 0);
       it.x = float(x), it.y = float(y);

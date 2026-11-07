@@ -144,8 +144,7 @@ void OnCore(st::Machine& m) {
     call.pokes = {{kMode, 0}, {kAllScreens, 0}, {kClipTop, 0}, {kClipBottom, 199}, {kClipLeft, 0},
                   {kClipRight, 19}, {kColour, uint16_t(Get16(m, kColour))}};
     remaster::QueueImage(id, call);
-    if (!m.ahead) return original();  // drawn by the game this once
-    // In the run-ahead copy the item is kept anyway (decoded right after the copy's run).
+    // (Kept at first sight too: main decodes the image right after the frame - remaster::DrawQueued - before it is shown.)
   }
   remaster::Item it;
   it.key = remaster::Key(caller, object);
@@ -173,7 +172,7 @@ void OnSprite(st::Machine& m) {
     call.at_x = 160, call.at_y = 110;
     call.regs[0] = uint32_t(call.at_x), call.regs[1] = uint32_t(call.at_y);
     remaster::QueueImage(id, call);
-    if (!m.ahead) return original();  // drawn by the game this once
+    // (Kept at first sight too: main decodes the image right after the frame - remaster::DrawQueued - before it is shown.)
   }
   remaster::Item it;
   it.key = remaster::Key(caller, Reg(cpu::A0 + 6));

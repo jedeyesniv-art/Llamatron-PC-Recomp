@@ -856,6 +856,9 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           if (g_survey.f) cpu::g_write_watch = SurveyWatch;
         }
         if (!machine.RunFrame()) running = false, end = direct ? GameEnd::kQuitApp : GameEnd::kToLauncher;
+        // Sprites met for the first time this frame: their images now (outside the CPU's run), so they are shown
+        // the remaster's way from their first frame (the hooks kept them instead of letting the game draw them).
+        remaster::DrawQueued(&machine, "first sight");
         if (g_survey.f) {
           SurveyFrame(machine, frame);
           if (frame >= opt.survey_to) std::fclose(g_survey.f), g_survey.f = nullptr, cpu::g_write_watch = nullptr;
