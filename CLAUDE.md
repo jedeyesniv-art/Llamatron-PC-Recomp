@@ -193,6 +193,13 @@ elease\Llamatron-<ver>-windows.zip (no game
   Tools/make_trip_manual.py (pdftotext, not pypdf: it splits words) from Private	rip-a-tron-manual.pdf (James
   "Piku" Grimwood's 2003 transcription), into the Trip folder; package_portable.ps1 runs it and checks it. The
   text viewer: right stick pages too, L3 / Home top, End bottom.
+- Andes Attack's docs (owner 2026-11-07): Game::docs_via = "gridrunner", docs_screen 1 - Gridrunner's ADDITIONAL
+  INFORMATION (Ctrl + click on the title) run the same way, its text start ($11CDE: movea.l #$49762,a0; operand
+  $11CE0) moved to the essay "yak reviews the reviewers" ($49B32, whose 10 bytes \c3 \s 2   become \g 2 2 \c3
+  \s 2: top left). Text codes: \g x y place, \c n colour, \s n size,  line, \e end. Its screen runs in state 2;
+  back to the title = done. Every docs run shows CRT++ as CRT+ (crt::SetDocs; owner: D2 / Hardcore readers
+  unreadable). Package: Extras\Trip-A-Tron manual.pdf. Gotcha fixed: a docs_via disk sent down the text path
+  looped the launcher (no text -> kDocs again every frame).
 
 ## Settings panel and buttons (2026-11-03; supersedes the "Back = pause", "B twice = disks" notes below)
 - DONE (owner tested 2026-11-03: the panel and every pause "very happy"; the Settings disk stays last on the

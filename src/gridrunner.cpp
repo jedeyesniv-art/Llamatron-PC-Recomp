@@ -77,7 +77,15 @@ int g_flick = 0;           // right stick: -1 up, 1 down, 0 back near the centre
 bool g_lb = false, g_rb = false;  // shoulder buttons last frame (one nosecone step per press)
 bool g_du = false, g_dd = false;  // d-pad up / down last frame (the same, in the game)
 bool g_quit = false;
-bool g_docs = false, g_docs_shown = false;  // StartDocs: on the way to GAME SECRETS / there
+bool g_docs = false, g_docs_shown = false;  // StartDocs: on the way to the docs screen / there
+int g_docs_screen = 0;  // 0 GAME SECRETS, 1 the essay (ADDITIONAL INFORMATION from "yak reviews the reviewers")
+bool g_docs_clicked = false;  // the essay: its click made on the title (its screen runs in state 2)
+
+// ADDITIONAL INFORMATION: Ctrl + click on the title loads its text at $11CDE ("movea.l #$49762,a0"); the text has
+// codes \g x y (place), \c n (colour), \s n (size), \r (new line), \e (end). The essay's heading is at $49B32
+// ("\c3\s\x02\r\ryak reviews the reviewers"). For the docs those 10 bytes become \g 2 2 \c3 \s 2 (as long: placed
+// top left, the heading's colour and size, the two new lines gone) and the text starts there.
+constexpr uint32_t kInfoText = 0x11CE0, kInfoTextWas = 0x49762, kEssay = 0x49B32, kEssayFrom = kEssay;
 bool g_running = false;  // the game has unpacked itself and reached its title
 bool g_hide_entry_lane = true;
 bool g_unlock_died = true;  // grid_unlock_level_died
@@ -133,6 +141,24 @@ void MenuButton(st::Machine* m) {
 }
 
 void QueueClick(int x, int y, uint8_t modifier = 0) { g_clicks.push_back({x, y, modifier, true}); }
+
+// The essay docs: ADDITIONAL INFORMATION's text from the essay's heading (see kInfoText). Once, checked first.
+void PointInfoAtEssay(st::Machine* m) {
+  static bool logged = false;
+  uint8_t* r = m->Ram();
+  const uint8_t heading[] = {'\\', 'c', '3', '\\', 's', 2, '\\', 'r', '\\', 'r', 'y', 'a', 'k'};
+  uint32_t was = uint32_t(r[kInfoText]) << 24 | r[kInfoText + 1] << 16 | r[kInfoText + 2] << 8 | r[kInfoText + 3];
+  if (was == uint32_t(kEssayFrom)) return;  // done
+  if (was != kInfoTextWas || std::memcmp(r + kEssay, heading, sizeof(heading)) != 0) {
+    if (!logged) LOG("gridrunner: ADDITIONAL INFORMATION's text isn't where expected: the whole text shown");
+    logged = true;
+    return;
+  }
+  const uint8_t start[10] = {'\\', 'g', 2, 2, '\\', 'c', '3', '\\', 's', 2};
+  std::memcpy(r + kEssayFrom, start, sizeof(start));
+  Put16(*m, kInfoText, int(kEssayFrom >> 16)), Put16(*m, kInfoText + 2, int(kEssayFrom & 0xFFFF));
+  LOG("gridrunner: ADDITIONAL INFORMATION starts at the essay");
+}
 // The pointer to (x, y) in turn with the clicks, no button.
 void QueueMove(int x, int y) { g_clicks.push_back({x, y, 0, false}); }
 
@@ -405,10 +431,12 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
     if (!g_running) {
       if (g_frame > 450 && g_frame % 40 < 4) buttons |= 2;
     } else if (GameState(*m) == kTitle) {
-      if (g_clicks.empty() && g_frame % 30 == 0) QueueClick(-1, 0, kAlt);
-    } else if (GameState(*m) == kSecrets) {
+      if (g_docs_screen == 1 && !g_docs_clicked) PointInfoAtEssay(m);
+      if (g_clicks.empty() && g_frame % 30 == 0) QueueClick(-1, 0, g_docs_screen == 1 ? kCtrl : kAlt);
+      g_docs_clicked = g_docs_screen == 1;
+    } else if (g_docs_screen == 0 ? GameState(*m) == kSecrets : g_docs_clicked) {
       g_docs_shown = true;
-      LOG("gridrunner: game secrets after %d frames", g_frame);
+      LOG("gridrunner: docs screen %d after %d frames", g_docs_screen, g_frame);
     }
     if (g_frame > 4000) g_docs_shown = true, LOG("gridrunner: no game secrets after %d frames", g_frame);
   } else if (g_docs && GameState(*m) == kTitle) {
@@ -529,7 +557,7 @@ const char* Hint(st::Machine* m, bool have_pad) {
 
 bool QuitRequested() { return g_quit; }
 
-void StartDocs() { g_docs = true, g_docs_shown = false; }
+void StartDocs(int screen) { g_docs = true, g_docs_shown = g_docs_clicked = false, g_docs_screen = screen; }
 bool DocsSkipping() { return g_docs && !g_docs_shown; }
 
 void SetHideEntryLane(bool on) { g_hide_entry_lane = on; }
@@ -543,7 +571,8 @@ void Reset() {
   g_lb = g_rb = g_du = g_dd = false;
   g_title_hint_ms = 0;
   g_quit = g_running = g_hooked = g_test = false;
-  g_docs = g_docs_shown = false;
+  g_docs = g_docs_shown = g_docs_clicked = false;
+  g_docs_screen = 0;
   g_clicks.clear();
   g_click_frame = g_prev_state = -1;
   g_frame = 0;

@@ -377,6 +377,7 @@ struct Context {
   std::vector<uint32_t> preview;
   fs::path preview_path;
   bool in_game_docs = false;  // the game runs to its own docs screen (Game::docs_in_game)
+  int docs_screen = 0;  // which one (Game::docs_screen of the disk asking: Andes -> Gridrunner's essay)
   std::string docs_keys;  // typed into a docs reader once it runs  // keys for the program's first console prompts (a crack's trainer questions)
 };
 
@@ -515,7 +516,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   remaster_grid::Start();
   input::Reset();
   grid::Reset();
-  if (gridrunner && c.in_game_docs) grid::StartDocs();
+  if (gridrunner && c.in_game_docs) grid::StartDocs(c.docs_screen);
   game::g_llamatron = llamatron;
   if (llamatron) game::ApplyPatches(machine, opt.game);
   input::SetMode(mode);
@@ -1126,11 +1127,14 @@ GameEnd RunEntry(Context& c, const games::Game& g, bool direct, bool docs = fals
     c.type_ahead = reader ? std::string() : games::ConsoleAnswers(g);
     c.game = reader ? nullptr : &g;  // (no faster CPU for the reader)
     c.docs_keys = g.docs_keys;
+    crt::SetDocs(docs);  // (CRT++ as CRT+: readable)
     crt::SetGame(reader ? std::string() : g.id);  // the game's own CRT look
     remap::SetGame(reader ? std::string() : g.id, g.mode);  // the player's buttons for it
     end = reader ? RunGame(c, g.docs_program, direct, input::Mode::kDocs)
                  : RunGame(c, games::ProgramToRun(g), direct, g.mode);
     c.in_game_docs = false;
+    c.docs_screen = 0;
+    crt::SetDocs(false);
     crt::SetGame("");
     remap::SetGame("", input::Mode::kGeneric);
     c.type_ahead.clear();
@@ -1390,7 +1394,9 @@ int main(int argc, char** argv) {
       std::vector<bool> v;
       for (const games::Game& g : c.games) {
         std::error_code ec;
-        v.push_back(!g.docs_program.empty() || g.docs_in_game || !DocsText(c, g).empty());
+        bool via = false;  // another game's docs: if that game is here
+        for (const games::Game& h : c.games) via |= !g.docs_via.empty() && h.id == g.docs_via;
+        v.push_back(!g.docs_program.empty() || g.docs_in_game || via || !DocsText(c, g).empty());
       }
       return v;
     };
@@ -1404,11 +1410,22 @@ int main(int argc, char** argv) {
       }
       int game = l.Selected();
       const games::Game& g = c.games[size_t(game)];
-      if (a == launcher::Action::kDocs && g.docs_program.empty() && !g.docs_in_game) {  // text: the launcher shows it
+      if (a == launcher::Action::kDocs && g.docs_program.empty() && !g.docs_in_game && g.docs_via.empty()) {  // text: the launcher shows it
         l.ShowText(TextLines(DocsText(c, g)));
         continue;
       }
-      GameEnd end = RunEntry(c, g, false, a == launcher::Action::kDocs);
+      GameEnd end;
+      if (a == launcher::Action::kDocs && !g.docs_via.empty()) {  // another game's docs screen
+        end = GameEnd::kToLauncher;
+        for (const games::Game& h : c.games)
+          if (h.id == g.docs_via) {
+            c.docs_screen = g.docs_screen;
+            end = RunEntry(c, h, false, true);
+            break;
+          }
+      } else {
+        end = RunEntry(c, g, false, a == launcher::Action::kDocs);
+      }
       if (end == GameEnd::kQuitApp) break;
       l.Enter(game);
       l.SetDocsAvailable(docs_available());  // (an install may have written a text file)

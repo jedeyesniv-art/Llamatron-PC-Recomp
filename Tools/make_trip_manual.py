@@ -4,7 +4,9 @@ Private/trip-a-tron-manual.pdf) -> plain ASCII text, wrapped to 78 columns, as M
 The app can't read a PDF itself (compressed streams, embedded fonts): it is converted here, once.
 Needs pdftotext (poppler; Git for Windows has it in mingw64\\bin). pypdf splits words ("ke yboard") - not used.
 usage: python -P Tools/make_trip_manual.py [<manual.pdf>] [<out MANUAL.TXT>]"""
+import os
 import re
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -12,7 +14,14 @@ import textwrap
 pdf = sys.argv[1] if len(sys.argv) > 1 else 'Private/trip-a-tron-manual.pdf'
 out = sys.argv[2] if len(sys.argv) > 2 else 'Private/new/trip_a_t/TRIP_A_T.RON/MANUAL.TXT'
 
-text = subprocess.run(['pdftotext', '-enc', 'UTF-8', pdf, '-'], capture_output=True, check=True).stdout.decode('utf-8')
+# pdftotext: on the PATH (Git Bash), else Git for Windows' own copy (PowerShell, package_portable.ps1).
+tool = shutil.which('pdftotext')
+for git in (os.environ.get('ProgramFiles', r'C:\Program Files'), os.environ.get('LOCALAPPDATA', '') + r'\Programs'):
+    if not tool and os.path.exists(os.path.join(git, 'Git', 'mingw64', 'bin', 'pdftotext.exe')):
+        tool = os.path.join(git, 'Git', 'mingw64', 'bin', 'pdftotext.exe')
+if not tool:
+    sys.exit('pdftotext not found (it comes with Git for Windows: mingw64\\bin)')
+text = subprocess.run([tool, '-enc', 'UTF-8', pdf, '-'], capture_output=True, check=True).stdout.decode('utf-8')
 
 # The viewer's font is ASCII.
 ascii_map = {'‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-',

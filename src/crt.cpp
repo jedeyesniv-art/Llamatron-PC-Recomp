@@ -30,6 +30,7 @@ SDL_GPUShader* g_shader = nullptr;
 SDL_GPURenderState* g_state = nullptr;
 SDL_GPUDevice* g_device = nullptr;
 int g_mode = 1;  // 0 off, 1 CRT+, 2 CRT++ (setting crt, or <game>_crt)
+bool g_docs = false;  // SetDocs: CRT++ shown as CRT+
 std::string g_game;  // SetGame
 
 // The owner's per-game looks (2026-11-07, from the Deck test build's settings.txt): what a game uses for these keys
@@ -469,6 +470,7 @@ void LoadSettings() {
     return float(settings::Get(key, def));
   };
   g_mode = std::clamp(int(GameGet("crt", 2)), 0, 2);  // (CRT++ by default since 2026-11-07, owner)
+  if (g_docs && g_mode == 2) g_mode = 1;  // (SetDocs)
   Params& p = g_params;
   p.beam[0] = get("crt_scanlines", 0.45);
   p.beam[1] = get("crt_beam_min", 0.35);
@@ -521,6 +523,12 @@ bool GameDefaultValue(const std::string& game, const char* key, double* value) {
   for (const GameDefault& d : kGameDefaults)
     if (game == d.game && std::strcmp(key, d.key) == 0) return *value = d.value, true;
   return false;
+}
+
+void SetDocs(bool on) {
+  if (on == g_docs) return;
+  g_docs = on;
+  LoadSettings();
 }
 
 void SetGame(const std::string& id) {

@@ -53,7 +53,9 @@ const char* Hint(st::Machine* m, bool have_pad);
 bool QuitRequested();
 // Docs: the game runs unseen to its title and opens GAME SECRETS (its own manual pages); leaving them (or B)
 // ends the run. Call after Reset.
-void StartDocs();
+// screen 0: GAME SECRETS (Alt + click); 1: "Yak reviews the reviewers", the essay on Andes Attack's reviews in
+// ADDITIONAL INFORMATION (Ctrl + click), its text start moved to the essay's heading.
+void StartDocs(int screen = 0);
 bool DocsSkipping();  // still on the way there: run fast, show and play nothing
 // Hide objects in the entry lane under the top rail until they can be shot (default on; --entry-lane = off).
 void SetHideEntryLane(bool on);

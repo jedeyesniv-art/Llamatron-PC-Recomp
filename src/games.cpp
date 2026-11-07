@@ -201,6 +201,8 @@ std::vector<Known> KnownGames() {
   k.back().game.play_more = {3};  // the pause screen (its dots every VBL, captured)
   k.back().game.mode = input::Mode::kAndes;
   k.back().game.year = 1988;
+  // No docs on its disk: Yak's essay on its reviews, from Gridrunner's ADDITIONAL INFORMATION (owner 2026-11-07).
+  k.back().game.docs_via = "gridrunner", k.back().game.docs_screen = 1;
   k.back().game.help = {"ANDES ATTACK  -  JEFF MINTER, 1988", "",
                         "Save the llamas from the Zzyaxian landers.", "",
                         "LEFT STICK UP/DOWN   altitude",

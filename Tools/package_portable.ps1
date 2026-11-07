@@ -1,6 +1,6 @@
 # "Llamasoft on the ST" (the project's title from 1.3.0; the exe stays llamatron.exe).
 # Builds Release and assembles the portable folder dist\LlamasoftOnTheST\:
-#   llamatron.exe (static runtime: no DLLs), README.txt, licenses\, game\ with every game (see below). The PDB
+#   llamatron.exe (static runtime: no DLLs), README.txt, licenses\, game\ with every game (see below), Extras\. The PDB
 #   goes to dist\symbols\.
 # -Release also writes dist\release\LlamasoftOnTheST-<version>-windows.zip (top folder "Llamasoft on the ST", with
 # game\; no unpacked game files besides Trip-A-Tron's folder, no userdata or logs - checked) and
@@ -67,6 +67,15 @@ function Copy-Games([string]$to) {
     }
 }
 
+# Extras\: things to read outside the app (owner 2026-11-07): Trip-A-Tron's whole manual as the PDF (James "Piku"
+# Grimwood's 2003 transcription; the app shows it as text with X).
+function Copy-Extras([string]$to) {
+    $pdf = Join-Path $repo "Private\trip-a-tron-manual.pdf"
+    if (-not (Test-Path $pdf)) { throw "$pdf not found" }
+    New-Item -ItemType Directory -Force $to | Out-Null
+    Copy-Item $pdf (Join-Path $to "Trip-A-Tron manual.pdf")
+}
+
 # Fresh folder, but keep userdata\ if it's already there (the owner's scores and settings).
 New-Item -ItemType Directory -Force $dist | Out-Null
 Get-ChildItem $dist | Where-Object { $_.Name -ne "userdata" } | Remove-Item -Recurse -Force
@@ -75,6 +84,7 @@ Copy-Item (Join-Path $repo "res\README.txt") $dist
 New-Item -ItemType Directory -Force (Join-Path $dist "licenses") | Out-Null
 Copy-Item (Join-Path $repo "licenses\THIRD-PARTY-NOTICES.txt") (Join-Path $dist "licenses")
 Copy-Games (Join-Path $dist "game")
+Copy-Extras (Join-Path $dist "Extras")
 New-Item -ItemType Directory -Force $symbols | Out-Null
 Copy-Item (Join-Path $repo "build\llamatron.pdb") $symbols
 Write-Host "portable folder: $dist (version $version)"
@@ -88,6 +98,7 @@ if ($Release) {
     Copy-Item $exe, (Join-Path $repo "res\README.txt") $stage
     Copy-Item -Recurse (Join-Path $dist "licenses") $stage
     Copy-Games (Join-Path $stage "game")
+    Copy-Extras (Join-Path $stage "Extras")
     # Leak check: disk images only (plus Trip-A-Tron's own folder, which is how it ships); no unpacked game
     # files from the other disks, no user data, no logs.
     $bad = Get-ChildItem -Recurse $stage | Where-Object {

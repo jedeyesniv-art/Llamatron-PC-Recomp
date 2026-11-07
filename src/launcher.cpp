@@ -305,7 +305,7 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
   auto docs = [&]() {
     info_ = false;
     const games::Game& d = (*games_)[size_t(selected_)];
-    if (!d.docs_program.empty() || d.docs_in_game) {
+    if (!d.docs_program.empty() || d.docs_in_game || !d.docs_via.empty()) {
       info_ = false;
       want_docs_ = true;
       launching_ = 0;

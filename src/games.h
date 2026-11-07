@@ -41,6 +41,10 @@ struct Game {
   // name several, "A|B": each one found, one after the other).
   std::string docs_program, docs_keys, docs_text;
   bool docs_in_game = false;  // the docs are a screen of the game itself (Gridrunner's GAME SECRETS)
+  // Or another game's in-game docs (id; Andes Attack: Gridrunner's "Yak reviews the reviewers", about Andes), and
+  // which of its docs screens (grid::StartDocs: 0 GAME SECRETS, 1 the essay).
+  std::string docs_via;
+  int docs_screen = 0;
   bool user = false;    // a disk the player added (not one we know); its "program" option picks what runs
   bool settings = false;  // the Settings disk: opens the settings panel, nothing runs
   // Choices on the how-to-play page (trainers, a user disk's program), saved as settings <id>_<key>.

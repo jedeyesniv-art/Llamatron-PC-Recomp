@@ -23,6 +23,8 @@ void LoadSettings();
 // The game running ("" = none: the launcher, the Settings disk). Each game has its own look (<id>_crt) and
 // CRT++ sliders (<id>_crt_psy_*) once changed in it; until then, per key, the shared ones (crt, crt_psy_*).
 void SetGame(const std::string& id);
+// Docs (readers, text screens): CRT++ is shown as CRT+ (its trails smear text; owner 2026-11-07). Off stays off.
+void SetDocs(bool on);
 // A game's built-in look for a key ("crt", "crt_psy_..."): the owner's tuning, used when the player hasn't set
 // the game's own (<game>_<key>). False = none: the shared key.
 bool GameDefaultValue(const std::string& game, const char* key, double* value);
