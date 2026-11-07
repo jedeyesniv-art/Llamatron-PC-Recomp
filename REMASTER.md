@@ -24,9 +24,8 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
 - **No push until the owner says so** ("much later": their iOS ports come first).
 
 ### Polish to-do (owner 2026-11-03: "save our further plans for later"), roughly by impact
-1. **Pad / Deck access to the remaster settings**: remaster on/off and run-ahead 0-3 are keyboard-only (F8 / F7).
-   Add them to the launcher's options page (Y), per game or global; update res/README.txt (it still says the
-   remaster is Photon Storm's only) - all seven games, the CRT glow.
+1. **Pad / Deck access to the remaster settings: DONE.** The settings panel (Back / F1, the Settings disk) has
+   the remaster and run-ahead; res/README.txt covers all the games. Owner 2026-11-07: "using that extensively".
 2. **Steam Deck test of the whole stack** (remaster + run-ahead + the new glow) with the test build: the log's
    timing / slow present lines, and "crt: glow levels in float" vs "in 8 bits".
 3. **No first-sight frame: DONE 2026-11-07.** The hooks keep a new sprite's item (as the run-ahead copy did) and

@@ -188,8 +188,7 @@ elease\Llamatron-<ver>-windows.zip (no game
   --mpress (Y attached to Photon Storm's SMART BOMB), then gy in play -> bombs 3 -> 2; Andes scheme switch
   rebuilds the list; smoke all 12 pass. Owner tested the build: works. Gridrunner's d-pad up / down are now listed
   under NOSECONE SHOT UP / DOWN (the owner moved them there from UP / DOWN rows, which made them RB / LB on the
-  menus too); list a button under what it does in play, so moving it there keeps it as itself. NOT verified with a real pad: the event path (Llamatron, Gridrunner
-  menus) and remap::Button (Llamatron / generic direct reads) - the owner's test.
+  menus too); list a button under what it does in play, so moving it there keeps it as itself. Owner tested with a real pad (2026-11-07): remaps work well.
 
 ## Mutant Camels twin stick (2026-11-05; owner asked: move on the left, aim on the right)
 - The camel spits all the time in the joystick's direction (Yak's README; fire held = no jump / sit). Play reads
