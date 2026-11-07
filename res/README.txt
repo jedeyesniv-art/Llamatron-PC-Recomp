@@ -3,8 +3,8 @@ LLAMASOFT ON THE ST
 
 Jeff Minter's Atari ST games running natively on Windows with modern pad controls:
   Llamatron: 2112 (1991) and Super Gridrunner, the bonus game on the same disk
-  Trip-A-Tron (1992), the light synthesiser
-  Revenge of the Mutant Camels (1992, the 1 MB STE version) and its TT Megamix (1991: written for the
+  Trip-A-Tron (1988; this is its 1992 shareware release), the light synthesiser
+  Revenge of the Mutant Camels (1991, the 1 MB STE version) and its TT Megamix (1991: written for the
     Atari TT - 32 bullets instead of 8, twice the objects)
   Andes Attack (1988)
   Defender 2 (Arcadia 1990: Defender, Defender II and Stargate)
@@ -95,9 +95,9 @@ LLAMATRON CONTROLS - KEYBOARD
   Esc                 pause screen: quit to title
   F1                  settings (Esc there: back to the disks)
   F11 or Alt+Enter    fullscreen / window
-  F9                  CRT look on / off
-  F8                  Photon Storm: the remaster (smooth motion, exact ship angle) on / off
-  F7                  Photon Storm remaster: run-ahead 0-3 frames (default 2: quickest response)
+  F9                  CRT look: off / CRT+ / CRT++
+  F8                  the remaster (smooth motion at 4x) on / off - every game but Trip-A-Tron
+  F7                  run-ahead 0-3 frames with the remaster (default 2: quickest response)
 
 
 SUPER GRIDRUNNER CONTROLS - XBOX PAD
@@ -216,8 +216,16 @@ IMPROVEMENTS OVER THE ORIGINAL
   softened; Hardcore starts with its own strobes switched off.
 - Super Gridrunner: smooth 50 frames a second; snakes waiting in the entry lane at the top show up 1.5
   seconds before they come down, instead of appearing out of nowhere (--entry-lane keeps the original).
-- CRT look (on by default; X on the start screen or F9 to switch): scanlines, a phosphor mask and a faint
-  glow, with true blacks. The picture keeps its size and shape.
+- The remaster (on by default; F8 or Settings): Llamatron, Super Gridrunner, the Camels, Andes Attack,
+  Defender 2, Hardcore and Photon Storm draw their moving things at 4x the ST's resolution, sliding smoothly
+  between frames (Photon Storm's ship at its exact angle), on the title and attract screens too. The game
+  underneath is unchanged.
+- Run-ahead (with the remaster; F7 or Settings, default 2 frames): the game is run a frame or two ahead with
+  your controls, so the picture answers the pad quicker than the original did.
+- CRT look (on by default; X on the start screen or F9 cycles off / CRT+ / CRT++): CRT+ is scanlines, a
+  phosphor mask and a soft glow, with true blacks, the picture keeping its size and shape; CRT++ adds
+  psychedelic trails. Each game can have its own look (set in its Settings).
+- Your own buttons: each game's controls can be remapped (Settings in a game, CONTROLS).
 
 
 SETTINGS (userdata\settings.txt)
