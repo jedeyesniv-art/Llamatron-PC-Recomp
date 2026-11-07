@@ -67,6 +67,7 @@ add_executable(llamatron WIN32
   src/launcher.cpp
   src/games.cpp
   src/pad.cpp
+  src/remap.cpp
   src/stgames.cpp
   src/crt.cpp
   src/remaster.cpp

@@ -10,6 +10,7 @@
 #include "settings.h"
 #include "log.h"
 #include "machine.h"
+#include "remap.h"
 
 namespace input {
 namespace {
@@ -61,7 +62,7 @@ void MenuButton(st::Machine* m) {
 
 // A stick as 8-way joystick bits: 45-degree sectors, centred on the axes.
 uint8_t StickBits(SDL_Gamepad* pad, SDL_GamepadAxis ax, SDL_GamepadAxis ay) {
-  float x = SDL_GetGamepadAxis(pad, ax) / 32767.0f, y = SDL_GetGamepadAxis(pad, ay) / 32767.0f;
+  float x = remap::Axis(pad, ax), y = remap::Axis(pad, ay);
   if (x * x + y * y < 0.35f * 0.35f) return 0;
   float angle = std::atan2(-y, x);  // up = +90 degrees
   int sector = int(std::lround(angle / (3.14159265f / 4))) & 7;  // 0 = right, counter-clockwise
@@ -73,10 +74,10 @@ uint8_t StickBits(SDL_Gamepad* pad, SDL_GamepadAxis ax, SDL_GamepadAxis ay) {
 
 uint8_t DpadBits(SDL_Gamepad* pad) {
   uint8_t b = 0;
-  if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_UP)) b |= st::kJoyUp;
-  if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_DOWN)) b |= st::kJoyDown;
-  if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT)) b |= st::kJoyLeft;
-  if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) b |= st::kJoyRight;
+  if (remap::Button(pad, SDL_GAMEPAD_BUTTON_DPAD_UP)) b |= st::kJoyUp;
+  if (remap::Button(pad, SDL_GAMEPAD_BUTTON_DPAD_DOWN)) b |= st::kJoyDown;
+  if (remap::Button(pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT)) b |= st::kJoyLeft;
+  if (remap::Button(pad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) b |= st::kJoyRight;
   return b;
 }
 
@@ -290,11 +291,11 @@ void UpdateGeneric(st::Machine* m, int mouse_dx, int mouse_dy, uint8_t mouse_but
   uint8_t j0 = 0, j1 = 0, buttons = mouse_buttons;
   if (!g_pads.empty()) {
     SDL_Gamepad* p = g_pads[0];
-    auto button = [&](SDL_GamepadButton b) { return SDL_GetGamepadButton(p, b); };
+    auto button = [&](SDL_GamepadButton b) { return remap::Button(p, b); };
     j1 |= StickBits(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY) | DpadBits(p);
     if (button(SDL_GAMEPAD_BUTTON_SOUTH) || button(SDL_GAMEPAD_BUTTON_WEST)) j1 |= st::kJoyFire;
-    if (SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000) buttons |= 2;
-    if (SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16000) buttons |= 1;
+    if (remap::Axis(p, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 0.49f) buttons |= 2;
+    if (remap::Axis(p, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 0.49f) buttons |= 1;
     float x = SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
     float y = SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
     float mag = std::sqrt(x * x + y * y);
@@ -331,7 +332,7 @@ uint8_t SecondPadJoystick() {
   if (g_pads.size() < 2) return 0;
   SDL_Gamepad* p = g_pads[1];
   uint8_t j = StickBits(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY) | DpadBits(p);
-  if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_SOUTH)) j |= st::kJoyFire;
+  if (remap::Button(p, SDL_GAMEPAD_BUTTON_SOUTH)) j |= st::kJoyFire;
   return Clean(j);
 }
 
@@ -383,7 +384,7 @@ void Update(st::Machine* m) {
   bool aim = false;
   if (!g_pads.empty()) {
     SDL_Gamepad* p = g_pads[0];
-    auto button = [&](SDL_GamepadButton b) { return SDL_GetGamepadButton(p, b); };
+    auto button = [&](SDL_GamepadButton b) { return remap::Button(p, b); };
     j1 |= StickBits(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY) | DpadBits(p);
     if (button(SDL_GAMEPAD_BUTTON_WEST)) j1 |= st::kJoyFire;  // X: always stick 1 (a one-stick game)
     if (g_pads.size() == 1) {  // twin-stick: the right stick is joystick 0
@@ -393,7 +394,7 @@ void Update(st::Machine* m) {
       aim = ax * ax + ay * ay >= 0.35f * 0.35f;  // the same dead zone as the 8-way direction
       if (aim) game::SetAim(true, ax, ay);
       if ((button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) && !game::AtTitle(*m)) ||
-          SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000)
+          remap::Axis(p, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 0.49f)
         j0 |= st::kJoyFire;
       // A at the title starts the twin-stick game (fire on stick 2), elsewhere it's stick 1's fire. Decided when
       // it's pressed, so holding it through the start doesn't turn into the other stick's fire.

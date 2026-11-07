@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "machine.h"
+#include "remap.h"
 
 namespace pad {
 namespace {
@@ -18,6 +19,7 @@ const State& Poll(SDL_Gamepad* real) {
     g_now = g_test;
     g_now.connected = true;
     g_have_test = false;
+    if (remap::TestThrough()) remap::Apply(&g_now.buttons, &g_now.lt, &g_now.rt);
   } else if (real) {
     State s;
     s.connected = true;
@@ -27,6 +29,7 @@ const State& Poll(SDL_Gamepad* real) {
     s.lt = axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER), s.rt = axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
     for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT && b < 32; ++b)
       if (SDL_GetGamepadButton(real, SDL_GamepadButton(b))) s.buttons |= 1u << b;
+    remap::Apply(&s.buttons, &s.lt, &s.rt);  // the game's own buttons (the player's remap)
     g_now = s;
   } else {
     g_now = State{};

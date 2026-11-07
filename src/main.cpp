@@ -20,6 +20,7 @@
 #include "games.h"
 #include "gridrunner.h"
 #include "pad.h"
+#include "remap.h"
 #include "stgames.h"
 #include "tripatron.h"
 #include "music.h"
@@ -126,6 +127,7 @@ Options ParseArgs(int argc, char** argv) {
     else if (Arg(a, "wav", &v)) o.wav = v;
     else if (Arg(a, "shot", &v)) o.shots[std::atoi(v.c_str())] = v.substr(v.find(':') + 1);
     else if (a == "--remaster-capture") o.remaster_headless = true;
+    else if (a == "--remap-test") remap::SetTestThrough(true);  // scripted pad input through the remap too
     else if (Arg(a, "survey", &v)) {
       o.survey_from = std::atoi(v.c_str());
       size_t c1 = v.find(':'), c2 = v.find(':', c1 + 1);
@@ -408,6 +410,7 @@ void ApplySettings(const Options& opt) {
   crt::LoadSettings();
   remaster::LoadSettings();
   stgames::LoadSettings();
+  remap::Reload();  // (the control scheme may have changed the list)
   if (opt.remaster_ahead >= 0) remaster::SetAhead(opt.remaster_ahead);
   if (opt.aim < 0) game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
 }
@@ -582,6 +585,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   auto menu_event = [&](const SDL_Event& e) {
     menu::Result r = menu::HandleEvent(e);
     if (r == menu::Result::kClose) {
+      remap::SyncEvents(input::FirstPad());  // (what's held now makes no presses)
       menu::Close();
       menu_resync = true;
     } else if (r == menu::Result::kQuit) {
@@ -605,6 +609,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       open_menu();
       return;
     }
+    if (remap::DropEvent(e)) return;  // pad 1's buttons: remap::Events makes the game's own instead
     input::HandleEvent(e, &machine);
   };
   uint64_t last_mouse_ms = 0;  // the game doesn't use the mouse: its cursor is hidden
@@ -642,6 +647,8 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       }
       dispatch(e);
     }
+    if (!menu::IsOpen())
+      for (const SDL_Event& re : remap::Events(input::FirstPad())) dispatch(re);  // the remapped buttons' presses
     if (menu::IsOpen()) {  // the panel's own frame: the pad held, scripted presses (tests)
       ++menu_ticks;
       uint64_t now = SDL_GetTicksNS();
@@ -755,7 +762,11 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           if (p.what.rfind("mx", 0) == 0) mouse_x += float(std::atof(p.what.c_str() + 2));
           if (p.what.rfind("my", 0) == 0) mouse_y += float(std::atof(p.what.c_str() + 2));
         }
-        if (test_pad) grid::SetTestPad(tp), pad::SetTest({true, tp.lx, tp.ly, tp.rx, tp.ry, tp.lt, tp.rt, tp.buttons});
+        if (test_pad) {
+          pad::SetTest({true, tp.lx, tp.ly, tp.rx, tp.ry, tp.lt, tp.rt, tp.buttons});  // (Poll remaps it: --remap-test)
+          if (remap::TestThrough()) remap::Apply(&tp.buttons, &tp.lt, &tp.rt);
+          grid::SetTestPad(tp);
+        }
         pad::Poll(input::FirstPad());
         int dx = int(mouse_x), dy = int(mouse_y);
         mouse_x -= float(dx), mouse_y -= float(dy);
@@ -799,7 +810,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           SDL_Event be{};
           be.type = frame == p.frame ? SDL_EVENT_GAMEPAD_BUTTON_DOWN : SDL_EVENT_GAMEPAD_BUTTON_UP;
           be.gbutton.button = uint8_t(SDL_GetGamepadButtonFromString(p.what.c_str() + 3));
-          dispatch(be);
+          if (remap::TranslateTest(&be)) dispatch(be);
         } else if (frame == p.frame || frame == p.frame + p.length - 1) {
           SDL_Scancode sc = SDL_GetScancodeFromName(p.what.c_str());
           SDL_Event ke{};
@@ -1093,9 +1104,11 @@ GameEnd RunEntry(Context& c, const games::Game& g, bool direct, bool docs = fals
     c.game = docs ? nullptr : &g;  // (no faster CPU for the reader)
     c.docs_keys = g.docs_keys;
     crt::SetGame(docs ? std::string() : g.id);  // the game's own CRT look
+    remap::SetGame(docs ? std::string() : g.id, g.mode);  // the player's buttons for it
     end = docs ? RunGame(c, g.docs_program, direct, input::Mode::kDocs)
                : RunGame(c, games::ProgramToRun(g), direct, g.mode);
     crt::SetGame("");
+    remap::SetGame("", input::Mode::kGeneric);
     c.type_ahead.clear();
     c.game = nullptr;
   }

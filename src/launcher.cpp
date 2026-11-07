@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "crt.h"
+#include "remap.h"
 
 namespace launcher {
 namespace {
@@ -562,6 +563,11 @@ void Launcher::Render() {
 
   if (info_) {
     std::vector<std::string> lines = picked.help;
+    if (!picked.settings && remap::Changed(picked.id, picked.mode)) {  // the page names the game's own buttons
+      lines.push_back("");
+      lines.push_back("CONTROLS CHANGED: the buttons above are the game's");
+      lines.push_back("own. Yours: Settings (Back in the game), CONTROLS.");
+    }
     int first_option = -1;
     if (!picked.options.empty()) {
       lines.push_back("");

@@ -1,4 +1,5 @@
-# Plan: per-game button remapping (agreed with the owner 2026-11-06; to build next session)
+# Plan: per-game button remapping (agreed with the owner 2026-11-06; BUILT 2026-11-07 - see CLAUDE.md "Button
+remapping"; triggers listed too, in-game only, not Trip-A-Tron / docs readers)
 
 ## What the owner asked for
 - Remap the pad's **buttons** per game (the d-pad counts as buttons; not the sticks). **Per game only**, no shared

@@ -8,6 +8,7 @@
 
 #include "cpu.h"
 #include "log.h"
+#include "remap.h"
 #include "settings.h"
 
 namespace grid {
@@ -406,10 +407,10 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
           default: return 0.0f;
         }
       }
-      return SDL_GetGamepadAxis(pad, a) / 32767.0f;
+      return remap::Axis(pad, a);
     };
     auto button = [&](SDL_GamepadButton b) {
-      return test ? (g_test_pad.buttons >> b & 1) != 0 : SDL_GetGamepadButton(pad, b);
+      return test ? (g_test_pad.buttons >> b & 1) != 0 : remap::Button(pad, b);
     };
     // The pointer: left stick through the curve, d-pad at a fixed slow speed.
     float vx, vy;

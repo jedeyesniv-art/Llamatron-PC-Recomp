@@ -56,6 +56,10 @@ while they're up and the picture behind shows what a change does.
   LB / RB         the previous / next section
   Back            carry on with the game    B               leave the game, back to the disks
 Changes are saved at once. A * marks the ones that take effect when the game next starts.
+Sections marked [+] / [-] fold away: A on the heading (or right / left) opens and closes them.
+CONTROLS (in a game, Back): the game's functions with the pad buttons on each. A on a row, then press a
+button: it moves to that function (pressing one already on the row takes it off). X puts a row's own buttons
+back; RESET CONTROLS all of them. Per game; Start and Back stay as they are; the sticks aren't remapped.
 In every game Start is the game's own pause (Defender 2 has none: Start freezes it).
 
 

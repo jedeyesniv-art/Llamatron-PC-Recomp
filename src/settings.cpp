@@ -42,7 +42,7 @@ void Save() {
   FILE* f = std::fopen(g_path.c_str(), "w");
   if (!f) return;
   std::fprintf(f, "# Llamatron PC settings (edit while the game runs: it rereads this file)\n");
-  for (const auto& [key, value] : g_values) std::fprintf(f, "%s=%g\n", key.c_str(), value);
+  for (const auto& [key, value] : g_values) std::fprintf(f, "%s=%.10g\n", key.c_str(), value);  // (exact for the controls' bit masks)
   std::fclose(f);
   std::error_code ec;
   g_time = std::filesystem::last_write_time(g_path, ec);

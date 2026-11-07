@@ -158,6 +158,30 @@ elease\Llamatron-<ver>-windows.zip (no game
   frame counter now runs across visits. SaveRenderShot reads the whole window.
 - Gotcha: pad events arrive in the background (SDL hint): the owner's pad opened the panel during a test.
 
+## Button remapping + panel tidy (2026-11-07; PLAN-CONTROLS.md, owner's answers below)
+- src/remap.cpp: per game a list of functions (each = the game's own buttons, the first = what attached buttons
+  act as); physical -> logical for pad 1 only, in a game only (main RunEntry remap::SetGame; not Trip-A-Tron, not
+  the docs readers: no panel there). Applied on all three paths: pad::Poll (stgames), remap::Button / Axis
+  (input.cpp Llamatron + generic, gridrunner.cpp), events (main: pad 1's real button events dropped while a
+  remap is active, Start / Back / Guide kept; remap::Events makes the logical downs / ups from the state each
+  frame; SyncEvents when the panel closes). Triggers are inputs too (owner): bits kLt 30 / kRt 31; a button on a
+  trigger's function = full squeeze, a trigger on a button's = on past half. A listed default attached nowhere
+  does nothing; never-listed buttons (L3...) pass through. Saved <prefix>_controls_<fn> = bit mask (prefix: id,
+  rmctt -> rmc, andes_arcade / _stick, defender2_arcade / _stick, user disks disk_<name>). settings.cpp now
+  writes %.10g (%g rounded the masks to 6 digits).
+- Panel: GENERAL (REMASTER, CRT LOOK second), the game's section, CONTROLS (in a game only; owner), CRT LOOK,
+  CRT++. Every heading but GENERAL folds ([+] / [-]: A, right opens, left closes), remembered (panel_open_<id>,
+  the game's own = panel_open_game, default open; others closed; the Settings disk its own panel_disk_open_*,
+  all closed). Controls rows: A = listen 5 s (a button / trigger toggles it on that row, moving it from another;
+  Start / Back / Esc cancel), X = the row's defaults, RESET CONTROLS. Andes / D2 "CONTROLS" choice renamed
+  CONTROL SCHEME. Launcher how-to-play page says CONTROLS CHANGED when the game has a remap.
+- Tests: --remap-test sends scripted pad input (g..., pad<button>) through the remap. Verified: panel driven by
+  --mpress (Y attached to Photon Storm's SMART BOMB), then gy in play -> bombs 3 -> 2; Andes scheme switch
+  rebuilds the list; smoke all 12 pass. Owner tested the build: works. Gridrunner's d-pad up / down are now listed
+  under NOSECONE SHOT UP / DOWN (the owner moved them there from UP / DOWN rows, which made them RB / LB on the
+  menus too); list a button under what it does in play, so moving it there keeps it as itself. NOT verified with a real pad: the event path (Llamatron, Gridrunner
+  menus) and remap::Button (Llamatron / generic direct reads) - the owner's test.
+
 ## Mutant Camels twin stick (2026-11-05; owner asked: move on the left, aim on the right)
 - The camel spits all the time in the joystick's direction (Yak's README; fire held = no jump / sit). Play reads
   the joystick at $12778 (STE): d0 -> 8-way table $38D34 -> shot velocity $38D24 / $38D28 (16.16 longs, 3 px,

@@ -5,7 +5,9 @@
 #include <cstdio>
 #include <vector>
 
+#include "input.h"
 #include "log.h"
+#include "remap.h"
 #include "settings.h"
 
 namespace menu {
@@ -29,11 +31,14 @@ struct Section {
   const char* title;
 };
 
+// In this order: general, the games, the game's controls (in a game only), the CRT looks. Every section but
+// GENERAL folds away ([+] / [-]).
 const Section kSections[] = {
-    {"general", "GENERAL"},       {"crt", "CRT LOOK"},       {"crtpp", "CRT++"},       {"llamatron", "LLAMATRON"},
+    {"general", "GENERAL"},       {"llamatron", "LLAMATRON"},
     {"gridrunner", "SUPER GRIDRUNNER"}, {"photonstorm", "PHOTON STORM"}, {"andes", "ANDES ATTACK"},
     {"rmc", "MUTANT CAMELS"},
     {"defender2", "DEFENDER 2"},  {"hardcore", "HARDCORE"},  {"tripatron", "TRIP-A-TRON"},
+    {"controls", "CONTROLS"},     {"crt", "CRT LOOK"},       {"crtpp", "CRT++"},
 };
 
 // The defaults here must match the ones where each setting is read.
@@ -41,14 +46,14 @@ const std::vector<Item>& Items() {
   static const std::vector<Item> items = {
       {"general", "REMASTER", "remaster", Kind::kToggle, 1, 0, 1, 1, {},
        "Sprites drawn smooth by the PC at 4x, sliding between frames (F8). Off: the ST's own picture."},
+      {"general", "CRT LOOK", "crt", Kind::kChoice, 1, 0, 2, 1, {"OFF", "CRT+", "CRT++"},
+       "CRT+: scanlines, mask and glow, like a TV of the time. CRT++: psychedelic trails on top (F9). In a game: that game's own."},
       {"general", "RUN-AHEAD", "remaster_ahead", Kind::kChoice, 2, 0, 3, 1, {"OFF", "1 FRAME", "2 FRAMES", "3 FRAMES"},
        "Remaster only: runs the game ahead to cut the delay between the pad and the picture (F7). 2 is the sweet spot."},
       {"general", "VOLUME", "volume", Kind::kSlider, 1, 0, 1, 0.05, {},
        "Master volume for every game (0.5 is about half as loud)."},
       {"general", "EVEN OUT GAME VOLUMES", "volume_normalise", Kind::kToggle, 1, 0, 1, 1, {},
        "Every game played at the same loudness (the loud ones turned down). Off: each as loud as the original."},
-      {"general", "CRT LOOK", "crt", Kind::kChoice, 1, 0, 2, 1, {"OFF", "CRT+", "CRT++"},
-       "CRT+: scanlines, mask and glow, like a TV of the time. CRT++: psychedelic trails on top (F9). In a game: that game's own."},
       {"general", "FULLSCREEN", "", Kind::kFullscreen, 1, 0, 1, 1, {}, "Fullscreen or a window (F11, Alt+Enter)."},
       {"general", "EXCLUSIVE FULLSCREEN", "fullscreen_exclusive", Kind::kToggle, 0, 0, 1, 1, {},
        "Switches the display to a 50 / 100 Hz mode for even motion, at the cost of a blink when switching away.",
@@ -114,7 +119,7 @@ const std::vector<Item>& Items() {
       {"photonstorm", "50 FRAMES A SECOND", "photonstorm_50fps", Kind::kToggle, 1, 0, 1, 1, {},
        "Draws every frame in play and on the attract screens (the original: 25). The game's speed is the same.", true},
 
-      {"andes", "CONTROLS", "andes_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
+      {"andes", "CONTROL SCHEME", "andes_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
        "Arcade: left / right only turn round, RT thrust (squeeze = speed), X / Y reverse. Stick thrust: the push moves you."},
       {"andes", "ALTITUDE SPEED", "andes_stick_speed", Kind::kSlider, 3, 1, 8, 0.5, {},
        "Pixels a frame up or down with the stick pushed all the way."},
@@ -125,7 +130,7 @@ const std::vector<Item>& Items() {
       {"andes", "DIRECT THRUST EASE", "andes_thrust_ease", Kind::kSlider, 0.5, 0.1, 3, 0.1, {},
        "With direct thrust: how quickly the speed follows the stick.", true},
 
-      {"defender2", "CONTROLS", "d2_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
+      {"defender2", "CONTROL SCHEME", "d2_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
        "Arcade: left / right only turn round, RT thrust (squeeze = speed), X / Y reverse. Stick thrust: the push moves you."},
       {"defender2", "60 HZ (ARCADE SPEED)", "defender2_60hz", Kind::kToggle, 1, 0, 1, 1, {},
        "The game's 60 Hz mode, as the arcade (its speeds adjusted). Off: 50 Hz.", true},
@@ -157,18 +162,79 @@ const std::vector<Item>& Items() {
 struct Row {
   int section = -1;  // a heading (index into kSections)
   int item = -1;     // or a setting
+  int control = -1;  // or one of the game's functions (remap::Functions)
+  bool reset_controls = false;
+  bool operator==(const Row& o) const {
+    return section == o.section && item == o.item && control == o.control && reset_controls == o.reset_controls;
+  }
 };
 
 std::function<void()> g_apply;
 SDL_Window* g_window = nullptr;
 bool g_open = false;
 std::string g_game, g_title;
+std::vector<int> g_sections;  // shown, in order
 std::vector<Row> g_rows;
 int g_sel = 0;  // row
 int g_top = 0;  // first row shown
 // Held directions (pad d-pad / stick, keyboard handled by its own repeat): repeat timers.
 int g_held_y = 0, g_held_x = 0;
 double g_wait_y = 0, g_wait_x = 0;
+// A function row waiting for a button to attach (-1: none), and for how long.
+int g_listen = -1;
+double g_listen_left = 0;
+float g_trigger[2] = {0, 0};  // LT / RT as last seen (the panel's axis events): a squeeze past half = a press
+constexpr double kListenSeconds = 5;
+
+bool IsSection(int s, const char* id) { return std::string(kSections[s].id) == id; }
+// The game's own section (both Camels builds share one).
+std::string OwnSection() { return g_game == "rmctt" ? "rmc" : g_game; }
+
+// Open / closed, remembered: in a game (its own section starts open, the rest closed) apart from the Settings
+// disk (all closed).
+std::string OpenKey(int s) {
+  if (g_game.empty()) return std::string("panel_disk_open_") + kSections[s].id;
+  return std::string("panel_open_") + (IsSection(s, OwnSection().c_str()) ? "game" : kSections[s].id);
+}
+bool Foldable(int s) { return !IsSection(s, "general"); }
+bool SectionOpen(int s) {
+  if (!Foldable(s)) return true;
+  bool def = !g_game.empty() && IsSection(s, OwnSection().c_str());
+  return settings::Get(OpenKey(s), def ? 1 : 0) != 0;
+}
+
+void Rebuild() {
+  Row was = g_sel >= 0 && g_sel < int(g_rows.size()) ? g_rows[size_t(g_sel)] : Row{};
+  g_rows.clear();
+  for (int s : g_sections) {
+    g_rows.push_back({s});
+    if (!SectionOpen(s)) continue;
+    if (IsSection(s, "controls")) {
+      for (size_t f = 0; f < remap::Functions().size(); ++f) g_rows.push_back({-1, -1, int(f)});
+      g_rows.push_back({-1, -1, -1, true});
+      continue;
+    }
+    for (size_t i = 0; i < Items().size(); ++i)
+      if (std::string(kSections[s].id) == Items()[i].section) g_rows.push_back({-1, int(i)});
+  }
+  g_sel = std::min(g_sel, int(g_rows.size()) - 1);
+  for (size_t i = 0; i < g_rows.size(); ++i)
+    if (g_rows[i] == was) g_sel = int(i);
+}
+
+void Applied() {
+  if (g_apply) g_apply();
+  Rebuild();  // (a control scheme changes the controls' list)
+}
+
+void SetOpen(int s, bool open) {
+  if (!Foldable(s) || SectionOpen(s) == open) return;
+  settings::Set(OpenKey(s), open ? 1 : 0);
+  settings::Save();
+  Rebuild();
+}
+
+bool Selectable(const Row& r) { return r.section < 0 || Foldable(r.section); }
 
 // In a game, the look (crt) and the CRT++ sliders are the game's own: <id>_<key> once changed there, until then
 // the shared key (what the Settings disk edits). Per key.
@@ -197,15 +263,26 @@ void SetValue(const Item& it, double v) {
   settings::Set(key, v);
   settings::Save();
   LOG("settings: %s = %g", key.c_str(), v);
-  if (g_apply) g_apply();
+  Applied();
+}
+
+const Row* SelectedRow() {
+  if (g_sel < 0 || g_sel >= int(g_rows.size())) return nullptr;
+  return &g_rows[size_t(g_sel)];
 }
 
 const Item* Selected() {
-  if (g_sel < 0 || g_sel >= int(g_rows.size()) || g_rows[size_t(g_sel)].item < 0) return nullptr;
-  return &Items()[size_t(g_rows[size_t(g_sel)].item)];
+  const Row* r = SelectedRow();
+  if (!r || r->item < 0) return nullptr;
+  return &Items()[size_t(r->item)];
 }
 
 void Change(int dir) {
+  const Row* r = SelectedRow();
+  if (r && r->section >= 0) {  // a heading: right opens, left closes
+    SetOpen(r->section, dir > 0);
+    return;
+  }
   const Item* it = Selected();
   if (!it) return;
   switch (it->kind) {
@@ -216,7 +293,40 @@ void Change(int dir) {
   }
 }
 
+void StopListening(SDL_Gamepad* pad = nullptr) {
+  g_listen = -1;
+  // What's held now (the d-pad just attached) doesn't move the selection.
+  g_held_x = g_held_y = 0;
+  if (pad) {
+    float sx = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
+    float sy = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_UP) || sy < -0.5f) g_held_y = -1;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_DOWN) || sy > 0.5f) g_held_y = 1;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || sx < -0.5f) g_held_x = -1;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || sx > 0.5f) g_held_x = 1;
+  }
+  g_wait_x = g_wait_y = 0.35;
+}
+
+void Attach(int input) {
+  if (g_listen >= 0) remap::Toggle(size_t(g_listen), input);
+  StopListening(input::FirstPad());
+}
+
 void Press() {
+  const Row* r = SelectedRow();
+  if (r && r->section >= 0) {
+    SetOpen(r->section, !SectionOpen(r->section));
+    return;
+  }
+  if (r && r->control >= 0) {
+    g_listen = r->control, g_listen_left = kListenSeconds;
+    return;
+  }
+  if (r && r->reset_controls) {
+    remap::ResetAll();
+    return;
+  }
   const Item* it = Selected();
   if (!it) return;
   if (it->kind == Kind::kResetCrt && !g_game.empty() && std::string(it->section) == "crtpp") {
@@ -224,14 +334,14 @@ void Press() {
       if (PerGame(i) && std::string(i.key) != "crt") settings::Erase(OwnKey(i));
     settings::Save();
     LOG("settings: %s back to the shared CRT++ look", g_game.c_str());
-    if (g_apply) g_apply();
+    Applied();
     return;
   }
   if (it->kind == Kind::kResetCrt) {
     const bool pp = std::string(it->section) == "crtpp";
     settings::Set(pp ? "crt_psy_defaults" : "crt_defaults", 0);  // crt::LoadSettings puts its defaults back
     LOG("settings: the %s reset", pp ? "CRT++ look" : "CRT look");
-    if (g_apply) g_apply();
+    Applied();
     return;
   }
   if (it->kind == Kind::kChoice) {
@@ -243,11 +353,16 @@ void Press() {
 }
 
 void Default() {
+  const Row* r = SelectedRow();
+  if (r && r->control >= 0) {
+    remap::ResetFunction(size_t(r->control));
+    return;
+  }
   const Item* it = Selected();
   if (it && PerGame(*it)) {  // the game's own value goes: the shared one again
     settings::Erase(OwnKey(*it));
     settings::Save();
-    if (g_apply) g_apply();
+    Applied();
     return;
   }
   if (it && *it->key && it->kind != Kind::kFullscreen) SetValue(*it, it->def);
@@ -255,22 +370,21 @@ void Default() {
 
 void Move(int dir) {
   for (int i = g_sel + dir; i >= 0 && i < int(g_rows.size()); i += dir)
-    if (g_rows[size_t(i)].item >= 0) {
+    if (Selectable(g_rows[size_t(i)])) {
       g_sel = i;
       return;
     }
 }
 
-// The first setting of the next / previous section.
+// The next / previous section's heading.
 void JumpSection(int dir) {
-  int i = g_sel;
-  while (i >= 0 && g_rows[size_t(i)].section < 0) --i;  // this section's heading
-  for (i += dir; i >= 0 && i < int(g_rows.size()); i += dir)
-    if (g_rows[size_t(i)].section >= 0) break;
-  if (i < 0 || i >= int(g_rows.size())) return;
-  g_sel = i;
-  g_top = i;  // its heading at the top (Render keeps it in range)
-  Move(1);
+  for (int i = g_sel + dir; i >= 0 && i < int(g_rows.size()); i += dir)
+    if (g_rows[size_t(i)].section >= 0 && Selectable(g_rows[size_t(i)])) {
+      g_sel = i;
+      g_top = i;  // at the top (Render keeps it in range)
+      return;
+    }
+  if (dir < 0) g_sel = -1, g_top = 0, Move(1);  // above the first: the top of the list
 }
 
 }  // namespace
@@ -280,23 +394,28 @@ void SetWindow(SDL_Window* window) { g_window = window; }
 
 void Open(const std::string& game_id, const std::string& title) {
   g_game = game_id, g_title = title;
-  g_rows.clear();
-  auto add = [](int s) {
-    g_rows.push_back({s, -1});
-    for (size_t i = 0; i < Items().size(); ++i)
-      if (std::string(kSections[s].id) == Items()[i].section) g_rows.push_back({-1, int(i)});
-  };
-  if (game_id.empty()) {  // the Settings disk: everything
-    for (int s = 0; s < int(std::size(kSections)); ++s) add(s);
-  } else {  // in a game: general, the game's own (short), then the CRT look
-    const std::string own = game_id == "rmctt" ? "rmc" : game_id;  // both Camels builds: one section
-    for (const char* id : {"general", own.c_str(), "crt", "crtpp"})
-      for (int s = 0; s < int(std::size(kSections)); ++s)
-        if (game_id != "general" && game_id != "crt" && game_id != "crtpp" && std::string(kSections[s].id) == id) add(s);
+  g_sections.clear();
+  if (game_id.empty()) {  // the Settings disk: everything but the controls (those are per game, set in a game)
+    for (int s = 0; s < int(std::size(kSections)); ++s)
+      if (!IsSection(s, "controls")) g_sections.push_back(s);
+  } else {  // in a game: general, the game's own, its controls, then the CRT looks
+    const std::string own = OwnSection();
+    for (const char* id : {"general", own.c_str(), "controls", "crt", "crtpp"})
+      for (int s = 0; s < int(std::size(kSections)); ++s) {
+        if (!IsSection(s, id)) continue;
+        if (IsSection(s, "controls") && remap::Functions().empty()) continue;  // (no list for this program)
+        if (std::string(id) == own && (own == "general" || own == "controls" || own == "crt" || own == "crtpp"))
+          continue;
+        g_sections.push_back(s);
+      }
   }
+  g_rows.clear();
+  g_sel = -1;
+  Rebuild();
   g_sel = g_top = 0;
   Move(1);
   g_held_x = g_held_y = 0;
+  g_listen = -1;
   g_open = true;
   LOG("settings opened (%s)", game_id.empty() ? "all" : game_id.c_str());
 }
@@ -304,12 +423,32 @@ void Open(const std::string& game_id, const std::string& title) {
 void Close() {
   if (g_open) LOG("settings closed");
   g_open = false;
+  g_listen = -1;
 }
 
 bool IsOpen() { return g_open; }
 
 Result HandleEvent(const SDL_Event& e) {
   if (!g_open) return Result::kNone;
+  if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+      (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)) {
+    const bool right = e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER;
+    float v = e.gaxis.value / 32767.0f, was = g_trigger[right];
+    g_trigger[right] = v;
+    if (g_listen >= 0 && was <= 0.5f && v > 0.5f) Attach(right ? remap::kRt : remap::kLt);
+    return Result::kNone;
+  }
+  if (g_listen >= 0) {  // waiting for the button to attach: Start / Back / Guide, Esc cancel
+    if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+      if (remap::Attachable(e.gbutton.button)) Attach(e.gbutton.button);
+      else StopListening(input::FirstPad());
+    } else if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat &&
+               (e.key.scancode == SDL_SCANCODE_ESCAPE || e.key.scancode == SDL_SCANCODE_BACKSPACE ||
+                e.key.scancode == SDL_SCANCODE_F1)) {
+      StopListening(input::FirstPad());
+    }
+    return Result::kNone;
+  }
   if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
     switch (e.gbutton.button) {
       case SDL_GAMEPAD_BUTTON_SOUTH: Press(); break;
@@ -342,6 +481,10 @@ Result HandleEvent(const SDL_Event& e) {
 
 void Update(SDL_Gamepad* pad, double dt) {
   if (!g_open) return;
+  if (g_listen >= 0) {  // the d-pad is a button to attach now, not a move
+    if ((g_listen_left -= dt) <= 0) StopListening(pad);
+    return;
+  }
   int x = 0, y = 0;
   if (pad) {
     float sx = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
@@ -351,11 +494,14 @@ void Update(SDL_Gamepad* pad, double dt) {
     if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || sx < -0.5f) x = -1;
     if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || sx > 0.5f) x = 1;
   }
-  // A press acts at once; held, it repeats after a pause (faster for left / right: sliders).
+  // A press acts at once; held, it repeats after a pause (faster for left / right: sliders). Headings and the
+  // controls don't repeat left / right.
+  const Row* r = SelectedRow();
+  const bool repeat_x = !(r && (r->section >= 0 || r->control >= 0 || r->reset_controls));
   if (y != g_held_y) g_held_y = y, g_wait_y = 0.35, y ? Move(y) : void();
   else if (y && (g_wait_y -= dt) <= 0) g_wait_y = 0.08, Move(y);
   if (x != g_held_x) g_held_x = x, g_wait_x = 0.35, x ? Change(x) : void();
-  else if (x && (g_wait_x -= dt) <= 0) g_wait_x = 0.05, Change(x);
+  else if (x && repeat_x && (g_wait_x -= dt) <= 0) g_wait_x = 0.05, Change(x);
 }
 
 void Render(SDL_Renderer* r) {
@@ -392,22 +538,31 @@ void Render(SDL_Renderer* r) {
   if (!g_title.empty()) text(g_title, pad + 10 * glyph * 1.5f, y + 4 * s, kDim);
   y += 2.5f * row_h;
 
-  // Help for the picked setting and the controls, at the bottom.
-  std::vector<std::string> foot;
-  if (const Item* it = Selected()) {
-    std::string help = it->help;
+  // Help for the picked row and the controls, at the bottom.
+  std::string help;
+  const Row* sel_row = SelectedRow();
+  if (sel_row && sel_row->section >= 0) {
+    help = SectionOpen(sel_row->section) ? "A or left: fold this section away." : "A or right: open this section.";
+  } else if (sel_row && sel_row->control >= 0) {
+    help = g_listen >= 0 ? "Press the button for this (one already on the row comes off). Start / Back: cancel."
+                         : std::string(remap::Functions()[size_t(sel_row->control)].help) +
+                               " A: attach a button. X: its own buttons.";
+  } else if (sel_row && sel_row->reset_controls) {
+    help = "Press A: every button back to what the game had.";
+  } else if (const Item* it = Selected()) {
+    help = it->help;
     if (it->next_start) help += " Applies when the game next starts.";
-    size_t at = 0;  // word wrap to the panel
-    while (at < help.size()) {
-      size_t n = std::min(help.size() - at, size_t(kCols));
-      if (at + n < help.size()) {
-        size_t sp = help.rfind(' ', at + n);
-        if (sp != std::string::npos && sp > at) n = sp - at;
-      }
-      foot.push_back(help.substr(at, n));
-      at += n;
-      while (at < help.size() && help[at] == ' ') ++at;
+  }
+  std::vector<std::string> foot;
+  for (size_t at = 0; at < help.size();) {  // word wrap to the panel
+    size_t n = std::min(help.size() - at, size_t(kCols));
+    if (at + n < help.size()) {
+      size_t sp = help.rfind(' ', at + n);
+      if (sp != std::string::npos && sp > at) n = sp - at;
     }
+    foot.push_back(help.substr(at, n));
+    at += n;
+    while (at < help.size() && help[at] == ' ') ++at;
   }
   const char* keys1 = "UP/DOWN PICK   LEFT/RIGHT CHANGE   A TOGGLE";
   const char* keys2 = g_game.empty() ? "X DEFAULT   LB/RB SECTION   B BACK" : "X DEFAULT   LB/RB SECTION";
@@ -422,25 +577,44 @@ void Render(SDL_Renderer* r) {
   for (int i = g_top; i < int(g_rows.size()) && i < g_top + visible; ++i) {
     const Row& row = g_rows[size_t(i)];
     float ry = y + float(i - g_top) * row_h;
-    if (row.section >= 0) {
-      const bool own = !g_game.empty() && std::string(kSections[row.section].id) == "crtpp";
-      const char* title = own ? "CRT++ FOR THIS GAME" : kSections[row.section].title;
-      text(title, pad, ry + 2 * s, kAccent);
-      SDL_SetRenderDrawColor(r, 255, 200, 90, 90);
-      float lx = pad + (float(SDL_strlen(title)) + 1) * glyph;
-      SDL_RenderLine(r, lx, ry + 6 * s, pw - pad, ry + 6 * s);
-      continue;
-    }
-    const Item& it = Items()[size_t(row.item)];
     bool sel = i == g_sel;
     if (sel) {
       SDL_FRect bar{pad / 2, ry - 2 * s, pw - pad, row_h};
       SDL_SetRenderDrawColor(r, 255, 200, 90, 50);
       SDL_RenderFillRect(r, &bar);
     }
+    if (row.section >= 0) {
+      const bool own = !g_game.empty() && IsSection(row.section, "crtpp");
+      std::string title = own ? "CRT++ FOR THIS GAME" : kSections[row.section].title;
+      if (IsSection(row.section, "controls") && remap::Changed()) title += " (CHANGED)";
+      if (Foldable(row.section)) title = (SectionOpen(row.section) ? "[-] " : "[+] ") + title;
+      text(title, pad, ry + 2 * s, sel ? kWhite : kAccent);
+      SDL_SetRenderDrawColor(r, 255, 200, 90, 90);
+      float lx = pad + (float(title.size()) + 1) * glyph;
+      if (lx < pw - pad) SDL_RenderLine(r, lx, ry + 6 * s, pw - pad, ry + 6 * s);
+      continue;
+    }
+    const float vx = pad + kLabelCols * glyph;
+    if (row.control >= 0) {  // a function: its buttons
+      const remap::Function& f = remap::Functions()[size_t(row.control)];
+      text(f.label, pad, ry, sel ? kWhite : kLabel);
+      if (g_listen == row.control) {
+        if (int(g_listen_left * 3) % 2 == 0) text("PRESS A BUTTON", vx, ry, kAccent);
+      } else {
+        uint32_t m = remap::Attached(size_t(row.control));
+        std::string names = m ? remap::MaskNames(m) : "-";
+        if (names.size() > size_t(kCols - kLabelCols)) names = names.substr(0, size_t(kCols - kLabelCols - 2)) + "..";
+        text(names, vx, ry, !m ? kDim : m == f.DefaultMask() ? kOn : kAccent);
+      }
+      continue;
+    }
+    if (row.reset_controls) {
+      text("RESET CONTROLS", pad, ry, sel ? kWhite : kLabel);
+      continue;
+    }
+    const Item& it = Items()[size_t(row.item)];
     const bool shared_reset = it.kind == Kind::kResetCrt && !g_game.empty() && std::string(it.section) == "crtpp";
     text(shared_reset ? "USE THE SHARED CRT++" : it.label, pad, ry, sel ? kWhite : kLabel);
-    float vx = pad + kLabelCols * glyph;
     double v = Value(it);
     char buf[32];
     switch (it.kind) {
