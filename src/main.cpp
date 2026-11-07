@@ -92,7 +92,7 @@ struct Options {
     std::string what;
   };
   std::vector<Press> presses;
-  // --poke=N:<hex text offset>:<hex word>: write a word into the game's memory at frame N (tests)
+  // --poke=N:<hex text offset | @hex address>:<hex word>: write a word into the game's memory at frame N (tests)
   struct Poke {
     int frame;
     uint32_t offset;
@@ -146,8 +146,9 @@ Options ParseArgs(int argc, char** argv) {
     }
     else if (Arg(a, "poke", &v)) {
       size_t c1 = v.find(':'), c2 = v.find(':', c1 + 1);
-      o.pokes.push_back({std::atoi(v.c_str()), uint32_t(std::strtoul(v.c_str() + c1 + 1, nullptr, 16)),
-                         uint16_t(std::strtoul(v.c_str() + c2 + 1, nullptr, 16))});
+      bool abs = v[c1 + 1] == '@';  // @<hex>: an absolute address
+      uint32_t off = uint32_t(std::strtoul(v.c_str() + c1 + 1 + (abs ? 1 : 0), nullptr, 16)) | (abs ? 0x80000000u : 0);
+      o.pokes.push_back({std::atoi(v.c_str()), off, uint16_t(std::strtoul(v.c_str() + c2 + 1, nullptr, 16))});
     }
     else if (Arg(a, "cpu-all-from", &v)) o.cpu_all_from = std::atoi(v.c_str());
     else if (Arg(a, "watch-step", &v)) o.watch_step = std::max(1, std::atoi(v.c_str()));
@@ -824,7 +825,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       }
       for (const auto& p : opt.pokes) {
         if (p.frame != frame) continue;
-        uint8_t* at = machine.Ram() + machine.TextBase() + p.offset;
+        uint8_t* at = machine.Ram() + ((p.offset & 0x80000000u) ? (p.offset & 0xFFFFFF) : machine.TextBase() + p.offset);
         at[0] = uint8_t(p.value >> 8), at[1] = uint8_t(p.value);
       }
       if (frame == opt.dump_frame) {

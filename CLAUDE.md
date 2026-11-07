@@ -57,6 +57,12 @@ elease\Llamatron-<ver>-windows.zip (no game
   is in the VBL), hooks from the ARC logo on; dot entry $442EA hooked; title stars behind the text ($441EA ->
   Item::behind: Draw puts colour 0, those items, then the picture with colour 0 see-through). The original's
   behind plotter rewrites whole background words, erasing other stars in the word (flicker): ours shows them all.
+  Bonus stage (2026-11-07, owner): state 3 (the quasi-3D tunnel of particles; entered at $18022 when the warp
+  $1B102 is open and the ship reaches the world's middle $1D134/$1D136 = $800; VBL handler $1BA22, frame routine
+  $1C060) and 5 (after it, ~290 frames) drawn every VBL on the faster CPU (PsDrawsEveryVbl, play_more); state 3
+  fully captured (its particles and ship go through the hooked routines: the raw ST picture is empty), pixel-
+  identical, same length (720 frames); state 5 not captured (other draw routines), 50 a second. Test: --poke takes
+  @<hex> absolute addresses now: --poke=1900:@1B102:1 --poke=1900:@1D134:800 --poke=1900:@1D136:800 in play.
 - Gotcha: CLAUDE.md has raw CR characters inside lines (paths like Private\r...): edit it byte-safely (Python
   open(..., 'rb')), never through text mode.
 - Andes Attack remaster (2026-11-02): src/remaster_andes.cpp (sprite routine $21D6C, draw pass $18DD2..$18E78,

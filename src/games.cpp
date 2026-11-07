@@ -215,7 +215,7 @@ std::vector<Known> KnownGames() {
   wip("photonstorm", "PHOTON STORM", "PHOTON.YAK", "PHOTON STORM  -  JEFF MINTER, ARC 1990",
       "Blast the alien swarms in deep space.", {0.08f, 0.10f, 0.30f, 1}, {0.95f, 0.75f, 0.20f, 1});
   k.back().game.play_at = 0x44846, k.back().game.play_value = 1, k.back().game.play_word = true;
-  k.back().game.play_more = {12, 7, 11, 8, 10};  // the ARC logo, title, enemy guide, high scores, pause (50 a second)
+  k.back().game.play_more = {12, 7, 11, 8, 10, 3, 5};  // the ARC logo, title, enemy guide, high scores, pause, bonus
   k.back().game.mode = input::Mode::kPhotonStorm;
   k.back().game.year = 1990;
   k.back().game.help = {"PHOTON STORM  -  JEFF MINTER, ARC 1990", "",

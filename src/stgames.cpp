@@ -654,12 +654,16 @@ constexpr uint32_t kPsState = 0x44846, kPsX = 0x4F1C0, kPsY = 0x4F1C2;
 constexpr uint32_t kPsDivisor = 0x466BE;
 bool g_ps_50fps = true;
 constexpr int kPsPlay = 1, kPsPaused = 10, kPsTitle = 7;
+// 3: the bonus stage between levels (the quasi-3D tunnel of particles; entered at $18022 when the warp $1B102 is
+// open and the ship reaches the world's middle; VBL handler $1BA22, frame routine $1C060; then 5, then play).
+constexpr int kPsBonus = 3, kPsBonusEnd = 5;  // (5: after it, ~290 frames)
 // The screens drawn every VBL with photonstorm_50fps (their animation is in the VBL) and captured by the remaster:
 // play, the ARC logo (12), the title (7), the enemy guide (11), the high scores (8). Not the change-overs (2) or
 // the pause (10). (games.cpp play_more: the faster CPU in the same states.)
 // (10: the pause screen - a fountain of dots the stick moves; owner 2026-11-07: the held play items didn't belong.)
 bool PsDrawsEveryVbl(int state) {
-  return state == kPsPlay || state == 12 || state == kPsTitle || state == 11 || state == 8 || state == kPsPaused;
+  return state == kPsPlay || state == 12 || state == kPsTitle || state == 11 || state == 8 || state == kPsPaused ||
+         state == kPsBonus || state == kPsBonusEnd;
 }
 constexpr uint8_t kKeyQ = 0x10;
 float g_ps_mx = 0, g_ps_my = 0;
