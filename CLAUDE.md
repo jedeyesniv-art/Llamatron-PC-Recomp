@@ -206,6 +206,8 @@ elease\Llamatron-<ver>-windows.zip (no game
   (transparent), in make_cover.py's style; tiles = screenshots through each game's own CRT++ look (not in git:
   logs/steamshots), taken with --window --window-size=1920x1200 --program=X --rshot=N:<name>_N.bmp and the smoke
   inputs (PICKS in the script: shot, centre, zoom). Shipped as Extras\Steam art (package_portable.ps1).
+  2026-11-07: the tiles are now mostly the owner's own title-screen captures (logs/steamshots/own: Llamatron, Grid,
+  Revenge, Trip, photon, Andes, Hardcore; from their Videos\Captures), ours only for Defender II's title.
 - src/steam.cpp AddToSteam (panel GENERAL, ADD TO STEAM, Kind::kSteam; outcome on the row, <= 18 letters):
   launched from Steam (env SteamGameId = appid << 32 | 0x02000000; Proton: Steam root = Z: +
   STEAM_COMPAT_CLIENT_INSTALL_PATH) -> art only, for every user whose shortcuts.vdf has that appid. Else (Windows,
