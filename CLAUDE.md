@@ -374,6 +374,9 @@ font doubled with a raster gradient. In README.md.
   pre-sym .. 5 post-sym; KML FXENABLE / FXSTATE) - green in the Y strip. Gyro: SDL's HIDAPI Steam Controller
   driver is on by default on Windows (gyro reported); under Steam Input only Steam's virtual pad (no gyro) is
   seen - a hint says so once.
+- Settings panel: TRIP-A-TRON CONTROLS (section "tripkeys", owner 2026-11-07: a reference, no remapping - too
+  complex): Kind::kInfo rows (label = control, choices[0] = what it does, help = the details), after the game's
+  own section, open by default in Trip-A-Tron; also on the Settings disk (folded).
 - Shared (2026-11-01): src/pad.cpp = pad 1 as a per-frame snapshot (real or the test pad from --press=N:g...)
   with edges; src/stgames.cpp = RMC and Andes controls (modes kRmc / kAndes). Registry play rule (games.h
   play_at / play_value / play_word / play_vbl): the faster CPU (--cpu, x8) while that RAM value says "play";

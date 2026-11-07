@@ -156,7 +156,7 @@ On the Control Panel the d-pad jumps from icon to icon and names it, with what A
 button) do there; the sticks are the mouse (LB held: slowly, for the small buttons; in the tool screens the
 d-pad nudges a pixel at a time). B goes back: out of any screen (Sillyscope, Colour Cooker, the sequencers,
 Disk...) to the Control Panel, closes an alert or a Sym / Cube panel, and on the bare panel puts it away.
-Settings (Back) has its feel: light speed, stick curve, FLOW (inertia for long glides), paint pressure on /
+Settings (Back) lists every control (TRIP-A-TRON CONTROLS: pick a row for the details) and has its feel: light speed, stick curve, FLOW (inertia for long glides), paint pressure on /
 off, GYRO (turn the pad to move the light, like a pen - Steam Deck, PlayStation and Switch pads) and a rumble
 on the beat in music mode.
 Keyboard and mouse work as on the ST (F1-F6 are its own: the settings are on the pad's Back only). The first
