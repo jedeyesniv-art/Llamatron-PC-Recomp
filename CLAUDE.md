@@ -63,7 +63,7 @@ elease\Llamatron-<ver>-windows.zip (no game
   every VBL on the faster CPU (PsDrawsEveryVbl, play_more); both fully captured (the raw ST picture lacks the
   particles and ship), pixel-identical, same lengths (720 / 290 frames). The bonus won (its script's 'e', $1C634):
   4 (score counts up, ~275 frames) then 6 (WARP: 3D streaks, $1C866 / $1C9F4, ~405) - captured the same way,
-  verified (--poke=2100:@44846:4 mid-bonus). Every state now: 0 boot, 2 change-overs and 9 (high-score initials,
+  verified (--poke=2100:@44846:4 mid-bonus); owner tested in real play 2026-11-07: smooth. Every state now: 0 boot, 2 change-overs and 9 (high-score initials,
   an input screen) are the only ones not drawn every VBL / captured. Test: --poke takes
   @<hex> absolute addresses now: --poke=1900:@1B102:1 --poke=1900:@1D134:800 --poke=1900:@1D136:800 in play.
 - Gotcha: CLAUDE.md has raw CR characters inside lines (paths like Private\r...): edit it byte-safely (Python
@@ -127,7 +127,7 @@ elease\Llamatron-<ver>-windows.zip (no game
   ship is lost (state 5 with play's frame) - Attract(): every VBL, faster CPU, captured. Both are partly timed by
   their drawing: they end 4 / 3 frames (of 340 / 38) sooner than the original, capture on or off alike (captured
   at the original pace their length changed with the capture instead). Known: the pyramid's lines cross the
-  humanoids in the original, pass behind them here (~10 pixels). Left: state 3 (frame $12C9C, not reached
+  humanoids in the original, pass behind them here (~10 pixels). Owner tested in real play: smooth. Left: state 3 (frame $12C9C, not reached
   scripted), the logo (owner).
 - Hardcore remaster (2026-11-03): the Camels port with Hardcore addresses (remaster_rmc.cpp kHc) + compiled
   sprites (type 6) and one-plane plotters. Trail rings $1A1F8/$1A4F8 advance per drawn frame (cosmetic).
