@@ -696,6 +696,11 @@ constexpr uint32_t kPsTurn = 0x17D02, kPsTurnTest = 0x17D0E, kPsTurnDone = 0x17D
 constexpr uint32_t kPsMove = 0x17DEC, kPsMoveDone = 0x17ECE;
 constexpr uint32_t kPsShotNew = 0x18494, kPsShotNewNext = 0x184A4;
 constexpr uint32_t kPsShotsMove = 0x181DA, kPsShotsMoveNext = 0x181E0;
+// $43F8E projects the bonus tunnel and the WARP's streaks: x + x * z / (D - z), D = the word at $43F8C. The WARP
+// raises D to +520 while its streaks' z run through 0..$1FFF, so z = D now and then divides by zero - the game
+// has no handler for that (on an ST: bombs, back to the desktop; seen on the Deck 2026-11-07). Hooked at the
+// "sub.w d5,d6" that makes the divisor: 0 becomes 1 (z one off D, which the game already meets: divs overflows).
+constexpr uint32_t kPsProjectSub = 0x43FA2;
 constexpr uint32_t kPsMarker = 0x15C30, kPsMarkerDraw = 0x15C54, kPsMarkerNone = 0x15C60, kPsMarkerTable = 0x15C3A;
 constexpr double kPi = 3.14159265358979;
 constexpr int kPsMaxShots = 32;
@@ -724,6 +729,12 @@ void PsBox(double a, double* x, double* y) {
   *x = c * k, *y = s * k;
 }
 void SetWord(cpu::Reg r, int v) { cpu::Set(r, (cpu::Get(r) & 0xFFFF0000u) | uint16_t(v)); }
+
+void PsOnProjectSub(st::Machine&) {
+  uint16_t d6 = uint16_t(cpu::Get(cpu::Reg(cpu::D0 + 6)) - cpu::Get(cpu::Reg(cpu::D0 + 5)));
+  SetWord(cpu::Reg(cpu::D0 + 6), d6 ? d6 : 1);
+  cpu::Set(cpu::PC, kPsProjectSub + 2);
+}
 
 // The heading's exact angle, re-synced whenever the game set $27942 itself (a new ship...).
 double PsHeading(st::Machine& m) {
@@ -1101,6 +1112,12 @@ void PsInstallHooks(st::Machine* m) {
   for (const H& h : kHooks) {
     Put16(m, h.at, 0x4AFC);
     m->AddHook(h.at, [fn = h.fn](st::Machine& running) { fn(running); });
+  }
+  if (uint16_t(Get16(*m, kPsProjectSub)) == 0x9C45) {  // sub.w d5,d6
+    Put16(m, kPsProjectSub, 0x4AFC);
+    m->AddHook(kPsProjectSub, PsOnProjectSub);
+  } else {
+    LOG("photon storm: divide hook not installed ($%06X = $%04X)", kPsProjectSub, uint16_t(Get16(*m, kPsProjectSub)));
   }
   for (PsShot& s : g_ps_shots) s.on = false;
   g_ps_heading_on = false;

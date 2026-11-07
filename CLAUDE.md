@@ -63,7 +63,7 @@ elease\Llamatron-<ver>-windows.zip (no game
   every VBL on the faster CPU (PsDrawsEveryVbl, play_more); both fully captured (the raw ST picture lacks the
   particles and ship), pixel-identical, same lengths (720 / 290 frames). The bonus won (its script's 'e', $1C634):
   4 (score counts up, ~275 frames) then 6 (WARP: 3D streaks, $1C866 / $1C9F4, ~405) - captured the same way,
-  verified (--poke=2100:@44846:4 mid-bonus); owner tested in real play 2026-11-07: smooth. Every state now: 0 boot, 2 change-overs and 9 (high-score initials,
+  verified (--poke=2100:@44846:4 mid-bonus); owner tested in real play 2026-11-07: smooth. Divide by zero (Deck run 2026-11-07: the game quit after the bonus): the projection $43F8E (x + x*z / (D - z), D = $43F8C) divides by zero when a WARP streak's z equals D (D rises to +520 in the WARP's second half) - the original's own bug (no handler: bombs on an ST), random, ~1 warp in 10. Hook at its sub.w d5,d6 ($43FA2, stgames.cpp kPsProjectSub): 0 -> 1. Repro: the bonus pokes + --poke=2100:@44846:4 --poke=2450:@2B0E0:FA --poke=2450:@1C83C:0 --poke=2450:@43F8C:64 --poke=2450:@2B52A:172. Every state now: 0 boot, 2 change-overs and 9 (high-score initials,
   an input screen) are the only ones not drawn every VBL / captured. Test: --poke takes
   @<hex> absolute addresses now: --poke=1900:@1B102:1 --poke=1900:@1D134:800 --poke=1900:@1D136:800 in play.
 - Gotcha: CLAUDE.md has raw CR characters inside lines (paths like Private\r...): edit it byte-safely (Python
