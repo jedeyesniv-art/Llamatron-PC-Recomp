@@ -231,6 +231,19 @@ elease\Llamatron-<ver>-windows.zip (no game
   panel section MUTANT CAMELS (rmctt shows it too). Not the 512K build. Verified: up while walking right,
   jump while aiming up, 160 deg = (-3, 1.09); TT 225 deg = (-3, -3); smoke all pass.
 
+## Owner's settings baked in (2026-11-07: "happy with the CRT tuning and controls")
+- crt.cpp kGameDefaults: every <game>_crt / <game>_crt_psy_* from the Deck test build's settings.txt (generated:
+  andes, defender2, gridrunner, hardcore (CRT++ sliders only), llamatron, photonstorm, rmc, rmctt). GameGet():
+  the player's own <game>_<key>, else the table, else the shared key; the panel's Value() asks
+  crt::GameDefaultValue too; its reset row reads "THE GAME'S OWN CRT++ AGAIN". Shared crt default 1 -> 2 (CRT++;
+  the shared sliders already matched). The table is the owner's - regenerate it from their file if they retune.
+- remap Function::start = the buttons attached out of the box when not the game's own (identity stays
+  defaults[0]): Andes / Defender 2 arcade - fire on RT, thrust on A and LT (LT still the analog squeeze, A full
+  thrust). StartMask() for the initial map, X / RESET, Changed(), the panel's colours. Menus that pick with A
+  (D2 title / player select, Andes / D2 name entry) take RT too (pad::RtPressed). grid_stick_speed 6.5 -> 6.
+- Not baked (not CRT / controls): volume 0.6, trip_music 2. Tests: scripted pad input bypasses the remap unless
+  --remap-test.
+
 ## Volume (2026-11-05; owner: games "really loud on a TV", some louder than others)
 - Settings volume (master, 0..1, gain = v^2: 0.5 = -12 dB) and volume_normalise (1): main.cpp scales the samples
   (clamped) before the queue and the --wav dump. games.cpp NormalGainDb = -23 LUFS (EBU R128) - each game's

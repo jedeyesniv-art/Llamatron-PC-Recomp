@@ -16,6 +16,13 @@ uint32_t Function::DefaultMask() const {
   return m;
 }
 
+uint32_t Function::StartMask() const {
+  if (start.empty()) return DefaultMask();
+  uint32_t m = 0;
+  for (int d : start) m |= 1u << d;
+  return m;
+}
+
 namespace {
 
 constexpr int A = SDL_GAMEPAD_BUTTON_SOUTH, B = SDL_GAMEPAD_BUTTON_EAST, X = SDL_GAMEPAD_BUTTON_WEST,
@@ -54,8 +61,8 @@ const std::vector<Function> kGridrunner = {
 };
 
 const std::vector<Function> kAndesArcade = {
-    {"fire", "FIRE", {A, LT}, "Fire (held). A types the letter of a high score name."},
-    {"thrust", "THRUST (SQUEEZE)", {RT}, "Squeeze = speed. A button here: full thrust."},
+    {"fire", "FIRE", {A, LT}, "Fire (held).", {RT}},
+    {"thrust", "THRUST (SQUEEZE)", {RT}, "Squeeze = speed. A button here: full thrust.", {A, LT}},
     {"bomb", "SMART BOMB", {B}, "A smart bomb."},
     {"reverse", "REVERSE", {X, Y}, "Turn round."},
     {"shield", "SHIELD (HOLD)", {LB, RB}, "The shield while held (it drains)."},
@@ -78,8 +85,8 @@ const std::vector<Function> kAndesStick = {
 };
 
 const std::vector<Function> kD2Arcade = {
-    {"fire", "FIRE", {A, LT}, "Fire (held). On the menus A picks, LT is the right mouse button."},
-    {"thrust", "THRUST (SQUEEZE)", {RT}, "Squeeze = speed. A button here: full thrust."},
+    {"fire", "FIRE", {A, LT}, "Fire (held).", {RT}},
+    {"thrust", "THRUST (SQUEEZE)", {RT}, "Squeeze = speed. A button here: full thrust.", {A, LT}},
     {"bomb", "SMART BOMB", {B}, "A smart bomb."},
     {"reverse", "REVERSE", {X, Y}, "Turn round. High score initials: X deletes a letter."},
     {"inviso", "INVISO / ENERGY", {LB}, "Inviso in Stargate (held), the energy weapon in Defender II."},
@@ -200,7 +207,7 @@ bool MakeMap(const std::vector<Function>& fns, const std::string& prefix, std::v
   sets->clear();
   for (const Function& f : fns) {
     std::string k = Key(prefix, f);
-    sets->push_back(settings::Has(k) ? uint32_t(settings::Get(k, 0)) & ~kFixed : f.DefaultMask());
+    sets->push_back(settings::Has(k) ? uint32_t(settings::Get(k, 0)) & ~kFixed : f.StartMask());
   }
   uint32_t defaults = 0;  // a default of some function
   for (const Function& f : fns) defaults |= f.DefaultMask();
@@ -291,7 +298,7 @@ void Toggle(size_t fn, int input) {
 
 void ResetFunction(size_t fn) {
   if (fn >= g_sets.size()) return;
-  uint32_t d = (*g_fns)[fn].DefaultMask();
+  uint32_t d = (*g_fns)[fn].StartMask();
   for (uint32_t& s : g_sets) s &= ~d;
   g_sets[fn] = d;
   Save();
@@ -306,7 +313,7 @@ void ResetAll() {
 
 bool Changed() {
   for (size_t i = 0; i < g_sets.size(); ++i)
-    if (g_sets[i] != (*g_fns)[i].DefaultMask()) return true;
+    if (g_sets[i] != (*g_fns)[i].StartMask()) return true;
   return false;
 }
 
@@ -314,7 +321,7 @@ bool Changed(const std::string& id, input::Mode mode) {
   std::string prefix;
   for (const Function& f : ListFor(id, mode, &prefix)) {  // (Andes / Defender 2: the scheme selected)
     std::string k = Key(prefix, f);
-    if (settings::Has(k) && uint32_t(settings::Get(k, 0)) != f.DefaultMask()) return true;
+    if (settings::Has(k) && uint32_t(settings::Get(k, 0)) != f.StartMask()) return true;
   }
   return false;
 }

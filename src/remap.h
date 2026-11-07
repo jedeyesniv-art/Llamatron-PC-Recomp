@@ -26,7 +26,11 @@ struct Function {
   const char* label;  // the panel's row
   std::vector<int> defaults;  // the game's own buttons for it (the first: what attached buttons act as)
   const char* help;
-  uint32_t DefaultMask() const;
+  // The buttons attached out of the box when they aren't the game's own (owner's layout, 2026-11-07); empty =
+  // the defaults. The identity (what a button acts as) stays defaults[0].
+  std::vector<int> start = {};
+  uint32_t DefaultMask() const;  // the game's own
+  uint32_t StartMask() const;    // attached out of the box
 };
 
 // The game being played (in-game only; "" = none: no remapping). Mode tells user disks (generic controls).

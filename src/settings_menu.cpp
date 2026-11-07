@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <vector>
 
+#include "crt.h"
 #include "input.h"
 #include "log.h"
 #include "remap.h"
@@ -47,7 +48,7 @@ const std::vector<Item>& Items() {
   static const std::vector<Item> items = {
       {"general", "REMASTER", "remaster", Kind::kToggle, 1, 0, 1, 1, {},
        "Sprites drawn smooth by the PC at 4x, sliding between frames (F8). Off: the ST's own picture."},
-      {"general", "CRT LOOK", "crt", Kind::kChoice, 1, 0, 2, 1, {"OFF", "CRT+", "CRT++"},
+      {"general", "CRT LOOK", "crt", Kind::kChoice, 2, 0, 2, 1, {"OFF", "CRT+", "CRT++"},
        "CRT+: scanlines, mask and glow, like a TV of the time. CRT++: psychedelic trails on top (F9). In a game: that game's own."},
       {"general", "RUN-AHEAD", "remaster_ahead", Kind::kChoice, 2, 0, 3, 1, {"OFF", "1 FRAME", "2 FRAMES", "3 FRAMES"},
        "Remaster only: runs the game ahead to cut the delay between the pad and the picture (F7). 2 is the sweet spot."},
@@ -97,7 +98,7 @@ const std::vector<Item>& Items() {
       {"llamatron", "ANALOG AIM", "analog_aim", Kind::kToggle, 0, 0, 1, 1, {},
        "Twin-stick shots in any direction (off: the original 8). Also RB on the title screen."},
 
-      {"gridrunner", "SHIP SPEED", "grid_stick_speed", Kind::kSlider, 6.5, 2, 12, 0.5, {},
+      {"gridrunner", "SHIP SPEED", "grid_stick_speed", Kind::kSlider, 6.0, 2, 12, 0.5, {},
        "Pixels a frame with the stick pushed all the way."},
       {"gridrunner", "STICK CURVE", "grid_stick_curve", Kind::kSlider, 2, 1, 4, 0.25, {},
        "1 = straight; higher = finer control near the centre, the same top speed."},
@@ -309,6 +310,8 @@ double Value(const Item& it) {
   if (it.kind == Kind::kFullscreen) return g_window && (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) ? 1 : 0;
   if (!*it.key) return 0;
   if (PerGame(it) && settings::Has(OwnKey(it))) return settings::Get(OwnKey(it), it.def);
+  double game_def;  // the game's built-in look (crt.cpp's table: the owner's tuning)
+  if (PerGame(it) && crt::GameDefaultValue(g_game, it.key, &game_def)) return game_def;
   return settings::Get(it.key, it.def);
 }
 
@@ -391,10 +394,10 @@ void Press() {
   const Item* it = Selected();
   if (!it) return;
   if (it->kind == Kind::kResetCrt && !g_game.empty() && std::string(it->section) == "crtpp") {
-    for (const Item& i : Items())  // the game's own CRT++ sliders go: the shared ones again
+    for (const Item& i : Items())  // the player's own CRT++ for the game goes: its built-in look (or the shared)
       if (PerGame(i) && std::string(i.key) != "crt") settings::Erase(OwnKey(i));
     settings::Save();
-    LOG("settings: %s back to the shared CRT++ look", g_game.c_str());
+    LOG("settings: %s back to its default CRT++ look", g_game.c_str());
     Applied();
     return;
   }
@@ -420,7 +423,7 @@ void Default() {
     return;
   }
   const Item* it = Selected();
-  if (it && PerGame(*it)) {  // the game's own value goes: the shared one again
+  if (it && PerGame(*it)) {  // the player's own value for the game goes: the game's built-in one (or the shared)
     settings::Erase(OwnKey(*it));
     settings::Save();
     Applied();
@@ -667,7 +670,7 @@ void Render(SDL_Renderer* r) {
         uint32_t m = remap::Attached(size_t(row.control));
         std::string names = m ? remap::MaskNames(m) : "-";
         if (names.size() > size_t(kCols - kLabelCols)) names = names.substr(0, size_t(kCols - kLabelCols - 2)) + "..";
-        text(names, vx, ry, !m ? kDim : m == f.DefaultMask() ? kOn : kAccent);
+        text(names, vx, ry, !m ? kDim : m == f.StartMask() ? kOn : kAccent);
       }
       continue;
     }
@@ -677,7 +680,7 @@ void Render(SDL_Renderer* r) {
     }
     const Item& it = Items()[size_t(row.item)];
     const bool shared_reset = it.kind == Kind::kResetCrt && !g_game.empty() && std::string(it.section) == "crtpp";
-    text(shared_reset ? "USE THE SHARED CRT++" : it.label, pad, ry, sel ? kWhite : kLabel);
+    text(shared_reset ? "THE GAME'S OWN CRT++ AGAIN" : it.label, pad, ry, sel ? kWhite : kLabel);
     double v = Value(it);
     char buf[32];
     switch (it.kind) {

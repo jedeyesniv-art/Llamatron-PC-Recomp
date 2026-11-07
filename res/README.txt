@@ -176,23 +176,23 @@ goes on).
 ANDES ATTACK - XBOX PAD
 -----------------------
   Left stick up / down   altitude                 Left stick left / right   face that way
-  RT                     thrust: how far you squeeze sets the speed
-  A or LT                fire                     B                         smart bomb
+  LT                     thrust: how far you squeeze sets the speed (A: full thrust)
+  RT                     fire                     B                         smart bomb
   X or Y                 reverse
   LB or RB (hold)        shield (its energy drains while it's up)
   Start                  pause
   (Settings: CONTROLS = STICK THRUST: the stick's left / right thrusts that way, the older scheme.)
-  High score name: up / down picks a letter, A enters it.
+  High score name: up / down picks a letter, A (or RT, Start) enters it.
 Mouse and keyboard as the original: mouse up / down, left button thrust, right reverse, Left Shift fire,
 Control smart bomb, Alt (hold) shield, Right Shift pause, Space resume.
 
 
 DEFENDER 2 - XBOX PAD
 ---------------------
-  Title: the d-pad picks Defender, Defender II or Stargate, A starts it; then A = one player.
+  Title: the d-pad picks Defender, Defender II or Stargate, A (or RT, Start) starts it; then A = one player.
   Left stick up / down   climb / dive             Left stick left / right   face that way
-  RT                     thrust: how far you squeeze sets the speed
-  A or LT                fire                     B                         smart bomb
+  LT                     thrust: how far you squeeze sets the speed (A: full thrust)
+  RT                     fire                     B                         smart bomb
   X or Y                 reverse
   LB                     inviso (Stargate)        RB                        ship type (Defender II)
   (Settings: CONTROLS = STICK THRUST: the stick's left / right thrusts that way, the older scheme.)

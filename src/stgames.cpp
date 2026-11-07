@@ -233,7 +233,7 @@ void NameEntryPad(st::Machine* m, const pad::State& p) {
     g_letter_repeat = first ? 18 : 6;  // held: a pause, then quicker
   }
   g_letter_held = dir != 0;
-  if (pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START)) TapKey(m, kLetterCodes[g_letter]);
+  if (pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START) || pad::RtPressed()) TapKey(m, kLetterCodes[g_letter]);
 }
 
 void AndesUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
@@ -512,7 +512,7 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
       // The pointer only shows after "PRESS SPACE": the first d-pad press sends Space, so the choice is seen.
       bool dpad = pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ||
                   pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_UP) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_DOWN);
-      bool a = pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START);
+      bool a = pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START) || pad::RtPressed();
       if (g_d2_title_at < 0) g_d2_title_at = g_d2_frame;
       const bool waiting = Get16(*m, kD2WaitSpace) != 0 || g_d2_frame - g_d2_title_at < 30;
       if ((dpad || a) && waiting && (g_d2_space_at < 0 || g_d2_frame - g_d2_space_at > 25))
@@ -536,7 +536,7 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
         g_d2_players = sel;
         Put16(m, kD2PtrX, kD2PlayerBoxes[sel].x), Put16(m, kD2PtrY, kD2PlayerBoxes[sel].y);
       }
-      if (pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START))
+      if (pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START) || pad::RtPressed())
         D2Click(kD2PlayerBoxes[g_d2_players], 1);
     } else {  // other screens (the initials, options...): the pointer; the d-pad steps it 8 px (one letter)
       if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;

@@ -333,7 +333,7 @@ bool DrawsEveryVbl(int state) { return state == kPlay || state == kIntro || stat
 bool FastCpu(int state) { return state == kPlay || state == kIntro; }
 
 void LoadSettings() {
-  g_tune.speed = settings::Get("grid_stick_speed", 6.5);
+  g_tune.speed = settings::Get("grid_stick_speed", 6.0);
   g_tune.curve = settings::Get("grid_stick_curve", 2.0);
   g_tune.deadzone = std::clamp(settings::Get("grid_stick_deadzone", 0.15), 0.0, 0.9);
   g_tune.dpad = settings::Get("grid_dpad_speed", 1.0);

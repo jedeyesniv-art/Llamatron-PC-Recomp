@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <string>
 
 #include "log.h"
@@ -31,11 +32,94 @@ SDL_GPUDevice* g_device = nullptr;
 int g_mode = 1;  // 0 off, 1 CRT+, 2 CRT++ (setting crt, or <game>_crt)
 std::string g_game;  // SetGame
 
-// A setting the running game can have its own of: its key if it has one, else the shared key.
-std::string GameKey(const char* key) {
-  if (g_game.empty()) return key;
-  std::string own = g_game + "_" + key;
-  return settings::Has(own) ? own : std::string(key);
+// The owner's per-game looks (2026-11-07, from the Deck test build's settings.txt): what a game uses for these keys
+// when the player hasn't given it its own. Generated - keep in step with the panel (settings_menu Value).
+struct GameDefault {
+  const char* game;
+  const char* key;
+  double value;
+};
+const GameDefault kGameDefaults[] = {
+    {"andes", "crt", 2},
+    {"andes", "crt_psy_bleed", 0.3},
+    {"andes", "crt_psy_glow", 2.5},
+    {"andes", "crt_psy_keep", 1},
+    {"andes", "crt_psy_length", 0.3},
+    {"andes", "crt_psy_saturation", 1.15},
+    {"andes", "crt_psy_tint", 0.45},
+    {"andes", "crt_psy_trails", 0.3},
+    {"defender2", "crt", 2},
+    {"defender2", "crt_psy_bleed", 1.2},
+    {"defender2", "crt_psy_glow", 2},
+    {"defender2", "crt_psy_keep", 0.9},
+    {"defender2", "crt_psy_length", 0.05},
+    {"defender2", "crt_psy_saturation", 1.45},
+    {"defender2", "crt_psy_threshold", 0.65},
+    {"defender2", "crt_psy_trails", 0.3},
+    {"defender2", "crt_psy_zoom", 0},
+    {"gridrunner", "crt", 2},
+    {"gridrunner", "crt_psy_bleed", 0.9},
+    {"gridrunner", "crt_psy_cycle", 0},
+    {"gridrunner", "crt_psy_gain", 1.1},
+    {"gridrunner", "crt_psy_glow", 5.5},
+    {"gridrunner", "crt_psy_hue", 0.64},
+    {"gridrunner", "crt_psy_length", 0.1},
+    {"gridrunner", "crt_psy_saturation", 1.15},
+    {"gridrunner", "crt_psy_tint", 0.3},
+    {"gridrunner", "crt_psy_trails", 0.1},
+    {"gridrunner", "crt_psy_zoom", 0.65},
+    {"hardcore", "crt_psy_bleed", 2},
+    {"hardcore", "crt_psy_cycle", 0.85},
+    {"hardcore", "crt_psy_glow", 5},
+    {"hardcore", "crt_psy_hue", 0.54},
+    {"hardcore", "crt_psy_length", 0.49},
+    {"hardcore", "crt_psy_saturation", 1.45},
+    {"hardcore", "crt_psy_threshold", 0.3},
+    {"hardcore", "crt_psy_tint", 0.35},
+    {"hardcore", "crt_psy_trails", 0.5},
+    {"llamatron", "crt", 2},
+    {"llamatron", "crt_psy_bleed", 1.1},
+    {"llamatron", "crt_psy_length", 0.3},
+    {"llamatron", "crt_psy_threshold", 0.1},
+    {"llamatron", "crt_psy_trails", 0.6},
+    {"photonstorm", "crt", 2},
+    {"photonstorm", "crt_psy_bleed", 0.7},
+    {"photonstorm", "crt_psy_glow", 4.5},
+    {"photonstorm", "crt_psy_hue", 0.18},
+    {"photonstorm", "crt_psy_length", 0.1},
+    {"photonstorm", "crt_psy_saturation", 1.15},
+    {"photonstorm", "crt_psy_threshold", 0.25},
+    {"photonstorm", "crt_psy_tint", 0.25},
+    {"photonstorm", "crt_psy_trails", 0.1},
+    {"photonstorm", "crt_psy_twist", 0},
+    {"photonstorm", "crt_psy_zoom", 0.05},
+    {"rmc", "crt", 2},
+    {"rmc", "crt_psy_cycle", 0.65},
+    {"rmc", "crt_psy_gain", 0.9},
+    {"rmc", "crt_psy_glow", 3.5},
+    {"rmc", "crt_psy_hue", 0.72},
+    {"rmc", "crt_psy_length", 0.2},
+    {"rmc", "crt_psy_trails", 0.1},
+    {"rmc", "crt_psy_twist", 0.15},
+    {"rmc", "crt_psy_zoom", 0.15},
+    {"rmctt", "crt", 2},
+    {"rmctt", "crt_psy_gain", 0.9},
+    {"rmctt", "crt_psy_hue", 0.68},
+    {"rmctt", "crt_psy_length", 0.15},
+    {"rmctt", "crt_psy_trails", 0.3},
+    {"rmctt", "crt_psy_zoom", 0.1},
+};
+
+// A setting the running game can have its own of: the player's own for the game, else the game's built-in look,
+// else the shared key.
+double GameGet(const char* key, double def) {
+  if (!g_game.empty()) {
+    std::string own = g_game + "_" + key;
+    if (settings::Has(own)) return settings::Get(own, def);
+    double v;
+    if (crt::GameDefaultValue(g_game, key, &v)) return v;
+  }
+  return settings::Get(key, def);
 }
 Params g_params{};
 
@@ -384,7 +468,7 @@ void LoadSettings() {
     if (reset) settings::Set(key, def);
     return float(settings::Get(key, def));
   };
-  g_mode = std::clamp(int(settings::Get(GameKey("crt"), 1)), 0, 2);
+  g_mode = std::clamp(int(GameGet("crt", 2)), 0, 2);  // (CRT++ by default since 2026-11-07, owner)
   Params& p = g_params;
   p.beam[0] = get("crt_scanlines", 0.45);
   p.beam[1] = get("crt_beam_min", 0.35);
@@ -411,7 +495,7 @@ void LoadSettings() {
   const bool psy_reset = settings::Get("crt_psy_defaults", 0) < kPsyDefaults;
   auto psy = [psy_reset](const char* key, double def) {
     if (psy_reset) settings::Set(key, def);
-    return float(settings::Get(GameKey(key), def));
+    return float(GameGet(key, def));
   };
   Psy& q = g_psy;
   q.length = psy("crt_psy_length", 0.4);
@@ -431,6 +515,12 @@ void LoadSettings() {
     settings::Set("crt_psy_defaults", kPsyDefaults);
     settings::Save();
   }
+}
+
+bool GameDefaultValue(const std::string& game, const char* key, double* value) {
+  for (const GameDefault& d : kGameDefaults)
+    if (game == d.game && std::strcmp(key, d.key) == 0) return *value = d.value, true;
+  return false;
 }
 
 void SetGame(const std::string& id) {
