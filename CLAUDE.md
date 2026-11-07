@@ -167,7 +167,8 @@ elease\Llamatron-<ver>-windows.zip (no game
   Andes: speed index $14BC4 (0..19; climb delays table $14BC6 1..32 frames, $2D77C = thrust held). D2: velocity
   $1B4B4 (16.16, + right), accel $1B4BE (0x3000), friction $1B4C6 (0x1800), top $1B4CA (9 px a frame);
   left alone while dying ($2F2DE countdown: controls skipped). Measured: D2 half 4.7, 30% 2.6, full 9; Andes
-  half 10, full 18, eased 17 -> 5 in ~2 s.
+  half 10, full 19 (2026-11-07: identical to the original's mouse-button thrust frame for frame - 0 -> 19 in
+  ~4.8 s; owner: keep it as the original), eased 17 -> 5 in ~2 s.
 - Tests: --press=N:grt@<0..1> (part squeeze), --watch=@<hex> (absolute address). Scripted runs die often:
   defender2_invincible=1 in the test userdata's settings.txt; Andes dies around frame 1150 with the smoke input.
 
