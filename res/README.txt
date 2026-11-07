@@ -40,10 +40,11 @@ The disks on a carousel: pick a game.
   Left / right    turn the carousel (LB / RB and the mouse wheel too)
   A or Start      play the disk in the middle
   Y               how to play (and its options: trainers, which program)
-  X               on that page: read the game's docs (where the disk has them); elsewhere: CRT look on / off
-                  (also F9, here and in the games)
+  X               the game's docs, where there are some: the disk's own notes or reader, Gridrunner's
+                  GAME SECRETS pages (A next page, B back), Trip-A-Tron's manual. In the text viewer: up /
+                  down scroll, LB / RB or the right stick turn pages, B back
   B, B            quit
-Keyboard: cursor keys, Enter, H = how to play, C = CRT, Esc twice = quit.
+Keyboard: cursor keys, Enter, H = how to play, X = docs, F9 = CRT look, Esc twice = quit.
 
 
 SETTINGS
@@ -247,7 +248,7 @@ IMPROVEMENTS OVER THE ORIGINAL
   underneath is unchanged.
 - Run-ahead (with the remaster; F7 or Settings, default 2 frames): the game is run a frame or two ahead with
   your controls, so the picture answers the pad quicker than the original did.
-- CRT look (on by default; X on the start screen or F9 cycles off / CRT+ / CRT++): CRT+ is scanlines, a
+- CRT look (on by default; Settings, or F9 cycles off / CRT+ / CRT++): CRT+ is scanlines, a
   phosphor mask and a soft glow, with true blacks, the picture keeping its size and shape; CRT++ adds
   psychedelic trails. Each game can have its own look (set in its Settings).
 - Your own buttons: each game's controls can be remapped (Settings in a game, CONTROLS).

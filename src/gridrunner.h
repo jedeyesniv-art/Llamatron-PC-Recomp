@@ -51,6 +51,10 @@ bool HandleEvent(const SDL_Event& e, st::Machine* m);
 void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_t mouse_buttons);
 const char* Hint(st::Machine* m, bool have_pad);
 bool QuitRequested();
+// Docs: the game runs unseen to its title and opens GAME SECRETS (its own manual pages); leaving them (or B)
+// ends the run. Call after Reset.
+void StartDocs();
+bool DocsSkipping();  // still on the way there: run fast, show and play nothing
 // Hide objects in the entry lane under the top rail until they can be shot (default on; --entry-lane = off).
 void SetHideEntryLane(bool on);
 // Forgets the state of the last game (before starting another).

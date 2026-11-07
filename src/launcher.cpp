@@ -261,8 +261,9 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
         case SDL_GAMEPAD_BUTTON_DPAD_DOWN: ScrollText(1); break;
         case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: ScrollText(-18); break;
         case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: ScrollText(18); break;
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK: ScrollText(-int(text_.size())); break;  // the start
         case SDL_GAMEPAD_BUTTON_EAST: case SDL_GAMEPAD_BUTTON_NORTH: case SDL_GAMEPAD_BUTTON_BACK:
-        case SDL_GAMEPAD_BUTTON_WEST: text_.clear(); info_ = true; break;
+        case SDL_GAMEPAD_BUTTON_WEST: text_.clear(); break;
         default: break;
       }
     } else if (e.type == SDL_EVENT_KEY_DOWN) {
@@ -271,7 +272,9 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
         case SDL_SCANCODE_DOWN: ScrollText(1); break;
         case SDL_SCANCODE_PAGEUP: ScrollText(-18); break;
         case SDL_SCANCODE_PAGEDOWN: case SDL_SCANCODE_SPACE: ScrollText(18); break;
-        case SDL_SCANCODE_ESCAPE: case SDL_SCANCODE_BACKSPACE: text_.clear(); info_ = true; break;
+        case SDL_SCANCODE_HOME: ScrollText(-int(text_.size())); break;
+        case SDL_SCANCODE_END: ScrollText(int(text_.size())); break;
+        case SDL_SCANCODE_ESCAPE: case SDL_SCANCODE_BACKSPACE: text_.clear(); break;
         default: break;
       }
     } else if (e.type == SDL_EVENT_MOUSE_WHEEL) {
@@ -298,9 +301,11 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
     launching_ = 0;
     return Action::kNone;
   };
-  // X on the how-to-play page: the docs (a reader runs like a game; text comes back as kDocs at once).
+  // X: the docs (a reader, or the game's own docs screen, runs like a game; text comes back as kDocs at once).
   auto docs = [&]() {
-    if (!(*games_)[size_t(selected_)].docs_program.empty()) {
+    info_ = false;
+    const games::Game& d = (*games_)[size_t(selected_)];
+    if (!d.docs_program.empty() || d.docs_in_game) {
       info_ = false;
       want_docs_ = true;
       launching_ = 0;
@@ -329,8 +334,7 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
       case SDL_GAMEPAD_BUTTON_START: return play();
       case SDL_GAMEPAD_BUTTON_NORTH: toggle_info(); break;
       case SDL_GAMEPAD_BUTTON_WEST:
-        if (info_ && has_docs) return docs();
-        if (crt::Available()) crt::Toggle();
+        if (has_docs) return docs();
         break;
       case SDL_GAMEPAD_BUTTON_EAST:
       case SDL_GAMEPAD_BUTTON_BACK: return back();
@@ -344,8 +348,8 @@ Action Launcher::HandleEvent(const SDL_Event& e) {
       case SDL_SCANCODE_DOWN: case SDL_SCANCODE_S: up_down(1); break;
       case SDL_SCANCODE_RETURN: case SDL_SCANCODE_SPACE: return play();
       case SDL_SCANCODE_F1: case SDL_SCANCODE_I: case SDL_SCANCODE_H: case SDL_SCANCODE_TAB: toggle_info(); break;
-      case SDL_SCANCODE_F9: case SDL_SCANCODE_C: if (crt::Available()) crt::Toggle(); break;
-      case SDL_SCANCODE_X: if (info_ && has_docs) return docs(); break;
+      case SDL_SCANCODE_F9: if (crt::Available()) crt::Toggle(); break;
+      case SDL_SCANCODE_X: if (has_docs) return docs(); break;
       case SDL_SCANCODE_ESCAPE: return back();
       default: break;
     }
@@ -367,8 +371,11 @@ Action Launcher::Update(SDL_Gamepad* pad, double dt) {
   fade_in_ = std::min(1.0, fade_in_ + dt * 2);
   if (pad && !text_.empty()) {  // the text viewer: the stick scrolls (repeating)
     float y = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
+    float ry = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;  // the right stick: pages
     if (std::fabs(y) > 0.5f) {
       if (--text_latch_ <= 0) ScrollText(y < 0 ? -1 : 1), text_latch_ = std::fabs(y) > 0.9f ? 2 : 5;
+    } else if (std::fabs(ry) > 0.5f) {
+      if (--text_latch_ <= 0) ScrollText(ry < 0 ? -18 : 18), text_latch_ = std::fabs(ry) > 0.9f ? 3 : 8;
     } else {
       text_latch_ = 0;
     }
@@ -556,10 +563,9 @@ void Launcher::Render() {
   DrawText("LLAMASOFT ON THE ATARI ST", w / 2, h * 0.06f, s, {120, 120, 135, 255}, true);
   const char* hint = SDL_GetTicks() < quit_armed_ms_ ? "PRESS B AGAIN TO QUIT"
                      : picked.settings ? "LEFT/RIGHT CHOOSE    A OPEN    Y WHAT'S HERE    B QUIT"
-                     : !crt::Available() ? "LEFT/RIGHT CHOOSE    A PLAY    Y HOW TO PLAY    B QUIT"
-                     : crt::Mode() == 2 ? "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT++   B QUIT"
-                     : crt::Mode() == 1 ? "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT+   B QUIT"
-                                        : "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X CRT: OFF   B QUIT";
+                     : size_t(selected_) < docs_.size() && docs_[size_t(selected_)]
+                         ? "LEFT/RIGHT CHOOSE   A PLAY   Y HOW TO PLAY   X DOCS   B QUIT"
+                         : "LEFT/RIGHT CHOOSE    A PLAY    Y HOW TO PLAY    B QUIT";
   DrawText(hint, w / 2, h * 0.92f, s * 0.9f, {150, 150, 165, 255}, true);
 
   if (info_) {
@@ -620,7 +626,7 @@ void Launcher::Render() {
       DrawText(text_[size_t(text_top_ + i)].c_str(), panel.x + 8 * ts, panel.y + (8 + i * 10) * ts, ts,
                {210, 210, 220, 255}, false);
     char foot[96];
-    std::snprintf(foot, sizeof(foot), "LINES %d-%d OF %d     UP/DOWN SCROLL   LB/RB PAGE   B BACK", text_top_ + 1,
+    std::snprintf(foot, sizeof(foot), "LINES %d-%d OF %d    UP/DOWN SCROLL   LB/RB OR RIGHT STICK PAGES   B BACK", text_top_ + 1,
                   std::min(int(text_.size()), text_top_ + 20), int(text_.size()));
     DrawText(foot, w / 2, panel.y + ph - 14 * ts, ts, {150, 150, 165, 255}, true);
   }

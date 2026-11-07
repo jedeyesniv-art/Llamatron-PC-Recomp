@@ -77,6 +77,7 @@ int g_flick = 0;           // right stick: -1 up, 1 down, 0 back near the centre
 bool g_lb = false, g_rb = false;  // shoulder buttons last frame (one nosecone step per press)
 bool g_du = false, g_dd = false;  // d-pad up / down last frame (the same, in the game)
 bool g_quit = false;
+bool g_docs = false, g_docs_shown = false;  // StartDocs: on the way to GAME SECRETS / there
 bool g_running = false;  // the game has unpacked itself and reached its title
 bool g_hide_entry_lane = true;
 bool g_unlock_died = true;  // grid_unlock_level_died
@@ -120,6 +121,10 @@ void PauseButton(st::Machine* m) {
 }
 
 void MenuButton(st::Machine* m) {
+  if (g_docs) {
+    g_quit = true;  // the docs: back to the disks
+    return;
+  }
   int s = GameState(*m);
   if (s == kPause) {
     TapKey(m, kQ);
@@ -393,6 +398,22 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
   if (g_running && g_hide_entry_lane && GameState(*m) == kPlay && g_frame % kPredictEvery == 0) Predict(m);
   if (g_running) Put16(*m, kFramesPerDraw, g_tune.draw_50 && DrawsEveryVbl(GameState(*m)) ? 1 : 2);
   uint8_t buttons = mouse_buttons;
+  if (g_docs && !g_docs_shown) {
+    // On the way to GAME SECRETS, unseen: a click leaves the Llamasoft screen (it takes them from ~450 frames;
+    // the game's state isn't readable before the title: still packed), then Alt + click on the title (taken
+    // once it has been up ~600 frames; earlier ones are ignored) until the pages come.
+    if (!g_running) {
+      if (g_frame > 450 && g_frame % 40 < 4) buttons |= 2;
+    } else if (GameState(*m) == kTitle) {
+      if (g_clicks.empty() && g_frame % 30 == 0) QueueClick(-1, 0, kAlt);
+    } else if (GameState(*m) == kSecrets) {
+      g_docs_shown = true;
+      LOG("gridrunner: game secrets after %d frames", g_frame);
+    }
+    if (g_frame > 4000) g_docs_shown = true, LOG("gridrunner: no game secrets after %d frames", g_frame);
+  } else if (g_docs && GameState(*m) == kTitle) {
+    g_quit = true;  // the last page read: back to the disks
+  }
   bool test = g_test;
   g_test = false;
   if (pad || test) {
@@ -495,6 +516,7 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
 const char* Hint(st::Machine* m, bool have_pad) {
   int s = GameState(*m);
   if (s == kPause) return have_pad ? "Start: resume   B: quit to title" : "Space: resume   Q or Esc: quit to title";
+  if (g_docs) return nullptr;  // (the docs: A next page, B back - no hint over the pages)
   if (!have_pad) return nullptr;
   switch (s) {
     case kTitle:
@@ -507,6 +529,9 @@ const char* Hint(st::Machine* m, bool have_pad) {
 
 bool QuitRequested() { return g_quit; }
 
+void StartDocs() { g_docs = true, g_docs_shown = false; }
+bool DocsSkipping() { return g_docs && !g_docs_shown; }
+
 void SetHideEntryLane(bool on) { g_hide_entry_lane = on; }
 
 void Reset() {
@@ -518,6 +543,7 @@ void Reset() {
   g_lb = g_rb = g_du = g_dd = false;
   g_title_hint_ms = 0;
   g_quit = g_running = g_hooked = g_test = false;
+  g_docs = g_docs_shown = false;
   g_clicks.clear();
   g_click_frame = g_prev_state = -1;
   g_frame = 0;

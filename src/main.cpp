@@ -376,6 +376,7 @@ struct Context {
   // it is there next time), else a test card.
   std::vector<uint32_t> preview;
   fs::path preview_path;
+  bool in_game_docs = false;  // the game runs to its own docs screen (Game::docs_in_game)
   std::string docs_keys;  // typed into a docs reader once it runs  // keys for the program's first console prompts (a crack's trainer questions)
 };
 
@@ -514,6 +515,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   remaster_grid::Start();
   input::Reset();
   grid::Reset();
+  if (gridrunner && c.in_game_docs) grid::StartDocs();
   game::g_llamatron = llamatron;
   if (llamatron) game::ApplyPatches(machine, opt.game);
   input::SetMode(mode);
@@ -687,8 +689,12 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
     // vsyncs (presents block on vsync): even motion. Otherwise game frames are due by the wall clock (at most a
     // few at once after a stall), shown on the next refresh.
     int run = 1;
+    const bool skipping = gridrunner && grid::DocsSkipping();  // in-game docs: on the way there, unseen
     if (menu::IsOpen()) {
       run = 0;
+    } else if (skipping && !opt.headless) {
+      run = 100;  // (~0.1 s of host time: the whole way in about a second)
+      menu_resync = true;  // the frame clock starts again once there
     } else if (!opt.headless) {
       double hz = machine.FrameHz();
       // A game at 60 Hz (or back at 50): a display mode that's a multiple of its rate, if there is one.
@@ -948,6 +954,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
     }
 
     std::vector<float>& samples = machine.Audio();
+    if (skipping) samples.clear();
     // Volume: the game's normalising gain (all games equally loud) times the master volume (settings; read
     // live, squared so the slider feels even: 0.5 = -12 dB). Applied before the WAV dump (tests measure it).
     if (!samples.empty()) {
@@ -976,7 +983,9 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
       SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
       SDL_RenderClear(renderer);
       SDL_FRect view{0, 0, float(st::kScreenW), float(view_h)};
-      if (remaster::Active() && shown == texture) {
+      if (skipping) {
+        // black until the docs screen is there
+      } else if (remaster::Active() && shown == texture) {
         // Between the last two frames: how far the clock (or the vsyncs) is into the frame shown last.
         float alpha = 1;
         if (opt.remaster_alpha >= 0) alpha = opt.remaster_alpha;
@@ -1112,13 +1121,16 @@ GameEnd RunEntry(Context& c, const games::Game& g, bool direct, bool docs = fals
   if (!g.install.empty() && !fs::exists(c.save_dir / g.program, ec) && !Install(c, g, files)) {
     end = fail(g.name + " couldn't be installed from " + g.source.string());
   } else {
-    c.type_ahead = docs ? std::string() : games::ConsoleAnswers(g);
-    c.game = docs ? nullptr : &g;  // (no faster CPU for the reader)
+    c.in_game_docs = docs && g.docs_in_game;  // the game itself, run to its docs screen
+    const bool reader = docs && !c.in_game_docs;
+    c.type_ahead = reader ? std::string() : games::ConsoleAnswers(g);
+    c.game = reader ? nullptr : &g;  // (no faster CPU for the reader)
     c.docs_keys = g.docs_keys;
-    crt::SetGame(docs ? std::string() : g.id);  // the game's own CRT look
-    remap::SetGame(docs ? std::string() : g.id, g.mode);  // the player's buttons for it
-    end = docs ? RunGame(c, g.docs_program, direct, input::Mode::kDocs)
-               : RunGame(c, games::ProgramToRun(g), direct, g.mode);
+    crt::SetGame(reader ? std::string() : g.id);  // the game's own CRT look
+    remap::SetGame(reader ? std::string() : g.id, g.mode);  // the player's buttons for it
+    end = reader ? RunGame(c, g.docs_program, direct, input::Mode::kDocs)
+                 : RunGame(c, games::ProgramToRun(g), direct, g.mode);
+    c.in_game_docs = false;
     crt::SetGame("");
     remap::SetGame("", input::Mode::kGeneric);
     c.type_ahead.clear();
@@ -1248,15 +1260,34 @@ std::vector<std::string> TextLines(const disk::Bytes& b) {
   return lines;
 }
 
-// A game's text docs: in its save folder (an installer wrote it), else on its disk. Empty if none.
+// A game's text docs: each file docs_text names ("A|B") from its save folder (an installer wrote it), else its
+// disk, one after the other with its name as a heading. Empty if none.
 disk::Bytes DocsText(const Context& c, const games::Game& g) {
   if (g.docs_text.empty()) return {};
-  std::error_code ec;
-  fs::path saved = games::SaveDir(g, c.save_dir) / g.docs_text;
-  if (fs::exists(saved, ec)) return disk::ReadHostFile(saved.string());
-  std::map<std::string, disk::Bytes> files = games::ReadSource(g.source, nullptr);
-  auto it = files.find(g.docs_text);
-  return it == files.end() ? disk::Bytes{} : it->second;
+  std::vector<std::pair<std::string, disk::Bytes>> found;
+  std::map<std::string, disk::Bytes> files;
+  bool read = false;
+  for (size_t at = 0; at <= g.docs_text.size();) {
+    size_t bar = std::min(g.docs_text.find('|', at), g.docs_text.size());
+    std::string name = g.docs_text.substr(at, bar - at);
+    at = bar + 1;
+    std::error_code ec;
+    fs::path saved = games::SaveDir(g, c.save_dir) / name;
+    if (fs::exists(saved, ec)) {
+      found.emplace_back(name, disk::ReadHostFile(saved.string()));
+      continue;
+    }
+    if (!read) files = games::ReadSource(g.source, nullptr), read = true;
+    if (auto it = files.find(name); it != files.end()) found.emplace_back(name, it->second);
+  }
+  if (found.size() == 1) return found[0].second;
+  disk::Bytes all;
+  for (const auto& [name, body] : found) {
+    std::string head = (all.empty() ? "" : "\n\n") + std::string("----- ") + name + " -----\n\n";
+    all.insert(all.end(), head.begin(), head.end());
+    all.insert(all.end(), body.begin(), body.end());
+  }
+  return all;
 }
 
 // --program: a game we know runs as from the launcher (its controls and save folder); anything else from --disk
@@ -1359,7 +1390,7 @@ int main(int argc, char** argv) {
       std::vector<bool> v;
       for (const games::Game& g : c.games) {
         std::error_code ec;
-        v.push_back(!g.docs_program.empty() || !DocsText(c, g).empty());
+        v.push_back(!g.docs_program.empty() || g.docs_in_game || !DocsText(c, g).empty());
       }
       return v;
     };
@@ -1373,7 +1404,7 @@ int main(int argc, char** argv) {
       }
       int game = l.Selected();
       const games::Game& g = c.games[size_t(game)];
-      if (a == launcher::Action::kDocs && g.docs_program.empty()) {  // a text file: shown by the launcher
+      if (a == launcher::Action::kDocs && g.docs_program.empty() && !g.docs_in_game) {  // text: the launcher shows it
         l.ShowText(TextLines(DocsText(c, g)));
         continue;
       }

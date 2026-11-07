@@ -72,6 +72,7 @@ std::vector<Known> KnownGames() {
             "BACK                 settings   (B there: back to the disks)", "",
             "The mouse works too: the original controls."};
   g.year = 1989;  // Atarimania, MobyGames (Wikipedia says 1991)
+  g.docs_in_game = true;  // GAME SECRETS: the title's own manual pages (gridrunner.cpp StartDocs)
   add(g, "GRIDRUNR.PRG");
 
   g = {};
@@ -89,8 +90,10 @@ std::vector<Known> KnownGames() {
             "              B: back   LB: slow pointer",
             "BACK       settings, and back to the disks",
             "L3 / F12   music off / pulse / full (hears the PC)",
-            "Yak's README.DOC is in userdata\\tripatron."};
-  g.docs_text = "README.DOC";  // written by the installer
+            "X on the disks: the manual and Yak's README.DOC."};
+  // The manual (Tools/make_trip_manual.py: Piku's 2003 transcription, PDF -> MANUAL.TXT in the game's folder),
+  // then Yak's README.DOC (written by the installer).
+  g.docs_text = "MANUAL.TXT|README.DOC";
   g.year = 1988;  // this disk: the shareware release of 24/08/92 (README.DOC)
   add(g, "TRIP1.TOS", true);
 

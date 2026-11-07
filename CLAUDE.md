@@ -184,6 +184,16 @@ elease\Llamatron-<ver>-windows.zip (no game
 - Tests: --press=N:grt@<0..1> (part squeeze), --watch=@<hex> (absolute address). Scripted runs die often:
   defender2_invincible=1 in the test userdata's settings.txt; Andes dies around frame 1150 with the smoke input.
 
+## Docs on X (2026-11-07)
+- Docs on X (owner 2026-11-07): X on the carousel = the disk's docs (hint "X DOCS" only where there are some);
+  the CRT toggle left X / C (F9 and the panel keep it). Gridrunner: Game::docs_in_game - the game runs unseen
+  (grid::StartDocs / DocsSkipping: black, silent, 100 frames a present) to its title, clicks Alt + left until GAME
+  SECRETS (state 7, ~954 frames, ~1 s), no hint; A pages, B or the last page (title) = back to the disks.
+  Trip-A-Tron: docs_text "MANUAL.TXT|README.DOC" (names joined, each found shown with a heading); MANUAL.TXT =
+  Tools/make_trip_manual.py (pdftotext, not pypdf: it splits words) from Private	rip-a-tron-manual.pdf (James
+  "Piku" Grimwood's 2003 transcription), into the Trip folder; package_portable.ps1 runs it and checks it. The
+  text viewer: right stick pages too, L3 / Home top, End bottom.
+
 ## Settings panel and buttons (2026-11-03; supersedes the "Back = pause", "B twice = disks" notes below)
 - DONE (owner tested 2026-11-03: the panel and every pause "very happy"; the Settings disk stays last on the
   carousel). Known: turning Remaster off while suspended shows the frame without sprites until resumed.
