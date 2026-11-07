@@ -758,6 +758,8 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           if (p.what == "gy") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_NORTH, test_pad = true;
           if (p.what == "glb") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, test_pad = true;
           if (p.what == "grb") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, test_pad = true;
+          if (p.what == "gr3") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_RIGHT_STICK, test_pad = true;
+          if (p.what == "gl3") tp.buttons |= 1u << SDL_GAMEPAD_BUTTON_LEFT_STICK, test_pad = true;
           if (p.what == "mleft") buttons |= 2;
           if (p.what == "mright") buttons |= 1;
           if (p.what.rfind("mx", 0) == 0) mouse_x += float(std::atof(p.what.c_str() + 2));
@@ -1008,6 +1010,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
           y += 10;
         }
       }
+      if (tripatron && !menu::IsOpen()) trip::DrawOverlay(renderer, float(view_h));
       if (menu::IsOpen()) {
         menu::Render(renderer);
         auto ms = opt.menushots.find(menu_ticks);

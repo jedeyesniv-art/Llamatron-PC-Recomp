@@ -127,18 +127,32 @@ The mouse plays it the original way: move the ship with the mouse, the buttons f
 
 TRIP-A-TRON - XBOX PAD
 ----------------------
+Played like an instrument. The basics:
   Left stick      move the light source           Right stick     spirograph: the stick is the position
-  RT (hold)       make patterns                   LT              latch pattern making on / off
-  D-pad L / R     previous / next effect          D-pad U / D     symmetry
-  LB / RB         palette                         A               surprise me (effect, symmetry, palette)
-  X               stop all patterns (panic)       Y               the Control Panel up / down
-  Start           the other demo (starfields)     B               the number row in turn (palettes;
-                                                                  the lasers in the starfield demo)
+  RT              paint - how hard you squeeze sets how thickly patterns flow (light = sparse pulses)
+  LT              the right mouse button (what it does is set in Global Parameters: VECTOR locks the light
+                  into a dead-straight line, CENTRE brings it back to the middle)
+  R3              latch painting on / off         D-pad U / D     previous / next symmetry
+  D-pad L / R     previous / next effect (the keyboard's Q, A and Z rows)
+  LB / RB (tap)   previous / next palette         A               surprise me (effect, symmetry, palette)
+  X               stop all patterns (panic)       B               the number row in turn (palettes;
+  Start           the other demo (starfields)                     the lasers in the starfield demo)
   L3 (or F12)     music: off / pulse / full - it listens to whatever your PC is playing
   Back            settings (and leaving, back to the disks)
-On the Control Panel and its screens the sticks are the mouse, A / X its left / right buttons (the icons do
-different things with each), and B goes back: out of any screen (Sillyscope, Colour Cooker, the sequencers,
+Hold to choose (a picture shows the choices while you hold):
+  LB held         the effect wheel: point the right stick at an effect, let go of LB to choose it;
+                  the d-pad left / right changes keyboard row
+  RB held         the symmetry wheel, the same way; hold Y too and it sets the pre-symmetry instead
+  Y               a tap: the Control Panel up / down. Held: the plot routine - LB pre-symmetry, A remap,
+                  X cube, B shear, Start resize, RB post-symmetry on / off (F1-F6); d-pad up / down steps
+                  the pre-symmetry
+On the Control Panel the d-pad jumps from icon to icon and names it, with what A (left button) and X (right
+button) do there; the sticks are the mouse (LB held: slowly, for the small buttons; in the tool screens the
+d-pad nudges a pixel at a time). B goes back: out of any screen (Sillyscope, Colour Cooker, the sequencers,
 Disk...) to the Control Panel, closes an alert or a Sym / Cube panel, and on the bare panel puts it away.
+Settings (Back) has its feel: light speed, stick curve, FLOW (inertia for long glides), paint pressure on /
+off, GYRO (turn the pad to move the light, like a pen - Steam Deck, PlayStation and Switch pads) and a rumble
+on the beat in music mode.
 Keyboard and mouse work as on the ST (F1-F6 are its own: the settings are on the pad's Back only). The first
 time it installs itself into userdata\tripatron (a few seconds). Its README is on the how-to-play page.
 
@@ -266,6 +280,7 @@ Written on the first run with every setting and its default. Edit it while the g
   trip_calm_background    0 = Trip-A-Tron's palettes flash as originally
   trip_music              Trip-A-Tron's music mode (0 off, 1 pulse, 2 full; also L3 / F12)
   trip_stick_speed, trip_stick_curve, trip_stick_deadzone, trip_spiro_size   Trip-A-Tron's sticks
+  trip_flow (0..1), trip_pressure, trip_gyro, trip_gyro_speed, trip_rumble   Trip-A-Tron's feel
 The CRT look needs a Direct3D 12 graphics card (any from the last ten years); without one the picture is
 shown plain.
 

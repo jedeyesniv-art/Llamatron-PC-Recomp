@@ -348,7 +348,17 @@ font doubled with a raster gradient. In README.md.
   sub-state $1BB34, buttons table $242BC). Verified all 36 icon / button screens. Pointer = $10692/4 in every
   screen, buttons $10696. Other manual notes: icons differ by left / right button; F1-F6 plot switches,
   Delete = next symmetry is presym, ; / ' secondary cursor on / off, ? starfield off, right button steers some
-  starfields - not on the pad yet (owner to choose).
+  starfields.
+- Trip-A-Tron as an instrument (2026-11-07, owner: "best-in-class", holistic redesign; pass 1 done): RT analog =
+  paint density (pulses: 0.12 + 0.88 p^2 starts a frame; trip_pressure), LT = right button, R3 = latch, LB / RB
+  tap = palette, held (11 frames or the right stick pushed) = effect wheel (keyboard rows Q / A / Z, d-pad row) /
+  symmetry wheel (+ Y = pre-symmetry: Delete, then the key 5 frames later), Y tap = panel, held = plot layer (LB A
+  X B Start RB = F1-F6, d-pad U/D = pre-symmetry), overlays trip::DrawOverlay (main.cpp after the hint), panel
+  d-pad grid (9 x 3 incl. presets, kIcons names + A / X meanings), tool screens: d-pad nudge, LB slow pointer;
+  trip_flow (inertia), trip_gyro / _speed (SDL sensor, yaw / pitch), trip_rumble (music beats). Tests: gr3 / gl3,
+  "trip key $xx" logged when a test pad is used. Pass 2 (research): live keys from the KML key table, the six
+  stages' on / off flags in the Y overlay, Global Parameter banks on Y + d-pad L/R, starfield / laser steering on
+  the right stick (KML variables SVX... named at $2F2E5 region of TRIP.PRG).
 - Shared (2026-11-01): src/pad.cpp = pad 1 as a per-frame snapshot (real or the test pad from --press=N:g...)
   with edges; src/stgames.cpp = RMC and Andes controls (modes kRmc / kAndes). Registry play rule (games.h
   play_at / play_value / play_word / play_vbl): the faster CPU (--cpu, x8) while that RAM value says "play";
