@@ -70,7 +70,7 @@ Runs were mostly without input, so options screens, name entry and high-score ta
   CPU, captured; pixel-identical. Left: the version screen and the logo (its lightning is pass-timed); the high
   scores' pillars are inline copies (would need the scroll-band piece).
 - **Camels DONE 2026-11-06** (STE + TT): the menus (their starfield, sliding) and the end-of-wave bonus; faster CPU on
-  the menus. Title: a still picture. Known: a type 1 (stretched) sprite clipped at the top line shades a little
+  the menus. Title: a still picture. 2026-11-07: the warp and the restart oasis (password) between levels too. Known: a type 1 (stretched) sprite clipped at the top line shades a little
   differently from the game's own clipping (seen once, TT bonus).
 - **Llamatron DONE 2026-11-06**: the title (parade, sheep; faster CPU there) and the continue screen (its frozen
   play picture is the last play pass's items, re-added each frame: before, it showed an empty arena - a bug since
@@ -81,7 +81,8 @@ Runs were mostly without input, so options screens, name entry and high-score ta
 - **Gridrunner DONE 2026-11-06** (as far as it goes): the wave intro's letters and game over's letters captured at 50
   a second (`grid::DrawsEveryVbl`). The title and its menus stay: the title's timeout counts drawn frames (at 50 a
   second it left for the attract screens 5x sooner), and they only draw the mouse pointer through the main loop.
-  The intro's star burst and the ship-lost screen are palette / raster cycles (nothing to slide).
+  The intro's star burst is a palette cycle (nothing to slide). The ship-lost screen (raster bands rolling up a
+  line a frame) is crossfaded between frames since 2026-11-07 (`remaster::SetCrossfade`: smooth, display-rate).
 - **Photon Storm DONE 2026-11-06**: states 12 / 7 / 11 / 8 captured, drawn every VBL (divisor 1) on the faster
   CPU; pixel-identical but for behind-the-text stars (`Item::behind`, new: drawn under the ST picture's
   non-zero pixels) that the original erases when two share a 16-px word. Change-overs (state 2) stay the ST picture.

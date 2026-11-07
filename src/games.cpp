@@ -111,7 +111,8 @@ std::vector<Known> KnownGames() {
       "Giant camels against the forces of evil.", {0.62f, 0.40f, 0.10f, 1}, {0.20f, 0.65f, 0.90f, 1});
   k.back().game.play_at = 0x3DD3E, k.back().game.play_value = 0x111DE;
   k.back().game.play_value2 = 0x112A2, k.back().game.play_value3 = 0x194A8;
-  k.back().game.play_more = {0x1084A, 0x10C4A};  // the menus (VBL-timed; not the change-overs between: CPU-timed)
+  // the menus (VBL-timed; not the change-overs between: CPU-timed), the warp and the oasis between levels
+  k.back().game.play_more = {0x1084A, 0x10C4A, 0x11018, 0x122AC, 0x12328, 0x12362, 0x12396, 0x123DA};
   k.back().game.mode = input::Mode::kRmc;
   k.back().game.docs_text = "README.TXT";
   k.back().game.ste = true;
@@ -149,7 +150,8 @@ std::vector<Known> KnownGames() {
   // title $102C4, menus $1085E, keys $1AF32 (flags $3E047), joystick $3E0C8 / 9, frame counter $3D94E.
   k.back().game.play_at = 0x3E0CE, k.back().game.play_value = 0x11206;
   k.back().game.play_value2 = 0x112CA, k.back().game.play_value3 = 0x194E0;
-  k.back().game.play_more = {0x1085E, 0x10C5E};  // the menus
+  // the menus, the warp and the oasis between levels
+  k.back().game.play_more = {0x1085E, 0x10C5E, 0x1102C, 0x122D4, 0x12350, 0x1238A, 0x123BE, 0x12402};
   k.back().game.mode = input::Mode::kRmc;
   k.back().game.docs_text = "README.TXT";
   k.back().game.ste = true;

@@ -16,6 +16,8 @@
 // the same instruction at $18B5A and ends with the same one at $18B92. So does the frame routine $4CE2A ($4CE30 /
 // $4CE4A; the drawing is the callback *$4CE04) that game over's own loop calls (state 8: the rising letters; other
 // screens call it too, but they aren't captured: grid::DrawsEveryVbl).
+// The ship-lost screen (state 4: "GOT YOU, SCUMBAG!!" on a Mandelbrot set) draws nothing that moves: its timer B
+// rasters roll a gradient up a line every VBL. remaster::SetCrossfade fades each frame into the next.
 #include "remaster_grid.h"
 
 #include <cstring>
@@ -181,6 +183,9 @@ void Update(st::Machine* m) {
   if (!g_installed && (state == grid::kTitle || Captured(state))) Install(m);
   if (!g_installed) return;
   remaster::DrawQueued(m, "gridrunner");
+  // The ship-lost screen (2026-11-07, owner: still 50 a second): a still picture under raster bands rolling up a
+  // line a frame - crossfaded between frames (remaster::SetCrossfade).
+  remaster::SetCrossfade(state == grid::kShipLost && remaster::Enabled());
   if (Frozen(state) && remaster::Enabled()) remaster::Hold();
   // Left play some other way than through the draw pass: the ST picture.
   else if (g_capture && !Captured(state)) g_capture = false, remaster::Stop();

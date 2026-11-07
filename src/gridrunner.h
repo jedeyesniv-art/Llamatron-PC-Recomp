@@ -32,7 +32,7 @@ namespace grid {
 
 // Game states ($4B632, dispatched from the VBL through the table at $12636).
 enum State {
-  kPlay = 1, kIntro = 3, kTitle = 5, kLevelSelect = 6, kSecrets = 7, kGameOver = 8, kNameEntry = 9, kOptions = 10,
+  kPlay = 1, kIntro = 3, kShipLost = 4, kTitle = 5, kLevelSelect = 6, kSecrets = 7, kGameOver = 8, kNameEntry = 9, kOptions = 10,
   kPausing = 11, kPause = 12
 };
 int GameState(st::Machine& m);

@@ -102,7 +102,10 @@ elease\Llamatron-<ver>-windows.zip (no game
   2026-11-06: also the wave intro (state 3, pass $18B5A..$18B92: the flying letters; its star burst is a palette
   cycle) and game over (8, frame routine $4CE30..$4CE4A); grid::DrawsEveryVbl = play / intro / game over at
   divisor 1, grid::FastCpu = play / intro (game over's click wait is a CPU loop). Not the title and menus (their
-  timeout counts drawn frames) nor the ship-lost screen (4: a raster cycle). Intro ~0.4 s shorter (its end waits
+  timeout counts drawn frames). The ship-lost screen (4: a still picture, raster bands rolling up a line a frame
+  through a gradient; 2026-11-07, owner: "at 50") is crossfaded between frames (remaster::SetCrossfade, generic:
+  the previous frame over this one at 1 - alpha; checked: alpha 0.5 = the 50/50 blend), so it presents at the
+  display's rate. Intro ~0.4 s shorter (its end waits
   for the letters, which line up with drawn frames); pixel-identical with capture. Next session:
   REMASTER.md "Where we are" (all ports done; its "Polish to-do" list is the plan; no push until the owner says).
 - Camels remaster (2026-11-03): src/remaster_rmc.cpp, STE + TT builds (TT addresses via Tools/mapaddr.py; the 512K
@@ -114,6 +117,11 @@ elease\Llamatron-<ver>-windows.zip (no game
   the menus (games.cpp play_more; the change-overs $1AC3C are CPU-timed). TT: $1085E / $10C5E, $10EFC / $10E32,
   $112CA / $115D2. Pixel-identical but for a TT bonus frame where a stretched (type 1) streak is clipped at
   line 16 (the sandbox image sliced vs the routine's own clipping).
+  2026-11-07 (owner, Deck: still 50 a second between levels): the warp (exit code $3C3AE / STE $3C01C = 3: hook
+  $1102C / draw $110D8, "warp to next oasis!") and the restart oasis after it and after every 5th level's bonus
+  (hooks $122D4 $12350 $1238A (the password: fire or 500 frames) $123BE $12402, draw $12414: the camel walks in /
+  off) captured, faster CPU; STE $11018 / $110C4, $122AC $12328 $12362 $12396 $123DA / $123EC. Pixel-identical
+  both builds. Test: --poke=2600:@3C3AE:3 in play (TT).
 - Sprite textures capped (2026-11-07, the owner's Deck: Camels TT crashed in d3d12core.dll = vkd3d-proton, in CopyDescriptorsSimple from our glow pass's flush, ~80 s into play): remaster.cpp never freed its baked / layer textures (TT ~1850 made in 80 s; and every earlier game's stayed). Now FreeTextures at each game's start and a soft cap (kMaxLive 1024: the least recently drawn, idle >= 1000 draw frames, go; TT settles ~1500 live). Not reproduced here: vkd3d-proton 3.1 on this PC (DLLs next to a copy of the exe, logsk) ran TT 4 min without the cap, 4327 textures, no crash - the Deck's AMD driver differs. If it crashes again, the cap wasn't it. Measured SDL's GPU descriptor heap use: ~257 of 2048 a command buffer (not an overflow).
 - Defender 2 remaster (2026-11-03): src/remaster_d2.cpp - many small draw routines hooked (sprites, plotters,
   OR-ed stars / particles / lasers via remaster::IndexAt, ground bands, terrain, planet); HUD and radar left.

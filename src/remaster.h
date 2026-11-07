@@ -106,6 +106,11 @@ void Reveal(int x, int y, int old_colour, float at);
 // first a line lower, rising to its place by the next step). Set every frame while it runs (x / y inclusive).
 void SetScroll(int x0, int y0, int x1, int y1);
 void ClearScroll();
+// A still picture whose colours change every frame (Gridrunner's ship-lost screen: raster bands rolling up a line a
+// frame through a smooth gradient): between frames the previous picture fades into this one, so the bands glide
+// at the display's rate (the same as sliding them a fraction of a line: the CRT averages each line anyway). Set
+// every frame while it runs (false: off).
+void SetCrossfade(bool on);
 // Not capturing (another screen than play): the next frames are shown as the ST drew them.
 void Stop();
 // Not capturing, but the game keeps its last picture (paused): the last frame's items stay, still.

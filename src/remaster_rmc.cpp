@@ -24,6 +24,11 @@
 // reload, the pixel's mask -, OR-ed in; the VBL ($10EAA) moves each one a line down when its countdown runs
 // out): hooked, each star a dot sliding by its countdown. Not the change-overs between them
 // (hook $1AC3C: CPU-timed) nor the title (a still picture).
+// Between levels (2026-11-07, owner: still 50 a second): the warp (hook $11018, draw $110C4: "warp to next oasis!",
+// the play scene rushing by; ends when $390E2 passes $15E, counted in the VBL) and the oasis (hooks $122AC ->
+// $12328 -> $12362 (the password: fire or 500 frames) -> $12396 -> $123DA, draw $123EC: the camel walks in and off
+// over a still picture) - VBL-timed, captured, on the faster CPU (games.cpp play_more). TT: warp $1102C / $110D8,
+// oasis $122D4 $12350 $1238A $123BE $12402 / $12414.
 // A new sprite image is drawn by the game the first time (decoded in the sandbox between frames): for that frame
 // it sits under the captured items (seen: an animated score popup under the camel for a frame).
 #include "remaster_rmc.h"
@@ -55,6 +60,8 @@ struct Addrs {
   uint32_t type6, plot2x2, plot2x1;  // Hardcore: compiled sprites (type 6), 2 x 2 / 2 x 1 one-plane plotters
   uint32_t menu1, menu1_draw, menu2, menu2_draw, bonus, bonus_draw;  // other screens' hooks and draw routines
   uint32_t menu_stars;  // the menus' starfield ("lea table,a6")
+  uint32_t warp, warp_draw;  // between levels: "warp to next oasis!" (the play scene rushing by)
+  uint32_t oasis[5], oasis_draw;  // then the oasis: the camel walks in, the password, it walks off (five hooks)
 };
 const Addrs kSte = {0x3DD3E, 0x111DE, 0x1056C, 0x4036A, 0x11450, 0x1A854, 0x3DF54,
                     0x1A3B6, 0x1A580, 0x1B0FA, 0x1AF14, 0x37000, 0x3DF54,
@@ -62,7 +69,8 @@ const Addrs kSte = {0x3DD3E, 0x111DE, 0x1056C, 0x4036A, 0x11450, 0x1A854, 0x3DF5
                     0x11D50, 0x11D78, 0x27C4C, 0x3D5C0, 0x3D5BE,
                     0x1247A, 0x1B700, 0x39384,
                     0x10BEA, 0x1B286, 0x3CB1A, 0x10BCE, 16, 16, "mutant camels", 0, 0, 0,
-                    0x1084A, 0x10EE8, 0x10C4A, 0x10E1E, 0x112A2, 0x115AA, 0x10EE8};
+                    0x1084A, 0x10EE8, 0x10C4A, 0x10E1E, 0x112A2, 0x115AA, 0x10EE8,
+                    0x11018, 0x110C4, {0x122AC, 0x12328, 0x12362, 0x12396, 0x123DA}, 0x123EC};
 // The TT Megamix (REVTT.TOS): found from the STE build's code bytes (32 bullets, twice the objects: the tables
 // after the first are further on).
 const Addrs kTt = {0x3E0CE, 0x11206, 0x10580, 0x426FA, 0x11478, 0x1A88C, 0x3E2E4,
@@ -71,7 +79,8 @@ const Addrs kTt = {0x3E0CE, 0x11206, 0x10580, 0x426FA, 0x11478, 0x1A88C, 0x3E2E4
                    0x11D78, 0x11DA0, 0x27C8A, 0x3D950, 0x3D94E,
                    0x124A2, 0x1B73E, 0x39686,
                    0x10BFE, 0x1B2C4, 0x3CEAA, 0x10BE2, 16, 16, "camels tt", 0, 0, 0,
-                   0x1085E, 0x10EFC, 0x10C5E, 0x10E32, 0x112CA, 0x115D2, 0x10EFC};
+                   0x1085E, 0x10EFC, 0x10C5E, 0x10E32, 0x112CA, 0x115D2, 0x10EFC,
+                   0x1102C, 0x110D8, {0x122D4, 0x12350, 0x1238A, 0x123BE, 0x12402}, 0x12414};
 // Hardcore (HARDCORE.PRG, Yak 1992): the same library - main loop, dispatcher $171E2 and its types, the plotter -
 // found with Tools/mapaddr.py from the Camels' STE dump. Play's draw routine $10974 (pause $11242). Type 2 clips
 // from line 1 here (the playfield's frame is drawn as part of the background).
@@ -107,8 +116,14 @@ bool Playing(const st::Machine& m) { return Get32(m, A.hook) == A.play && Get32(
 bool Captured(const st::Machine& m) {
   if (Playing(m)) return true;
   uint32_t hook = Get32(m, A.hook), draw = Get32(m, A.draw_ptr);
-  return A.menu1 && ((hook == A.menu1 && draw == A.menu1_draw) || (hook == A.menu2 && draw == A.menu2_draw) ||
-                     (hook == A.bonus && draw == A.bonus_draw));
+  if (!A.menu1) return false;
+  if ((hook == A.menu1 && draw == A.menu1_draw) || (hook == A.menu2 && draw == A.menu2_draw) ||
+      (hook == A.bonus && draw == A.bonus_draw) || (hook == A.warp && draw == A.warp_draw))
+    return true;
+  if (draw == A.oasis_draw)
+    for (uint32_t h : A.oasis)
+      if (hook == h) return true;
+  return false;
 }
 
 // "jsr (a3)": a frame is drawn.

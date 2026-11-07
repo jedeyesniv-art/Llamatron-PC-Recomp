@@ -47,6 +47,13 @@ struct Scroll {
   int age = 0;
   float period = 2;
 } g_scroll;  // Reveal: the frame shown's / the frame being run's
+// SetCrossfade: the frame shown's pixels (to become the previous picture when the next frame comes).
+struct Fade {
+  bool on = false, have_prev = false;
+  int frame = -1;  // g_shown when `cur` was taken
+  std::vector<uint32_t> cur;
+} g_fade;
+SDL_Texture* g_fade_prev = nullptr;
 Capture* g_cap = &g_real;
 std::vector<Item> g_prev, g_cur;  // the previous frame shown and this one
 std::vector<std::pair<uint64_t, SandboxCall>> g_queue;  // sprite images to draw in the sandbox
@@ -668,7 +675,13 @@ void FrameShown(uint32_t screen) {
   }
 }
 
-bool Active() { return Enabled() && ((g_real.capturing && g_have) || !g_reveal.empty() || g_scroll.on); }
+bool Active() { return Enabled() && ((g_real.capturing && g_have) || !g_reveal.empty() || g_scroll.on || g_fade.on); }
+
+void SetCrossfade(bool on) {
+  if (on == g_fade.on) return;
+  g_fade = Fade{};
+  g_fade.on = on;
+}
 
 void SetScroll(int x0, int y0, int x1, int y1) {
   if (!g_scroll.on) g_scroll = Scroll{}, g_scroll.on = true;
@@ -716,6 +729,27 @@ void Draw(SDL_Renderer* r, SDL_Texture* st_texture, const SDL_FRect& view, float
       SDL_FRect dst{float(s.x0 * kScale), float(s.y0 * kScale) + down, src.w * kScale, src.h * kScale};
       SDL_RenderTexture(r, st_texture, &src, &dst);
       SDL_SetRenderClipRect(r, nullptr);
+    }
+    if (g_fade.on && st_pixels) {  // the previous picture over this one, fading out as the frame goes on
+      if (g_fade.frame != g_shown) {
+        if (!g_fade_prev) {
+          g_fade_prev = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 200);
+          if (g_fade_prev)
+            SDL_SetTextureBlendMode(g_fade_prev, SDL_BLENDMODE_BLEND), SDL_SetTextureScaleMode(g_fade_prev, SDL_SCALEMODE_NEAREST);
+        }
+        if (g_fade_prev && g_fade.cur.size() == 320 * 200) {
+          for (uint32_t& p : g_fade.cur) p |= 0xFF000000u;
+          SDL_UpdateTexture(g_fade_prev, nullptr, g_fade.cur.data(), 320 * 4);
+          g_fade.have_prev = true;
+        }
+        g_fade.cur.assign(st_pixels, st_pixels + 320 * 200);
+        g_fade.frame = g_shown;
+      }
+      float a = std::clamp(alpha, 0.0f, 1.0f);
+      if (g_fade.have_prev && a < 1) {
+        SDL_SetTextureAlphaModFloat(g_fade_prev, 1 - a);
+        SDL_RenderTexture(r, g_fade_prev, nullptr, &full);
+      }
     }
   } else {  // colour 0 (line by line), then the items behind; the picture comes over them below
     for (int y = 0; y < 200;) {
@@ -865,6 +899,7 @@ void Shutdown() {
   DropTextures();
   if (g_target) SDL_DestroyTexture(g_target), g_target = nullptr;
   if (g_over) SDL_DestroyTexture(g_over), g_over = nullptr;
+  if (g_fade_prev) SDL_DestroyTexture(g_fade_prev), g_fade_prev = nullptr;
 }
 
 }  // namespace remaster
