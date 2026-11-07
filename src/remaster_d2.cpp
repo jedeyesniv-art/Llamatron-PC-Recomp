@@ -80,11 +80,18 @@ constexpr uint32_t kAttractFrames[] = {0x1FA38, 0x117F0, 0x11C70};
 }  // namespace
 
 bool DrawsEveryVbl(const st::Machine& m) { return Playing(m) || Attract(m); }
+bool Captured(const st::Machine& m) { return DrawsEveryVbl(m); }
 
+// Audit 2026-11-07: also the end-of-wave screen (state 4, frame $12848: ATTACK LEVEL n COMPLETED, the bonus
+// humanoids, a wireframe pyramid) and the fade when the ship is lost (state 5 with play's frame). Both are partly
+// timed by their drawing: every VBL on the faster CPU they end 4 / 3 frames (of 340 / 38) sooner than the
+// original, capture on or off alike; captured at the original pace they'd change with the capture instead.
 bool Attract(const st::Machine& m) {
   int state = Get16(m, kState);
-  if (state != 2 && state != 8) return false;
   uint32_t frame = Get32(m, kFramePtr);
+  if (state == 4) return frame == 0x12848;
+  if (state == 5) return frame == kPlayFrame;
+  if (state != 2 && state != 8) return false;
   for (uint32_t f : kAttractFrames)
     if (frame == f) return true;
   return false;
@@ -96,7 +103,7 @@ namespace {
 void OnLoopCall(st::Machine& m) {
   g_m = &m;
   if (!remaster::Decoding(m)) {
-    g_capture = remaster::Enabled() && DrawsEveryVbl(m);
+    g_capture = remaster::Enabled() && Captured(m);
     g_screen = Get32(m, kScreen) & 0xFFFFFF;
     g_in_pass = g_capture;
     if (g_capture) remaster::BeginFrame(g_screen);
@@ -526,7 +533,7 @@ void Update(st::Machine* m) {
   if (!g_installed && DrawsEveryVbl(*m)) Install(m);
   if (!g_installed) return;
   remaster::DrawQueued(m, "defender 2");
-  if (g_capture && !DrawsEveryVbl(*m)) g_capture = g_in_pass = false, remaster::Stop();
+  if (g_capture && !Captured(*m)) g_capture = g_in_pass = false, remaster::Stop();
 }
 
 }  // namespace remaster_d2
