@@ -236,14 +236,14 @@ std::vector<Known> KnownGames() {
                         "direction; left fire, right thrust. Control smart",
                         "bomb, Left Shift boost, Alt single shots. Right",
                         "Shift pauses (Space resumes, Q quits)."};
-  wip("hardcore", "HARDCORE", "HARDCORE.PRG", "HARDCORE  -  YAK, 1992 (UNFINISHED)",
+  wip("hardcore", "HARDCORE", "HARDCORE.PRG", "HARDCORE  -  YAK, 1991 (UNFINISHED)",
       "Never released: Yak's unfinished blaster.", {0.30f, 0.06f, 0.06f, 1}, {0.85f, 0.85f, 0.85f, 1});
   // VBL $168F2 calls the hook at $338BA: $104EA title, $145D0 level intro, $10C82 play, $11242 paused.
   k.back().game.play_at = 0x338BA, k.back().game.play_value = 0x10C82;
   k.back().game.mode = input::Mode::kHardcore;
-  k.back().game.year = 1992;
+  k.back().game.year = 1991;  // owner 2026-11-07 (its D-Bug 100 menu says 1992)
   k.back().game.docs_program = "DOC100E.PRG", k.back().game.docs_keys = "b";  // B = Yak's notes for testers
-  k.back().game.help = {"HARDCORE  -  YAK, 1992 (UNFINISHED)", "",
+  k.back().game.help = {"HARDCORE  -  YAK, 1991 (UNFINISHED)", "",
                         "A 5-level evaluation demo, never released.",
                         "Your four guns ride the edges of the field.",
                         "The guns fire by themselves; the puck",

@@ -8,7 +8,7 @@ Jeff Minter's Atari ST games running natively on Windows with modern pad control
     Atari TT - 32 bullets instead of 8, twice the objects)
   Andes Attack (1988)
   Defender 2 (Arcadia 1990: Defender, Defender II and Stargate)
-  Hardcore (1992), Yak's unfinished 5-level evaluation demo
+  Hardcore (1991), Yak's unfinished 5-level evaluation demo
   Photon Storm (Arc 1990)
 The original game code runs unchanged inside a small Atari ST built into this program, plus a few optional
 improvements listed below.

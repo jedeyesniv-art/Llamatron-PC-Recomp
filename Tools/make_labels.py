@@ -1,4 +1,5 @@
-"""The launcher's disk labels from the owner's photos of hand-written labels (res/labels/*-photo.jpg):
+"""The launcher's disk labels: the owner's drawn sheets (res/labels/sheet-N.png, see SHEETS), else the owner's
+photos of hand-written labels (res/labels/*-photo.jpg):
 crop to the drawn box, take out the room lighting (divide by the paper's brightness), make the ink black and the
 paper white with soft edges (the ruled lines go), scale to 512 x 392 (the label is 76 x 58 mm).
 Writes res/labels/<name>.png (to look at) and src/labels.inc (run-length packed 8-bit grey for the program).
@@ -25,12 +26,24 @@ LABELS = [
     ('rmctt', 'rmctt-photo.jpg', (0, 0, 1, 1), None),
     ('settings', 'settings-photo.jpg', (0, 0, 1, 1), None),  # the launcher's Settings disk (2026-11-03)
 ]
-# Every disk uses the Ink Free stand-in (owner 2026-11-01: "replace my handwritten labels so all the disks are
-# consistent"); the photo processing stays for a disk taken off this list.
+# The Ink Free stand-in (owner 2026-11-01: "replace my handwritten labels so all the disks are consistent"), now
+# only for a disk not on the drawn sheets (SHEETS, 2026-11-07); the photo processing stays for a disk on neither.
 STAND_IN = {'llamatron': ['Llamatron'], 'gridrunner': ['Super', 'Gridrunner'], 'tripatron': ['Trip-A-Tron'],
             'rmc': ['Mutant', 'Camels'], 'defender2': ['Defender 2'], 'andes': ['Andes', 'Attack'],
             'hardcore': ['Hardcore'], 'photonstorm': ['Photon', 'Storm'], 'rmctt': ['Camels', 'TT Megamix'],
             'settings': ['Settings']}
+# The owner's redrawn labels (2026-11-07, drawn digitally: res/labels/sheet-N.png, all on one template of 2 x 2
+# label cells between two narrow strips): which sheet, column, row. These come first; the stand-ins are left for
+# a disk with no cell here.
+SHEETS = {'photonstorm': (1, 0, 0), 'llamatron': (1, 1, 0), 'rmc': (1, 0, 1), 'rmctt': (1, 1, 1),
+          'tripatron': (2, 0, 0), 'andes': (2, 1, 0), 'gridrunner': (2, 0, 1), 'defender2': (2, 1, 1),
+          'hardcore': (3, 0, 0), 'settings': (3, 1, 0)}
+# The cells' drawn lines (outer edges) on the 2360 x 1640 template: columns, rows.
+SHEET_COLS = [(368, 1260), (1240, 2101)]
+SHEET_ROWS = [(143, 835), (812, 1576)]
+# The stand-in's box sits inside these margins of the label: a cell is scaled evenly to fit them (the bottom
+# row's cells are taller), on white paper.
+SHEET_FIT = (24, 26, W - 24, H - 26)
 # The signature at the bottom right ("by Yak"); none on our own Settings disk.
 BYLINE = {'settings': ''}
 
@@ -63,6 +76,24 @@ def stand_in(lines, byline='by Yak'):
                stroke_width=4, stroke_fill=0)
     big = big.rotate(-2, resample=Image.BICUBIC, fillcolor=255)
     return big.resize((W, H), Image.LANCZOS)
+
+
+def from_sheet(sheet, col, row):
+    """A cell of one of the owner's drawn sheets, its border lines included: the brush's grey made ink black and
+    the paper white, scaled evenly into SHEET_FIT on a white label."""
+    im = Image.open(os.path.join(ROOT, 'res', 'labels', 'sheet-%d.png' % sheet)).convert('L')
+    sx, sy = im.width / 2360, im.height / 1640
+    (x0, x1), (y0, y1) = SHEET_COLS[col], SHEET_ROWS[row]
+    cell = im.crop((int(x0 * sx), int(y0 * sy), int(x1 * sx), int(y1 * sy)))
+    g = np.asarray(cell, dtype=np.float32) / 255
+    v = np.clip((g - 0.25) / (0.85 - 0.25), 0, 1) * 255
+    cell = Image.fromarray(v.astype(np.uint8))
+    fx0, fy0, fx1, fy1 = SHEET_FIT
+    k = min((fx1 - fx0) / cell.width, (fy1 - fy0) / cell.height)
+    cell = cell.resize((round(cell.width * k), round(cell.height * k)), Image.LANCZOS)
+    out = Image.new('L', (W, H), 255)
+    out.paste(cell, ((W - cell.width) // 2, (H - cell.height) // 2))
+    return out
 
 
 def stroke_mask(size, lines, width):
@@ -125,7 +156,9 @@ def main():
     arrays = []
     for name, photo, box, touch_up in LABELS:
         path = os.path.join(ROOT, 'res', 'labels', photo)
-        if name in STAND_IN:
+        if name in SHEETS:
+            img = from_sheet(*SHEETS[name])
+        elif name in STAND_IN:
             img = stand_in(STAND_IN[name], BYLINE.get(name, 'by Yak'))
         else:
             img = process(path, box, globals()[touch_up] if touch_up else None)
