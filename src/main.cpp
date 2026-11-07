@@ -32,6 +32,7 @@
 #include "remaster_llama.h"
 #include "launcher.h"
 #include "settings_menu.h"
+#include "steam.h"
 #include "log.h"
 #include "machine.h"
 
@@ -45,6 +46,8 @@ struct Options {
   std::string userdata;    // --userdata=<dir>: saves, settings and log there (tests: keep the player's own)
   bool trace_tos = false;  // --trace-tos
   bool fullscreen = true;  // --window / --fullscreen
+  int window_w = 0, window_h = 0;
+  bool steam_add = false;  // --steam-add: ADD TO STEAM once, then quit (tests: with LLAMATRON_STEAM_ROOT)  // --window-size=WxH (screenshots for art; default 1280 x 800)
   bool match_refresh = true;  // --refresh=desktop: keep the desktop's refresh rate in fullscreen
   game::Options game;       // --flashes: keep the original screen flashes
   bool entry_lane = false;  // --entry-lane: Gridrunner shows the edges of enemies in the entry lane (original)
@@ -187,6 +190,8 @@ Options ParseArgs(int argc, char** argv) {
       std::transform(o.program.begin(), o.program.end(), o.program.begin(), ::toupper);
     }
     else if (Arg(a, "aspect", &v)) o.pal_aspect = v != "square";
+    else if (a == "--steam-add") o.steam_add = true;
+    else if (Arg(a, "window-size", &v)) std::sscanf(v.c_str(), "%dx%d", &o.window_w, &o.window_h);
     else if (a == "--flashes") o.game.flashes = true;
     else if (a == "--entry-lane") o.entry_lane = true;
     else if (a == "--aim=8") o.aim = 0;
@@ -1364,7 +1369,8 @@ int main(int argc, char** argv) {
   // Picture height in a 320-wide space: PAL pixel aspect (14.75 / 8) / 2 = 0.92 -> 200 / 0.92 = 217.
   c.view_h = opt.pal_aspect ? int(std::lround(st::kScreenH * 2.0 * 8.0 / 14.75)) : st::kScreenH;
   if (!opt.headless) {
-    c.window = SDL_CreateWindow("Llamasoft on the ST", st::kScreenW * 4, st::kScreenH * 4,
+    c.window = SDL_CreateWindow("Llamasoft on the ST", opt.window_w > 0 ? opt.window_w : st::kScreenW * 4,
+                                opt.window_h > 0 ? opt.window_h : st::kScreenH * 4,
                                 SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     c.renderer = crt::CreateRenderer(c.window);
     if (c.renderer) crt::Init(c.renderer);
@@ -1384,6 +1390,10 @@ int main(int argc, char** argv) {
     else LOG("no audio: %s", SDL_GetError());
   }
 
+  if (opt.steam_add) {
+    LOG("steam test: %s", steam::AddToSteam().c_str());
+    return 0;
+  }
   // --program (or tests): straight into that game, and leaving it quits. Otherwise the launcher.
   if (opt.program_given || opt.headless || !c.renderer) {
     RunProgram(c);

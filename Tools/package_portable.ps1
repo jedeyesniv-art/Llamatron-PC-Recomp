@@ -74,6 +74,11 @@ function Copy-Extras([string]$to) {
     if (-not (Test-Path $pdf)) { throw "$pdf not found" }
     New-Item -ItemType Directory -Force $to | Out-Null
     Copy-Item $pdf (Join-Path $to "Trip-A-Tron manual.pdf")
+    # Steam library art (Tools\make_steam_art.py -> res\steam): Settings, ADD TO STEAM copies it into Steam.
+    New-Item -ItemType Directory -Force (Join-Path $to "Steam art") | Out-Null
+    foreach ($f in "capsule.png", "wide.png", "hero.png", "logo.png") {
+        Copy-Item (Join-Path $repo "res\steam\$f") (Join-Path $to "Steam art")
+    }
 }
 
 # Fresh folder, but keep userdata\ if it's already there (the owner's scores and settings).

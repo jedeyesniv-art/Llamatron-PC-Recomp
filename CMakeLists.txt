@@ -78,6 +78,7 @@ add_executable(llamatron WIN32
   src/remaster_d2.cpp
   src/settings.cpp
   src/settings_menu.cpp
+  src/steam.cpp
   src/log.cpp
   src/crash.cpp)
 target_link_libraries(llamatron PRIVATE SDL3::SDL3-static musashi)

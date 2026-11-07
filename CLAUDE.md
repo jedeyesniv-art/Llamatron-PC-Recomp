@@ -201,6 +201,21 @@ elease\Llamatron-<ver>-windows.zip (no game
   unreadable). Package: Extras\Trip-A-Tron manual.pdf. Gotcha fixed: a docs_via disk sent down the text path
   looped the launcher (no text -> kDocs again every frame).
 
+## Steam (2026-11-07, owner: art + an ADD TO STEAM option on the Settings disk)
+- Art: Tools/make_steam_art.py <shots> -> res/steam/ capsule (600 x 900), wide (920 x 430), hero (1920 x 620), logo
+  (transparent), in make_cover.py's style; tiles = screenshots through each game's own CRT++ look (not in git:
+  logs/steamshots), taken with --window --window-size=1920x1200 --program=X --rshot=N:<name>_N.bmp and the smoke
+  inputs (PICKS in the script: shot, centre, zoom). Shipped as Extras\Steam art (package_portable.ps1).
+- src/steam.cpp AddToSteam (panel GENERAL, ADD TO STEAM, Kind::kSteam; outcome on the row, <= 18 letters):
+  launched from Steam (env SteamGameId = appid << 32 | 0x02000000; Proton: Steam root = Z: +
+  STEAM_COMPAT_CLIENT_INSTALL_PATH) -> art only, for every user whose shortcuts.vdf has that appid. Else (Windows,
+  registry SteamPath, loginusers.vdf MostRecent user): our exe's shortcut found -> art; else Steam must be
+  closed (steam.exe; it rewrites shortcuts.vdf on exit), the entry is appended (binary VDF; appid =
+  crc32("\"exe\"" + "Llamasoft on the ST") | 0x80000000, verified; .bak kept) and the art copied to
+  config\grid\<appid>{p,,_hero,_logo}.png. Tests: LLAMATRON_STEAM_ROOT=<stand-in folder> (also skips the running
+  check) + --steam-add (once, then quit). Verified on a copy of the owner's files: the 14 existing entries byte-
+  identical, second run = art only, SteamGameId path. Never run --steam-add without the stand-in root.
+
 ## Settings panel and buttons (2026-11-03; supersedes the "Back = pause", "B twice = disks" notes below)
 - DONE (owner tested 2026-11-03: the panel and every pause "very happy"; the Settings disk stays last on the
   carousel). Known: turning Remaster off while suspended shows the frame without sprites until resumed.

@@ -10,11 +10,15 @@
 #include "log.h"
 #include "remap.h"
 #include "settings.h"
+#include "steam.h"
 
 namespace menu {
 namespace {
 
-enum class Kind { kToggle, kSlider, kChoice, kFullscreen, kResetCrt, kInfo };  // kInfo: a line to read (choices[0])
+std::string g_steam_status;  // ADD TO STEAM's last outcome (shown on its row)
+
+enum class Kind { kToggle, kSlider, kChoice, kFullscreen, kResetCrt, kInfo, kSteam };  // kInfo: a line to read (choices[0])
+// kSteam: ADD TO STEAM (steam.h), done on A; the outcome shown on the row.
 
 struct Item {
   const char* section;  // "general", "crt" or a game id
@@ -60,6 +64,9 @@ const std::vector<Item>& Items() {
       {"general", "EXCLUSIVE FULLSCREEN", "fullscreen_exclusive", Kind::kToggle, 0, 0, 1, 1, {},
        "Switches the display to a 50 / 100 Hz mode for even motion, at the cost of a blink when switching away.",
        true},
+      {"general", "ADD TO STEAM", "", Kind::kSteam, 0, 0, 1, 1, {},
+       "Press A: this program becomes a game in your Steam library, with its own library art. Started from Steam "
+       "(Steam Deck), it adds the art to the shortcut you made. A new shortcut needs Steam closed; Steam shows the art once restarted."},
 
       {"crt", "SCANLINES", "crt_scanlines", Kind::kSlider, 0.45, 0, 1, 0.05, {}, "How dark the gaps between the lines are."},
       {"crt", "BEAM, DARK COLOURS", "crt_beam_min", Kind::kSlider, 0.35, 0, 1, 0.05, {}, "How thick the lines of dark colours are."},
@@ -353,7 +360,7 @@ void Change(int dir) {
     case Kind::kToggle: case Kind::kFullscreen: SetValue(*it, Value(*it) != 0 ? 0 : 1); break;
     case Kind::kChoice: SetValue(*it, std::clamp(Value(*it) + dir, it->lo, it->hi)); break;
     case Kind::kSlider: SetValue(*it, Value(*it) + dir * it->step); break;
-    case Kind::kResetCrt: case Kind::kInfo: break;
+    case Kind::kResetCrt: case Kind::kInfo: case Kind::kSteam: break;
   }
 }
 
@@ -393,6 +400,11 @@ void Press() {
   }
   const Item* it = Selected();
   if (!it) return;
+  if (it->kind == Kind::kSteam) {
+    g_steam_status = steam::AddToSteam();
+    LOG("settings: add to Steam: %s", g_steam_status.c_str());
+    return;
+  }
   if (it->kind == Kind::kResetCrt && !g_game.empty() && std::string(it->section) == "crtpp") {
     for (const Item& i : Items())  // the player's own CRT++ for the game goes: its built-in look (or the shared)
       if (PerGame(i) && std::string(i.key) != "crt") settings::Erase(OwnKey(i));
@@ -717,6 +729,9 @@ void Render(SDL_Renderer* r) {
         break;
       }
       case Kind::kResetCrt:
+        break;
+      case Kind::kSteam:
+        text(g_steam_status.empty() ? (sel ? "PRESS A" : "") : g_steam_status, vx, ry, g_steam_status.empty() ? kDim : kOn);
         break;
       case Kind::kInfo:
         text(it.choices.empty() ? "" : it.choices[0], vx, ry, sel ? kWhite : kOn);

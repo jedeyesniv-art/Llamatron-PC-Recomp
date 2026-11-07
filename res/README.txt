@@ -27,6 +27,11 @@ Trip-A-Tron's folder) in the "game" folder.
 Settings, high scores and a log file are kept in the "userdata" folder next to the program (each game other
 than Llamatron and Gridrunner in a folder of its own there).
 
+Steam (and the Steam Deck): on the Settings disk, GENERAL, ADD TO STEAM puts the program in your Steam
+library as a game, with its own library art (the pictures are in Extras\Steam art). On Windows, close Steam
+first if it isn't there yet. On a Steam Deck, add llamatron.exe as a non-Steam game in desktop mode (Proton),
+start it from Steam, then ADD TO STEAM gives that shortcut its art. Steam shows the art once restarted.
+
 More disks: put any Atari ST disk image (.msa, .st or .stx) in the "game" folder and it appears as a disk of
 its own on the start screen, named after the file, with simple pad controls (left stick and A = the
 joystick, right stick = the mouse, RT / LT = its buttons, Start = Space, B = Esc, Back = settings). If it
