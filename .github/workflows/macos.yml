@@ -1,0 +1,42 @@
+# The macOS build: one universal app (Apple Silicon + Intel), ad-hoc signed, uploaded as an artifact.
+# It has no games in it (they aren't in the repo): put a game folder in the app's Contents/Resources, or next to
+# the .app.
+name: macOS
+
+on:
+  push:
+    branches: [main, mac-port]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel 4
+
+      - name: Sign (ad hoc) and check
+        run: |
+          APP="build/Llamasoft on the ST.app"
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --verbose "$APP"
+          lipo -info "$APP/Contents/MacOS/Llamasoft on the ST"
+          otool -L "$APP/Contents/MacOS/Llamasoft on the ST"
+
+      - name: Package
+        run: |
+          mkdir -p out
+          ditto -c -k --keepParent "build/Llamasoft on the ST.app" out/LlamasoftOnTheST-macos.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LlamasoftOnTheST-macos
+          path: out/LlamasoftOnTheST-macos.zip

@@ -1363,6 +1363,13 @@ int main(int argc, char** argv) {
   // The log: --log, else userdata\llamatron.log next to the exe.
   std::error_code ec;
   c.save_dir = opt.userdata.empty() ? ExeDir() / "userdata" : fs::path(opt.userdata);
+#ifdef __APPLE__
+  // macOS: never inside the app (signed, and Gatekeeper may run it from a read-only copy): ~/Library/Application
+  // Support/Llamasoft on the ST.
+  if (opt.userdata.empty()) {
+    if (char* pref = SDL_GetPrefPath(nullptr, "Llamasoft on the ST")) c.save_dir = fs::path(pref), SDL_free(pref);
+  }
+#endif
   fs::create_directories(c.save_dir, ec);
   logging::Open(opt.log.empty() ? (c.save_dir / "llamatron.log").string().c_str() : opt.log.c_str());
   InstallCrashHandler();

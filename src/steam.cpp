@@ -5,6 +5,13 @@
 // and writes it back on exit: changed while it runs, the change is lost - the grid images are only files.
 #include "steam.h"
 
+#ifndef _WIN32
+// Windows only for now (the Steam Deck runs the Windows build under Proton).
+namespace steam {
+std::string AddToSteam() { return "WINDOWS ONLY"; }
+}  // namespace steam
+#else
+
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
@@ -305,3 +312,5 @@ std::string AddToSteam() {
 }
 
 }  // namespace steam
+
+#endif  // _WIN32

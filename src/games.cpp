@@ -332,6 +332,12 @@ fs::path ExeDir() {
 
 std::vector<fs::path> SearchRoots() {
   std::vector<fs::path> roots = {ExeDir() / "game", ExeDir()};
+#ifdef __APPLE__
+  // macOS: ExeDir is the app's Contents/Resources; a game folder next to the .app is looked in too.
+  fs::path res = ExeDir();
+  if (!res.has_filename()) res = res.parent_path();  // SDL's base path ends in a '/'
+  roots.push_back(res.parent_path().parent_path().parent_path() / "game");  // Resources -> Contents -> .app -> folder
+#endif
   for (fs::path p = ExeDir(); !p.empty(); p = p.parent_path()) {
     roots.push_back(p / "Private");
     if (p == p.parent_path()) break;

@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.24)
-project(Llamatron VERSION 2.0.0 LANGUAGES C CXX RC)
+# macOS: one universal app (Apple Silicon + Intel), from macOS 11. Set before project() so it applies everywhere.
+if(APPLE)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "")
+  if(NOT CMAKE_OSX_ARCHITECTURES)
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "")
+  endif()
+endif()
+project(Llamatron VERSION 2.0.0 LANGUAGES C CXX)
+if(WIN32)
+  enable_language(RC)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,9 +60,12 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(musashi PRIVATE -w)
 endif()
 
-configure_file(res/llamatron.rc.in ${CMAKE_BINARY_DIR}/llamatron.rc @ONLY)
-add_executable(llamatron WIN32
-  ${CMAKE_BINARY_DIR}/llamatron.rc
+if(WIN32)
+  configure_file(res/llamatron.rc.in ${CMAKE_BINARY_DIR}/llamatron.rc @ONLY)
+  set(PLATFORM_SOURCES ${CMAKE_BINARY_DIR}/llamatron.rc)
+endif()
+add_executable(llamatron WIN32 MACOSX_BUNDLE
+  ${PLATFORM_SOURCES}
   src/main.cpp
   src/machine.cpp
   src/cpu_musashi.cpp
@@ -85,6 +98,17 @@ add_executable(llamatron WIN32
   src/log.cpp
   src/crash.cpp)
 target_link_libraries(llamatron PRIVATE SDL3::SDL3-static musashi)
+if(APPLE)
+  # "Llamasoft on the ST.app"; the games go in its Contents/Resources/game (SDL_GetBasePath is Resources), saves
+  # in ~/Library/Application Support (main.cpp).
+  set_target_properties(llamatron PROPERTIES
+    OUTPUT_NAME "Llamasoft on the ST"
+    MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/res/Info.plist.in
+    MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.jedeyesniv-art.llamasoft-on-the-st"
+    MACOSX_BUNDLE_BUNDLE_NAME "Llamasoft on the ST"
+    MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+endif()
 # miniaudio 0.11.21 (public domain / MIT-0), as in our Neon port: loopback capture of the PC's sound.
 target_include_directories(llamatron PRIVATE ${CMAKE_SOURCE_DIR}/third_party/miniaudio)
 set_source_files_properties(src/miniaudio_impl.cpp PROPERTIES COMPILE_OPTIONS "-w")
