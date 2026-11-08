@@ -7,7 +7,8 @@ untouched underneath.**
 
 Eight games from Llamasoft's ST years:
 
-- **Llamatron: 2112** and its bonus game **Super Gridrunner**
+- **Llamatron: 2112**
+- **Super Gridrunner**
 - **Trip-A-Tron**, the light synthesiser
 - **Revenge of the Mutant Camels**: the 1 MB STE version and the TT Megamix
 - **Andes Attack**
@@ -15,19 +16,20 @@ Eight games from Llamasoft's ST years:
 - **Photon Storm**
 - **Hardcore**, Yak's unfinished evaluation demo
 
-The headlines:
+Top features:
 
-- **CRT+ and CRT++:** an accurate, beautiful CRT, or a Llamasoft-inspired psychedelic facelift.
 - **An interpolated, unlocked frame rate:** sprites drawn at four times the ST's resolution and moving at
   your monitor's full refresh rate.
-- **Pad controls tuned by hand for every game:** each one designed and play-tested by a person for how these
+- **CRT+ and CRT++:** an accurate, beautiful CRT, or a Llamasoft-inspired psychedelic facelift.
+- **Pad controls tuned by hand for every game:** each one designed and play-tested by a human for how these
   games feel on a modern controller.
 - **Trip-A-Tron, fully working:** with a custom music-reactive module that plays along with whatever your
   PC is playing.
+- **Per-game settings** a settings panel accessed with the Back button, enabling graphical tweaks on the fly and per-game control remapping.
 
-All of it responds to the pad quicker than the games did on a real ST.
+All of it responds to the pad quicker than the games did on a real ST thanks to emulation run-ahead.
 
-A hobby project, not affiliated with or endorsed by Jeff Minter or Llamasoft.
+A hobby project, not affiliated with Jeff Minter or Llamasoft.
 
 ## The game is the original: the remaster sits on top
 
@@ -40,14 +42,11 @@ a sprite on the screen, the remaster notes what it is and where it goes. Then it
 at 4x the resolution, interpolating them between the game's own positions. The game never knows: its memory,
 its timing and its decisions are exactly what they'd be without the remaster.
 
-We checked that game by game, rather than just assuming it:
+Claude checked game by game:
 
 - **Same picture:** with the remaster on, its picture composed at the ST's own resolution matches the
   original's pixel for pixel, over minutes of scripted play on every game.
 - **Same game:** the game's memory with the remaster and run-ahead on is identical to a run without them.
-
-The few known exceptions are cosmetic and documented in `REMASTER.md`: Hardcore's two trail rings, and
-Photon Storm's title stars, which the original erased in pairs.
 
 Where we change something on purpose, it's listed below with the setting that turns it off.
 
@@ -69,7 +68,7 @@ The picture keeps its true size, in the shape it had on a UK TV in 1991.
 games and puts them behind the action: bright things leave tinted trails that zoom, swirl and colour-cycle as
 they fade. It adds a composite TV's colour bleed and a boosted glow. It's lurid, joyful, and on by default.
 
-Each game ships with its own look, tuned by eye: the trail colour, length, zoom and glow suit that game. Every
+Each game ships with its own look, tuned by hand: the trail colour, length, zoom and glow suit that game. Every
 setting can be tuned further in the settings panel, live, with the game paused behind it.
 
 Both looks are also included as shader presets for **ShaderGlass and RetroArch** (`Extras\CRT shaders`, MIT
