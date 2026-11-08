@@ -213,7 +213,7 @@ def readme_cover(shots):
     raster_line(img, th, 6, 3)
     raster_line(img, 800 - th - 6, 6, 3, 4)
     llama, title, sub = llama_image(), title_image(5), sub_image(3)
-    remaster = text_image('2.0 - THE REMASTER', 4, lambda f: RAINBOW[min(7, int(f * 8))], st((0, 0, 2)))
+    remaster = text_image('2.0 - REMASTER', 4, lambda f: RAINBOW[min(7, int(f * 8))], st((0, 0, 2)))
     lw, lh = llama.width * 4, llama.height * 4
     gap = 44
     text_w = max(title.width, remaster.width, sub.width)
