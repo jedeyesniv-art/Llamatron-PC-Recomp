@@ -1,4 +1,4 @@
-# Llamasoft on the ST 2.0
+# Llamasoft on the ST 2.0 - Remaster
 
 ![Llamasoft on the ST](res/cover.png)
 

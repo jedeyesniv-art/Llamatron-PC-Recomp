@@ -5,7 +5,7 @@ build the zip with `Tools\package_portable.ps1 -Release`.
 
 ---
 
-## Llamasoft on the ST 2.0: the remaster
+## Llamasoft on the ST 2.0 - Remaster
 
 **The same games, byte for byte, made to look and feel the way you remember them, only better.**
 

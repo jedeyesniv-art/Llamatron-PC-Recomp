@@ -409,7 +409,7 @@ Crash: the log gets "CRASH: ... llamatron.exe+0x..." frames; llvm-symbolizer --o
 0x140000000+offset.
 
 ## Cover: res/cover.png (2.0, 2026-11-08: python -P Tools/make_steam_art.py logs/steamshots --cover - the owner's CRT++
-title captures as the tiles, "2.0 - THE REMASTER"; the 1.x cover below was make_cover.py's, whose helpers it reuses)
+title captures as the tiles, "2.0 - REMASTER"; the 1.x cover below was make_cover.py's, whose helpers it reuses)
 ## Cover 1.x (2026-11-01): Tools/make_cover.py <folder of screenshots>
 A 320 x 200 ST screen x4 in ST colours (3 bits a channel): 8 game tiles (80 x 56 crops of --shot screenshots,
 CROPS in the script; the screenshots aren't in git), make_icon.py's llama on a badge, the title in SDL's 8 x 8

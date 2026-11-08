@@ -201,7 +201,7 @@ def logo():
 
 def readme_cover(shots):
     """The README's cover 1280 x 800 (res/cover.png, 2.0): four games above and four below, the llama, the title and
-    "2.0 - THE REMASTER" on stars between them, rainbow raster lines either side."""
+    "2.0 - REMASTER" on stars between them, rainbow raster lines either side."""
     img = Image.new('RGB', (1280, 800), (0, 0, 0))
     th = 228  # each tile row
     names = ['llamatitle', 'gridrunner', 'tripatron', 'camels', 'andes', 'defender2', 'hardcore', 'photonstorm']
