@@ -47,7 +47,8 @@ The disks on a carousel: pick a game.
   Y               how to play (and its options: trainers, which program)
   X               the game's docs, where there are some: the disk's own notes or reader, Gridrunner's
                   GAME SECRETS pages (A next page, B back), Trip-A-Tron's manual (the PDF is in Extras\),
-                  Andes Attack: Yak's essay on its reviews, from Gridrunner. In the text viewer: up /
+                  Andes Attack: Yak's essay on its reviews, from Gridrunner, Photon Storm's manual
+                  (typed in by Parasite of LSD; game\docs). In the text viewer: up /
                   down scroll, LB / RB or the right stick turn pages, B back
   B, B            quit
 Keyboard: cursor keys, Enter, H = how to play, X = docs, F9 = CRT look, Esc twice = quit.

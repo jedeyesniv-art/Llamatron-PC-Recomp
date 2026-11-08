@@ -200,6 +200,9 @@ elease\Llamatron-<ver>-windows.zip (no game
   back to the title = done. Every docs run shows CRT++ as CRT+ (crt::SetDocs; owner: D2 / Hardcore readers
   unreadable). Package: Extras\Trip-A-Tron manual.pdf. Gotcha fixed: a docs_via disk sent down the text path
   looped the launcher (no text -> kDocs again every frame).
+- Photon Storm's docs (owner 2026-11-08): its manual typed in by Parasite of LSD, Private\docs\PHOTONSTORM.TXT
+  (kept out of git like the Trip manual); docs_text names are also looked up in <search root>\docs (game\docs in
+  the release: package_portable.ps1 copies Private\docs\*.TXT there and checks it).
 
 ## Launcher previews, rumble, pad button names (2026-11-07, owner)
 - src/preview.cpp: the picked disk's game runs unseen behind the carousel (after 0.45 s still; launcher Update

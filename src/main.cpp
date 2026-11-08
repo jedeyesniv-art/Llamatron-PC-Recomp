@@ -1303,7 +1303,17 @@ disk::Bytes DocsText(const Context& c, const games::Game& g) {
       continue;
     }
     if (!read) files = games::ReadSource(g.source, nullptr), read = true;
-    if (auto it = files.find(name); it != files.end()) found.emplace_back(name, it->second);
+    if (auto it = files.find(name); it != files.end()) {
+      found.emplace_back(name, it->second);
+      continue;
+    }
+    for (const fs::path& root : games::SearchRoots()) {  // docs of our own: a docs folder (game\docs, Private\docs)
+      fs::path p = root / "docs" / name;
+      if (fs::exists(p, ec)) {
+        found.emplace_back(name, disk::ReadHostFile(p.string()));
+        break;
+      }
+    }
   }
   if (found.size() == 1) return found[0].second;
   disk::Bytes all;

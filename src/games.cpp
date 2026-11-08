@@ -226,6 +226,8 @@ std::vector<Known> KnownGames() {
   k.back().game.play_more = {12, 7, 11, 8, 10, 3, 5, 4, 6};  // the ARC logo, title, enemy guide, high scores, pause, bonus
   k.back().game.mode = input::Mode::kPhotonStorm;
   k.back().game.year = 1990;
+  // Docs: the manual as typed in by Parasite of LSD (owner 2026-11-08; Private\docs, the release's game\docs).
+  k.back().game.docs_text = "PHOTONSTORM.TXT";
   k.back().game.help = {"PHOTON STORM  -  JEFF MINTER, ARC 1990", "",
                         "Blast the alien swarms in deep space.", "",
                         "LEFT STICK           point the ship; push far to fly",
