@@ -583,6 +583,10 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   changes colour 0 per line). Pad: see stgames.h. States after play: 4 game over, 5 high score table; a name
   is typed there (Crawio $1A38C: letters, Space = "_", 3 of them, count $1BC96, cursor $1BC92 >= 0 while
   entering), then back to the title. Pad: up / down picks a letter (shown on the hint line), A types it.
+- Defender 2 high scores (owner 2026-11-08: "not saving"): the original never saved them - three tables at $325B2
+  (Defender / Stargate / Defender II, 10 x 8 ASCII digits + 3 initials) only in RAM; its one file write ($4CD98) is
+  a screenshot saver (defpic0.neo). stgames.cpp D2Scores: userdata\defender2\D2SCORES.DAT put back once VBL $70 =
+  $4AF1A and the table is valid, written when it changes (not previews / sandboxes: SaveDir empty).
 - Defender 2 at 60 Hz (owner 2026-11-01: default; the smart bomb flash stays - "very quick"): it reads
   $FF820A at boot ($1EC04): bit 1 clear = 60 Hz -> "60 hz game speeds adjusted" ($2043F = 1; Options can
   switch it, $1F33E). Registry boot_60hz + setting defender2_60hz (1) -> Machine::SetBoot60Hz (sync_ 0).
