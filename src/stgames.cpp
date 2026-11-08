@@ -459,6 +459,63 @@ void D2Scores(st::Machine* m) {
   LOG("defender 2: high scores saved");
 }
 
+// Defender II's sector codes (variant $1F7F8 = 2 only; owner 2026-11-08): player select ($1157E) shows SECTOR CODE
+// and the start code under the triangle. The sector $1157C (0..15; play starts on level sector * 4 + 1, $10B2E)
+// rises at game over to the furthest reached ($17E3A) - for that session only. A left click below y $5A starts
+// typing a code ($324AE = the letter being typed, -1 none; "-----" at $32495): each frame the letter under the
+// pointer (table $32819, x / 8) is put there, a left click fixes it, a right click gives up. Five letters are
+// looked up in $324B0 (20 words, letter j of word i at i + j * $14): 0..15 = sectors ("start", "floyd", ...),
+// 16..19 cheats ("goaty" $1C42A / $1C40E, "raven" $1C40E, "incas" $1C410, "andes" $11792). $11732 shows the
+// sector's code (copied to $32495 and $324A8), $117EE = 1 redraws the base level / bonus.
+// We keep the furthest sector in the save folder and put it back at start, and the pad picks any sector up to it.
+constexpr uint32_t kD2Variant = 0x1F7F8, kD2Sector = 0x1157C, kD2Typing = 0x324AE, kD2Codes = 0x324B0,
+                   kD2CodeShown = 0x32495, kD2CodeUnder = 0x324A8, kD2Redraw = 0x117EE;
+constexpr const char* kD2SectorFile = "D2SECTOR.DAT";
+// The cheats' jump table $11794 sends "andes" to goaty's routine ($117A4: invincible); the routine after them,
+// $117E4 ($11792 = 1: a special weapon fired, $1C948, refills the energy $2BA3E instead of spending it), is reached
+// by none. Owner 2026-11-08: andes gets it.
+constexpr uint32_t kD2AndesEntry = 0x117A0, kD2GoatyCheat = 0x117A4, kD2EnergyCheat = 0x117E4;
+// "raven" ($1C40E) turns on debug keys in play (handler $1C314): i invincible on / off, d autopilot, n end the wave.
+// On the pad (owner 2026-11-08): R3, L3, both. Each acts when let go, so pressing both doesn't count as one.
+constexpr uint32_t kD2Raven = 0x1C40E;
+constexpr uint8_t kD2KeyI = 0x17, kD2KeyD = 0x20, kD2KeyN = 0x31;
+bool g_d2_l3 = false, g_d2_r3 = false, g_d2_both = false;
+int g_d2_best_sector = -1;  // the furthest sector (-1: not read yet this run)
+bool g_d2_sector_row = false, g_d2_typing = false;
+
+bool D2Codes(const st::Machine& m) { return Get16(m, kD2Variant) == 2; }
+
+void D2ShowSector(st::Machine* m, int sector) {
+  Put16(m, kD2Sector, sector);
+  for (int j = 0; j < 5; ++j) {
+    uint8_t c = m->Ram()[kD2Codes + sector + j * 0x14];
+    m->Ram()[kD2CodeShown + j] = c, m->Ram()[kD2CodeUnder + j] = c;
+  }
+  Put16(m, kD2Redraw, 1);
+}
+
+void D2Sectors(st::Machine* m) {
+  if (Get32(*m, 0x70) == kD2Vbl && Get32(*m, kD2AndesEntry) == kD2GoatyCheat) Put32(m, kD2AndesEntry, kD2EnergyCheat);
+  if (m->SaveDir().empty() || m->sandbox || Get32(*m, 0x70) != kD2Vbl) return;
+  const std::filesystem::path path = std::filesystem::path(m->SaveDir()) / kD2SectorFile;
+  int sector = Get16(*m, kD2Sector);
+  if (sector > 15) return;
+  if (g_d2_best_sector < 0) {
+    std::ifstream in(path);
+    int best = 0;
+    if (!(in >> best) || best < 0 || best > 15) best = 0;
+    g_d2_best_sector = best;
+    if (best > sector) Put16(m, kD2Sector, best);  // (before player select draws: its set-up reads it)
+    if (best) LOG("defender 2: furthest sector %d put back", best);
+    return;
+  }
+  if (sector <= g_d2_best_sector) return;
+  g_d2_best_sector = sector;
+  std::ofstream out(path, std::ios::trunc);
+  out << sector << "\n";
+  LOG("defender 2: furthest sector now %d", sector);
+}
+
 void D2Click(Point p, int delay) {
   g_d2_click_at = p;
   g_d2_click_in = delay;
@@ -467,6 +524,7 @@ void D2Click(Point p, int delay) {
 void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   remaster_d2::Update(m);
   D2Scores(m);
+  D2Sectors(m);
   const pad::State& p = pad::Now();
   int state = Get16(*m, kD2State);
   // Start in play: the emulation paused (the game has no pause of its own); elsewhere Start is A.
@@ -491,6 +549,16 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   if (g_d2_50fps) {
     int want = remaster_d2::DrawsEveryVbl(*m) ? 1 : 2;
     if (Get16(*m, kD2Divisor) != want) Put16(m, kD2Divisor, want);
+  }
+  {
+    const bool l3 = p.Held(SDL_GAMEPAD_BUTTON_LEFT_STICK), r3 = p.Held(SDL_GAMEPAD_BUTTON_RIGHT_STICK);
+    if (state == kD2Play && Get16(*m, kD2Raven) != 0) {
+      if (l3 && r3 && !g_d2_both) g_d2_both = true, TapKey(m, kD2KeyN);
+      if (!g_d2_both && g_d2_l3 && !l3) TapKey(m, kD2KeyD);
+      if (!g_d2_both && g_d2_r3 && !r3) TapKey(m, kD2KeyI);
+    }
+    if (!l3 && !r3) g_d2_both = false;
+    g_d2_l3 = l3, g_d2_r3 = r3;
   }
   if (state == kD2Play) {
     if (p.connected && Get16(*m, kD2Scheme) == 0) Put16(m, kD2Scheme, 1);  // the keyboard scheme
@@ -587,14 +655,51 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
       if (a && g_d2_click_in == 0)
         D2Click(kD2Boxes[g_d2_sel], waiting ? std::max(1, g_d2_space_at + 50 - g_d2_frame) : 1);
     } else if (state == kD2Screen && Get32(*m, kD2Sub) == kD2SubPlayers) {
-      int sel = g_d2_players;
-      if (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) sel ^= 1;
-      if (sel != g_d2_players) {
-        g_d2_players = sel;
-        Put16(m, kD2PtrX, kD2PlayerBoxes[sel].x), Put16(m, kD2PtrY, kD2PlayerBoxes[sel].y);
+      const bool left = pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT), right = pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+      const bool a = pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START) || pad::RtPressed();
+      if (!D2Codes(*m)) g_d2_sector_row = false;
+      if (D2Codes(*m) && int16_t(Get16(*m, kD2Typing)) >= 0) {
+        // Typing a code: left / right the letter (the pointer's x / 8, 32 of them), A fixes it, B gives up.
+        // (a to z: the codes' letters; the game's pointer limits stop short of the symbols after them)
+        if (!g_d2_typing) g_d2_typing = true, g_d2_click_at.x = 4, Put16(m, kD2PtrX, 4);  // from "a"
+        if (left || right) {
+          int letter = std::min((Get16(*m, kD2PtrX) & 0xFF) / 8, 25);
+          letter = (letter + (right ? 1 : 25)) % 26;
+          Put16(m, kD2PtrX, letter * 8 + 4);
+        }
+        if (a && g_d2_click_in == 0 && g_d2_click_frames == 0)
+          D2Click({Get16(*m, kD2PtrX), Get16(*m, kD2PtrY)}, 1);
+        if (pad::Pressed(SDL_GAMEPAD_BUTTON_EAST)) buttons |= 1;  // the right button
+      } else {
+        g_d2_typing = false;
+        if (D2Codes(*m) && (pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_UP) || pad::Pressed(SDL_GAMEPAD_BUTTON_DPAD_DOWN))) {
+          g_d2_sector_row = !g_d2_sector_row;
+          Point to = g_d2_sector_row ? Point{160, 150} : kD2PlayerBoxes[g_d2_players];
+          Put16(m, kD2PtrX, to.x), Put16(m, kD2PtrY, to.y);
+        }
+        if (g_d2_sector_row) {
+          // Any sector up to the furthest reached (this run or saved).
+          int best = std::max(g_d2_best_sector, 0), sector = Get16(*m, kD2Sector);
+          if (sector <= 15 && (left || right)) {
+            int to = right ? (sector >= best ? 0 : sector + 1) : (sector <= 0 ? best : sector - 1);
+            if (to != sector) D2ShowSector(m, to);
+          }
+          if (pad::Pressed(SDL_GAMEPAD_BUTTON_WEST) && g_d2_click_in == 0 && g_d2_click_frames == 0) {
+            D2Click({160, 150}, 1);                // a click below the figures starts typing a code
+            g_mouse_x = g_mouse_y = 0;
+          }
+          if (g_d2_click_frames == 0 && int16_t(Get16(*m, kD2Typing)) < 0)
+            Put16(m, kD2PtrX, 160), Put16(m, kD2PtrY, 150);
+        } else {
+          int sel = g_d2_players;
+          if (left || right) sel ^= 1;
+          if (sel != g_d2_players) {
+            g_d2_players = sel;
+            Put16(m, kD2PtrX, kD2PlayerBoxes[sel].x), Put16(m, kD2PtrY, kD2PlayerBoxes[sel].y);
+          }
+        }
+        if (a) D2Click(kD2PlayerBoxes[g_d2_players], 1);
       }
-      if (pad::Pressed(SDL_GAMEPAD_BUTTON_SOUTH) || pad::Pressed(SDL_GAMEPAD_BUTTON_START) || pad::RtPressed())
-        D2Click(kD2PlayerBoxes[g_d2_players], 1);
     } else {  // other screens (the initials, options...): the pointer; the d-pad steps it 8 px (one letter)
       if (p.Held(SDL_GAMEPAD_BUTTON_SOUTH) || p.rt > 0.5f) buttons |= 2;
       if (p.Held(SDL_GAMEPAD_BUTTON_WEST) || p.lt > 0.5f) buttons |= 1;
@@ -1297,6 +1402,8 @@ void Start(Game g) {
   g_d2_frame = 0, g_d2_space_at = g_d2_title_at = -1;
   g_d2_click_in = g_d2_click_frames = 0;
   g_d2_scores_ready = false, g_d2_scores.clear();
+  g_d2_best_sector = -1, g_d2_sector_row = g_d2_typing = false;
+  g_d2_l3 = g_d2_r3 = g_d2_both = false;
   g_host_paused = false;
   std::fill(std::begin(g_d2_held), std::end(g_d2_held), uint8_t(0));
   g_d2_pwm = 0;
@@ -1376,8 +1483,20 @@ const char* Hint(st::Machine* m, bool have_pad) {
     std::snprintf(buf, sizeof(buf), "< %s >   D-pad: choose   A: play", kD2BoxNames[g_d2_sel]);
     return buf;
   }
-  if (g_game == Game::kDefender2 && have_pad && Get16(*m, kD2State) == kD2Screen && Get32(*m, kD2Sub) == kD2SubPlayers)
-    return g_d2_players ? "< TWO PLAYERS >   A: start" : "< ONE PLAYER >   A: start";
+  if (g_game == Game::kDefender2 && have_pad && Get16(*m, kD2State) == kD2Screen && Get32(*m, kD2Sub) == kD2SubPlayers) {
+    if (!D2Codes(*m)) return g_d2_players ? "< TWO PLAYERS >   A: start" : "< ONE PLAYER >   A: start";
+    static char buf[96];
+    const char* players = g_d2_players ? "TWO PLAYERS" : "ONE PLAYER";
+    int sector = Get16(*m, kD2Sector);
+    if (int16_t(Get16(*m, kD2Typing)) >= 0)
+      return "TYPE A CODE   Left/Right: letter   A: next letter   B: give up";
+    if (g_d2_sector_row && sector <= 15)
+      std::snprintf(buf, sizeof(buf), "< SECTOR %d: LEVEL %d >   X: type a code   Up: %s   A: start", sector + 1,
+                    sector * 4 + 1, players);
+    else
+      std::snprintf(buf, sizeof(buf), "< %s >   Down: sector %d   A: start", players, sector <= 15 ? sector + 1 : 1);
+    return buf;
+  }
   if (g_game == Game::kDefender2 && have_pad && Get16(*m, kD2State) == kD2Screen && Get32(*m, kD2Sub) == kD2SubName)
     return "Left/Right: letter   A: fix it   X: delete";
   if (g_game == Game::kHardcore && Get32(*m, kHcHook) == kHcPaused)

@@ -587,6 +587,25 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   (Defender / Stargate / Defender II, 10 x 8 ASCII digits + 3 initials) only in RAM; its one file write ($4CD98) is
   a screenshot saver (defpic0.neo). stgames.cpp D2Scores: userdata\defender2\D2SCORES.DAT put back once VBL $70 =
   $4AF1A and the table is valid, written when it changes (not previews / sandboxes: SaveDir empty).
+- Defender II sector codes (owner 2026-11-08): player select ($1157E, variant $1F7F8 = 2 only) has SECTOR CODE:
+  sector $1157C (0..15, play starts on level sector * 4 + 1), raised at game over to the furthest reached (that
+  session only, $17E3A). A click below y $5A types a code ($324AE letter index, letter = pointer x / 8 via $32819;
+  right click gives up); words at $324B0 (letter j of word i at i + j * $14): start floyd furry beast lemac zippo
+  lazer dafad mamog funky donky dread kanji irata neuro stoat = sectors, goaty raven incas andes = cheats (jump
+  table $11794 = $117A4 $117D0 $117DA $117A4). goaty: invincible ($1C42A, the attract demo's flag), the other
+  cheat flags cleared. andes went to goaty's routine too; owner 2026-11-08: we point it (entry $117A0) at the
+  unreached $117E4 instead: $11792 = 1, each special weapon shot ($1C948, from the laser $1C8B2 -> $1C990 by ship
+  type $2BAB4) refills the energy $2BA3E (Caps' energy weapon $18168 still spends it between). Verified: same input
+  energy 12 -> 10 without, ~12 with. raven: debug keys in play ($1C40E; play key handler $1C314, ASCII
+  $4A774, not while the ship warps in $4CF06): i invincible on / off ("INVINCIBLE" / "VULNERABLE" in the scanner),
+  n ends the wave ($1D8C4 = 30), d autopilot ($4CEBA = 2, scheme $1BCC4 = 2: "DEMO", for good). Pad (owner
+  2026-11-08, in play with raven on): R3 = i, L3 = d, L3 + R3 = n; singles act on release (verified scripted). incas ($1C410):
+  only in Stargate - Caps fires Defender II's energy weapon ($138A2) instead of inviso (from the code, untried).
+  Verified scripted: goaty / andes (before the change)
+  idle 900 frames no death (without: died ~240 in), raven n -> wave 2, i -> invincible, d -> DEMO. stgames.cpp: the furthest sector saved (userdata\defender2\D2SECTOR.DAT)
+  and put back at start; pad: up / down = players row / sector row, left / right on the sector row = any sector up
+  to the furthest (D2ShowSector does $11732's copy + redraw $117EE), X there = type a code (left / right letter a-z,
+  A next letter, B gives up), A starts. Verified scripted: floyd typed -> base level 5, saved, put back, level 5.
 - Defender 2 at 60 Hz (owner 2026-11-01: default; the smart bomb flash stays - "very quick"): it reads
   $FF820A at boot ($1EC04): bit 1 clear = 60 Hz -> "60 hz game speeds adjusted" ($2043F = 1; Options can
   switch it, $1F33E). Registry boot_60hz + setting defender2_60hz (1) -> Machine::SetBoot60Hz (sync_ 0).
