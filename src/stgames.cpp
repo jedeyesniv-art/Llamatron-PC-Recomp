@@ -4,6 +4,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <string>
 #include <vector>
 
 #include "cpu.h"
@@ -403,6 +406,59 @@ void ReleaseAll(st::Machine* m) {
   for (int c = 0; c < 128; ++c) Hold(m, uint8_t(c), false);
 }
 
+// Defender 2's high scores (owner 2026-11-08: "not saving"): the original never saved them - its three tables
+// (Defender, Stargate, Defender II: 10 entries each of 8 ASCII digits + 3 initials, "yak" / "moo" / "cow" on the
+// disk) are only in RAM, and its one file write is a screenshot saver. We keep them in the save folder: put back
+// once the game has started (its VBL $4AF1A installed, the table valid), written when they change.
+constexpr uint32_t kD2Scores = 0x325B2, kD2ScoresSize = 3 * 10 * 11, kD2Vbl = 0x4AF1A;
+constexpr const char* kD2ScoresFile = "D2SCORES.DAT";
+bool g_d2_scores_ready = false;  // put back (or found none) this run
+std::string g_d2_scores;          // what the file holds
+
+bool D2ScoresValid(const uint8_t* t) {
+  for (uint32_t e = 0; e < 30; ++e) {
+    const uint8_t* p = t + e * 11;
+    for (int i = 0; i < 8; ++i)
+      if (p[i] < '0' || p[i] > '9') return false;
+    for (int i = 8; i < 11; ++i)
+      if (!std::strchr("abcdefghijklmnopqrstuvwxyz!.?`- ", p[i]) || !p[i]) return false;
+  }
+  return true;
+}
+
+void D2Scores(st::Machine* m) {
+  if (m->SaveDir().empty() || m->sandbox || Get32(*m, 0x70) != kD2Vbl) return;
+  uint8_t* t = m->Ram() + kD2Scores;
+  if (!D2ScoresValid(t)) return;
+  const std::filesystem::path path = std::filesystem::path(m->SaveDir()) / kD2ScoresFile;
+  if (!g_d2_scores_ready) {
+    g_d2_scores_ready = true;
+    std::ifstream in(path, std::ios::binary);
+    std::string s((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (s.size() == kD2ScoresSize && D2ScoresValid(reinterpret_cast<const uint8_t*>(s.data()))) {
+      std::memcpy(t, s.data(), kD2ScoresSize);
+      g_d2_scores = s;
+      LOG("defender 2: high scores put back from %s", kD2ScoresFile);
+    } else {
+      g_d2_scores.assign(reinterpret_cast<const char*>(t), kD2ScoresSize);  // the game's own: nothing to write yet
+    }
+    return;
+  }
+  if (std::memcmp(t, g_d2_scores.data(), kD2ScoresSize) == 0) return;
+  g_d2_scores.assign(reinterpret_cast<const char*>(t), kD2ScoresSize);
+  std::filesystem::path tmp = path;
+  tmp += ".tmp";
+  {
+    std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+    out.write(g_d2_scores.data(), std::streamsize(g_d2_scores.size()));
+    if (!out) return LOG("defender 2: can't write %s", tmp.string().c_str());
+  }
+  std::error_code ec;
+  std::filesystem::rename(tmp, path, ec);
+  if (ec) return LOG("defender 2: can't save the high scores (%s)", ec.message().c_str());
+  LOG("defender 2: high scores saved");
+}
+
 void D2Click(Point p, int delay) {
   g_d2_click_at = p;
   g_d2_click_in = delay;
@@ -410,6 +466,7 @@ void D2Click(Point p, int delay) {
 
 void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   remaster_d2::Update(m);
+  D2Scores(m);
   const pad::State& p = pad::Now();
   int state = Get16(*m, kD2State);
   // Start in play: the emulation paused (the game has no pause of its own); elsewhere Start is A.
@@ -1239,6 +1296,7 @@ void Start(Game g) {
   g_d2_sel = 1, g_d2_players = 0;
   g_d2_frame = 0, g_d2_space_at = g_d2_title_at = -1;
   g_d2_click_in = g_d2_click_frames = 0;
+  g_d2_scores_ready = false, g_d2_scores.clear();
   g_host_paused = false;
   std::fill(std::begin(g_d2_held), std::end(g_d2_held), uint8_t(0));
   g_d2_pwm = 0;

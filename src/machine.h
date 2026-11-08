@@ -33,6 +33,8 @@ class Machine {
   // Files on the game disk; saves go to `save_dir` (files written by the game shadow the disk's).
   bool Load(const disk::Program& program, std::map<std::string, disk::Bytes> files, const std::string& save_dir,
             std::string* error);
+  // Where the game's saves go ("" = none: the launcher's previews, look-ahead copies).
+  const std::string& SaveDir() const { return save_dir_; }
 
   // CPU speed as a multiple of the ST's 8 MHz (1 = original). Everything else keeps its real-time rate, so a
   // faster CPU only means the game's work is done sooner. Can change between frames.
