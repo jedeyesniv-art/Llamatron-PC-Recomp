@@ -30,6 +30,8 @@ set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+# macOS: not the runner's Homebrew libusb (players won't have it); IOKit's HID does the pads.
+set(SDL_HIDAPI_LIBUSB OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/SDL EXCLUDE_FROM_ALL)
 
 # Musashi 68000 core: its sources are copied to the build dir with our m68kconf.h over theirs, and the opcode
