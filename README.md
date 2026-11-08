@@ -1,4 +1,4 @@
-# Llamasoft on the ST
+# Llamasoft on the ST 2.0
 
 ![Llamasoft on the ST](res/cover.png)
 
@@ -15,9 +15,17 @@ Eight games from Llamasoft's ST years:
 - **Photon Storm**
 - **Hardcore**, Yak's unfinished evaluation demo
 
-They play at 50 frames a second on a twin-stick pad, drawn at four times the ST's resolution, gliding at your
-display's full refresh rate. They respond quicker than they did on a real ST, and you can play them through a
-CRT look that people who grew up with these screens will recognise.
+The headlines:
+
+- **CRT+ and CRT++:** an accurate, beautiful CRT, or a Llamasoft-inspired psychedelic facelift.
+- **An interpolated, unlocked frame rate:** sprites drawn at four times the ST's resolution and moving at
+  your monitor's full refresh rate.
+- **Pad controls tuned by hand for every game:** each one designed and play-tested by a person for how these
+  games feel on a modern controller.
+- **Trip-A-Tron, fully working:** with a custom music-reactive module that plays along with whatever your
+  PC is playing.
+
+All of it responds to the pad quicker than the games did on a real ST.
 
 A hobby project, not affiliated with or endorsed by Jeff Minter or Llamasoft.
 
@@ -29,7 +37,7 @@ game's own, computed the way it was in 1991.
 
 The remaster sits on top of that and doesn't touch it. The app follows the game as it draws: each time it puts
 a sprite on the screen, the remaster notes what it is and where it goes. Then it redraws those objects itself,
-at 4x the resolution, sliding them smoothly between the game's own positions. The game never knows: its memory,
+at 4x the resolution, interpolating them between the game's own positions. The game never knows: its memory,
 its timing and its decisions are exactly what they'd be without the remaster.
 
 We checked that game by game, rather than just assuming it:
@@ -43,18 +51,46 @@ Photon Storm's title stars, which the original erased in pairs.
 
 Where we change something on purpose, it's listed below with the setting that turns it off.
 
-## What's better
+## What's new
 
-### Smooth: 50 frames a second, and every frame of your display
+### CRT+ and CRT++
 
-On a real ST these games updated the screen 13-25 times a second; the busy waves stuttered. Here the emulated
-processor gets more power during play, so every game draws all 50 of its frames a second. The game logic still
-runs at exactly its original speed, because it was always timed by the 50 Hz display, not by how fast the
-processor could draw.
+**CRT+** is an accurate, beautiful CRT, built for these games rather than borrowed:
 
-The remaster then goes further. Moving objects are drawn at four times the ST's resolution and **slide
-smoothly between the game's frames** at your display's refresh rate: 60, 120 or 144 Hz. It covers play and
-also:
+- a soft electron beam, with scanlines that swell on bright colours just as a real tube's do
+- an aperture-grille phosphor mask with colour bleed
+- halation, the glow light makes as it scatters in the glass, computed from the picture in linear light,
+  not painted on as a halo
+- true blacks, and colour that blooms towards white at its brightest
+
+The picture keeps its true size, in the shape it had on a UK TV in 1991.
+
+**CRT++** is the Llamasoft-inspired facelift. It takes the feedback trails of Minter's light synths and later
+games and puts them behind the action: bright things leave tinted trails that zoom, swirl and colour-cycle as
+they fade. It adds a composite TV's colour bleed and a boosted glow. It's lurid, joyful, and on by default.
+
+Each game ships with its own look, tuned by eye: the trail colour, length, zoom and glow suit that game. Every
+setting can be tuned further in the settings panel, live, with the game paused behind it.
+
+Both looks are also included as shader presets for **ShaderGlass and RetroArch** (`Extras\CRT shaders`, MIT
+licence), so you can use them on everything else you play.
+
+### An interpolated, unlocked frame rate
+
+On a real ST these games updated the screen 13-25 times a second, and the busy waves stuttered. Here the
+emulated processor gets more power during play, so every game draws all 50 of its frames a second. The game
+logic still runs at exactly its original speed, because it was always timed by the 50 Hz display, not by how
+fast the processor could draw.
+
+The remaster then unlocks the frame rate entirely:
+
+- Moving objects are drawn at **four times the ST's resolution**.
+- They're **interpolated between the game's frames** at your monitor's refresh rate: 60, 120, 144, 240 Hz
+  or more. Each object's position is worked out from a continuous clock for the exact moment a frame goes
+  out, so the only limit is your display.
+- On a variable refresh (G-Sync / FreeSync) screen every frame lands evenly.
+
+It covers play, and also:
 
 - title screens and attract demos
 - the instruction scroller
@@ -65,40 +101,25 @@ also:
 - Llamatron's high score entry, where the cursor glides between letters
 
 Trip-A-Tron is the exception: it's a light synthesiser that paints straight into the screen, with no
-sprites to slide, so it runs as it always did.
+sprites to interpolate, so it runs as it always did.
 
-Some objects get more than smoothing:
+Some objects get more than interpolation:
 
 - **Photon Storm's ship turns at its exact angle.** The ST could only show 16 pre-drawn steps.
 - **Llamatron's analog shots fly at their true positions** rather than jumping a pixel at a time.
 
 ### Quicker than the real thing: run-ahead
 
-Smoothing between frames normally costs a frame of delay. Run-ahead more than wins it back: every frame, a copy
-of the machine runs one or two frames ahead with your controls, and you see that future. Measured on Photon
-Storm with the default setting, the picture responds about **40 ms sooner than the original game did** on its
-own hardware.
+Interpolating between frames normally costs a frame of delay. Run-ahead more than wins it back: every frame, a
+copy of the machine runs one or two frames ahead with your controls, and you see that future. Measured on
+Photon Storm with the default setting, the picture responds about **40 ms sooner than the original game did**
+on its own hardware.
 
-### CRT+ and CRT++
+### Pad controls, tuned by hand for every game
 
-**CRT+** is a CRT look built for these games:
-
-- a soft beam with scanlines that swell on bright colours
-- an aperture-grille phosphor mask
-- a halation glow made from blurred linear light, rather than a fake halo
-- true blacks, and colour that blooms into white when it's at its brightest
-
-It keeps the picture its true size, in the shape it had on a UK TV in 1991.
-
-**CRT++** adds what Minter's later games made famous: feedback trails that zoom, swirl and colour-cycle behind
-everything, with composite colour bleed and a boosted glow. It's lurid, and it's on by default.
-
-Each game has its own tuned look. Both are also included as shader presets for **ShaderGlass and RetroArch**,
-so you can use them on anything else you play (`Extras\CRT shaders`, MIT licence).
-
-### Made for a pad
-
-Each game gets controls designed for it, not a generic joystick mapping:
+These games were made for an ST joystick, a mouse and a keyboard. Each one has been given controls designed
+for it, then play-tested on a real pad and the Steam Deck, and tuned until it felt right: dead zones,
+response curves, how the thrust builds, which button does what. None of them is a generic joystick mapping.
 
 - **Llamatron** is played the way it was meant, "Robotron style": left stick moves, right stick fires. Analog
   aim in any direction is an option. TEAM mode works with a second pad.
@@ -106,17 +127,13 @@ Each game gets controls designed for it, not a generic joystick mapping:
   direction with the right. The original's smart bomb, boost and single-shot keys are on the triggers and
   shoulders.
 - **Andes Attack and Defender 2** get arcade Defender controls: stick up and down, a reverse button, and
-  analog thrust on the right trigger, where the squeeze sets your speed. In Andes Attack it accelerates frame
+  analog thrust on the right trigger, where the squeeze sets your speed. Andes Attack's thrust builds frame
   for frame like the original's mouse button.
-- **Super Gridrunner**, a mouse game, is steered with the stick, with the nosecone on the shoulders.
-- **The Mutant Camels** spit wherever the right stick points.
+- **Super Gridrunner**, a mouse game, is steered with the stick, with a light inertia so the ship feels
+  planted, and the nosecone on the shoulders.
+- **The Mutant Camels** spit wherever the right stick points, in all 360 degrees.
 - **Hardcore**'s guns follow the sticks.
-- **Trip-A-Tron** becomes an instrument:
-  - pressure-sensitive painting on the trigger
-  - effect and symmetry wheels on the shoulders
-  - a starfield you fly with the right stick
-  - a music mode that listens to whatever your PC is playing
-- **Menus and high score names** all work from the pad.
+- **Menus and high score names** all work from the pad, in every game.
 
 Around all of that:
 
@@ -125,6 +142,34 @@ Around all of that:
   PlayStation's symbols drawn in.
 - **Rumble:** read from the game itself: a lost life, a smart bomb, every kill, the Camels' pickups and
   Hardcore's puck.
+
+### Trip-A-Tron, fully working, with a music-reactive module
+
+Minter's 1988 light synthesiser runs complete:
+
+- **It installs itself** on first use.
+- **Its tool screens work:** the Sillyscope, Colour Cooker, sequencers, starfield editor and the rest, with
+  their text labels drawn as GEM drew them.
+- **Its KML programs run:** they're the scripts behind every effect.
+- **Its manual is included:** in full, as text and PDF.
+
+On a pad it becomes an instrument:
+
+- the right trigger paints with pressure: a light squeeze for sparse pulses, a hard one for a flood
+- effect and symmetry wheels on the shoulders, every key labelled with what it does in the loaded program
+- a starfield you fly with the right stick
+- gyro aiming on pads that have it
+
+The **music module** is ours, after Minter's later "virtual light machines": it listens to whatever your PC is
+playing and performs along with it.
+
+- The light source dances to the bass and mids.
+- Beats paint.
+- Every few bars the palette and effect move on, and strong beats switch the symmetry.
+
+Your own input always wins, so it's a duet, not a screensaver.
+
+Trip-A-Tron's harshest flashing palettes are calmed into gentle pulses.
 
 ### Kinder on eyes and ears
 
@@ -154,7 +199,7 @@ Around all of that:
 | Change | Why | The original |
 |---|---|---|
 | 50 frames a second in play | the ST couldn't keep up; the game's speed is unchanged | `--cpu=1`, or per game `grid_50fps=0`, `d2_50fps=0`, `photonstorm_50fps=0` |
-| The remaster (4x, smooth motion) | modern displays | F8 / Settings: the ST's own picture |
+| The remaster (4x, interpolated unlocked frame rate) | modern displays | F8 / Settings: the ST's own picture |
 | Run-ahead | lower latency than the original | F7 / Settings: 0 |
 | CRT+ / CRT++ | the look | F9 / Settings: off |
 | Screen flashes removed or calmed | photosensitivity | `--flashes`, `trip_calm_background=0`, `hc_strobes=1` |

@@ -108,7 +108,7 @@ LLAMATRON CONTROLS - KEYBOARD
   F1                  settings (Esc there: back to the disks)
   F11 or Alt+Enter    fullscreen / window
   F9                  CRT look: off / CRT+ / CRT++
-  F8                  the remaster (smooth motion at 4x) on / off - every game but Trip-A-Tron
+  F8                  the remaster (4x, interpolated unlocked frame rate) on / off - every game but Trip-A-Tron
   F7                  run-ahead 0-3 frames with the remaster (default 2: quickest response)
 
 
@@ -243,22 +243,30 @@ waves, enemies, scoring, sound and music are the originals', worked out the way 
 improvements sit on top of the game and leave it alone. We checked: with the remaster on, the game's memory
 is the same as without it, and its picture at the ST's own resolution matches pixel for pixel.
 
-What's better:
-- Smooth: during play the ST's processor gets more power, so the screen updates 50 times a second instead of
-  13-25 (the busy waves used to stutter badly). The games still run at exactly their original speed.
-- The remaster (on by default; F8 or Settings): moving things are drawn at 4x the ST's resolution and slide
-  smoothly between the game's frames at your display's refresh rate (120 Hz is lovely). Title screens,
-  attract demos, scrollers, bonus stages and high score entry too (every game but Trip-A-Tron, which paints
-  straight into the screen). Photon Storm's ship turns at its exact
-  angle instead of the ST's 16 steps; Llamatron's analog shots fly at their true positions.
+What's better - the headlines:
+- CRT+ and CRT++ (F9 or Settings: off / CRT+ / CRT++). CRT+ is an accurate, beautiful CRT built for these
+  games: a soft beam with scanlines that swell on bright colours, an aperture-grille phosphor mask, real
+  halation glow and true blacks, the picture keeping its size, in the shape it had on a UK TV in 1991.
+  CRT++ is a Llamasoft-inspired facelift: psychedelic feedback trails that zoom, swirl and colour-cycle
+  behind the action, with composite colour bleed and a boosted glow. Each game has its own tuned look, and
+  you can tune it further in Settings. Extras\CRT shaders has both looks for ShaderGlass and RetroArch.
+- An interpolated, unlocked frame rate (the remaster: on by default; F8 or Settings). During play the ST's
+  processor gets more power, so every game draws all 50 of its frames a second instead of 13-25, at exactly
+  its original speed. Then moving things are drawn at 4x the ST's resolution and interpolated between the
+  game's frames at your monitor's full refresh rate - 60, 120, 144, 240 Hz or more: the only limit is your
+  display. Title screens, attract demos, scrollers, bonus stages and high score entry too (every game but
+  Trip-A-Tron, which paints straight into the screen). Photon Storm's ship turns at its exact angle instead
+  of the ST's 16 steps; Llamatron's analog shots fly at their true positions.
+- Pad controls tuned by hand for every game: each designed for that game, play-tested on a real pad and the
+  Steam Deck and tuned until it felt right (see each game above). Every button can be remapped (Settings in
+  a game, CONTROLS); button names follow your pad (Xbox, PlayStation, Switch).
+- Trip-A-Tron, fully working - its tool screens, KML programs and the whole manual - played like an
+  instrument, with our music-reactive module (L3): it listens to whatever your PC is playing and performs
+  along with it, while your own input always wins.
+
+And:
 - Run-ahead (F7 or Settings, default 2 frames): a copy of the game runs a frame or two ahead with your
   controls, so the picture answers the pad quicker than the original did on a real ST.
-- CRT look (F9 or Settings: off / CRT+ / CRT++): CRT+ is scanlines, a phosphor mask and a real glow, with
-  true blacks, the picture keeping its size, in the shape it had on a UK TV in 1991. CRT++ adds
-  psychedelic feedback trails. Each game has its own tuned look, and you can tune it further in Settings.
-  Extras\CRT shaders has both looks for ShaderGlass and RetroArch.
-- Controls made for a pad, per game (see each game above); every button can be remapped (Settings in a game,
-  CONTROLS); button names follow your pad (Xbox, PlayStation, Switch).
 - Rumble from the game itself: a lost life, a smart bomb, every kill (Settings, GENERAL, RUMBLE).
 - Even volume: every game is brought to the same loudness, with a master volume (Settings, GENERAL).
 - No screen flashes: the white flash on every kill and the red and multicolour strobes are removed (they can
@@ -289,7 +297,7 @@ SETTINGS (userdata\settings.txt)
 Written on the first run with every setting and its default. Edit it while the game runs: it's reread.
   fullscreen_exclusive    1 = fullscreen switches the display to a multiple of the game's refresh rate
                           (even motion without G-Sync / FreeSync; the screen blinks when switching away)
-  remaster                1 = the remaster (smooth motion at 4x), 0 = the ST's own picture
+  remaster                1 = the remaster (4x, interpolated frame rate), 0 = the ST's own picture
   remaster_ahead          run-ahead with the remaster: 0..3 frames (2)
   crt                     0 = off, 1 = CRT+, 2 = CRT++ (each game can have its own: <game>_crt)
   volume, volume_normalise    master volume (0..1) and the even loudness across games (1 = on)
