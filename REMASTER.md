@@ -37,17 +37,12 @@ pilot was built, what went wrong on the way, and a recipe for the next games. Ke
    (owner); see "Outside play" below.
 5. **Run-ahead outside the remaster: NOT NEEDED** (owner 2026-11-07): Trip-A-Tron, the docs readers and user disks
    stay without it.
-6. **Small known glitches**: Photon Storm's pause DONE 2026-11-07 (the held play items are gone; its fountain of
-   dots is captured, 50 a second on the faster CPU, pixel-identical; a star phase shift for a frame or two on resume, as
-   before);
-   Hardcore's trail rings (cosmetic timing, see its notes); the owner's one-off 108 ms stutter (2026-11-03, not
-   reproduced - the slow present line is waiting for it; a scripted run's 121 ms gap at a wave change fell outside
-   every timed phase: events, settings reload, audio or the pacing wait next).
+6. **Small known glitches: DONE** (owner 2026-11-08: fine as they are - Hardcore's trail rings, the one-off
+   108 ms stutter; Photon Storm's pause was fixed 2026-11-07).
 7. **CRT extras (optional)**: a touch more sharpness (`ss` in the supersampled Line); "vertical sub-pixel through
    the scanlines" (a sprite between lines shared between two scanlines) as an option - a remaster liberty, owner's
    call.
-8. **512K Camels build**: leave unless wanted (not in the launcher or the zip; a scripted run stays on its
-   shareware screen).
+8. **512K Camels build: NOT INCLUDED** (owner 2026-11-08: a worse version of the 1 MB STE edition).
 9. **Release, when the owner says**: package (`-Release`), smoke-test the unpacked zip outside the repo, refresh
    the cover with remaster / CRT shots, README.md and release notes, push.
 - Before porting the next game: scan its draw core for every global it reads (`Tools/absreads.py`: each `$xxxxx.l` operand in
