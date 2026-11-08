@@ -236,33 +236,52 @@ The guns ride the four edges of the field and fire by themselves; the puck ricoc
 Keyboard: P pause, O resume, S strobes, N next level. Yak's notes for its testers are on the how-to-play page.
 
 
-IMPROVEMENTS OVER THE ORIGINAL
-------------------------------
-- Smooth: during play the ST's processor runs faster, so the screen updates 50 times a second instead of
-  16-25 (the busy waves used to stutter badly). The game itself runs at exactly its original speed.
-- Fullscreen is borderless (Alt+Enter or F11 for a window; Alt+Tab without the screen blanking).
-  Variable refresh (G-Sync / FreeSync) screens show every frame evenly. Without one, fullscreen_exclusive=1
-  in settings.txt picks a refresh rate that is a multiple of the game's 50 Hz (100 Hz on a 120 Hz screen,
-  50 Hz on 60 Hz screens that offer it) for perfectly even motion, at the cost of a blink when switching.
+THE REMASTER: WHAT'S BETTER, AND WHAT ISN'T CHANGED
+---------------------------------------------------
+Every game here is the original program, byte for byte, running in a small Atari ST inside this app. The
+waves, enemies, scoring, sound and music are the originals', worked out the way they were in 1991. The
+improvements sit on top of the game and leave it alone. We checked: with the remaster on, the game's memory
+is the same as without it, and its picture at the ST's own resolution matches pixel for pixel.
+
+What's better:
+- Smooth: during play the ST's processor gets more power, so the screen updates 50 times a second instead of
+  13-25 (the busy waves used to stutter badly). The games still run at exactly their original speed.
+- The remaster (on by default; F8 or Settings): moving things are drawn at 4x the ST's resolution and slide
+  smoothly between the game's frames at your display's refresh rate (120 Hz is lovely). Title screens,
+  attract demos, scrollers, bonus stages and high score entry too (every game but Trip-A-Tron, which paints
+  straight into the screen). Photon Storm's ship turns at its exact
+  angle instead of the ST's 16 steps; Llamatron's analog shots fly at their true positions.
+- Run-ahead (F7 or Settings, default 2 frames): a copy of the game runs a frame or two ahead with your
+  controls, so the picture answers the pad quicker than the original did on a real ST.
+- CRT look (F9 or Settings: off / CRT+ / CRT++): CRT+ is scanlines, a phosphor mask and a real glow, with
+  true blacks, the picture keeping its size, in the shape it had on a UK TV in 1991. CRT++ adds
+  psychedelic feedback trails. Each game has its own tuned look, and you can tune it further in Settings.
+  Extras\CRT shaders has both looks for ShaderGlass and RetroArch.
+- Controls made for a pad, per game (see each game above); every button can be remapped (Settings in a game,
+  CONTROLS); button names follow your pad (Xbox, PlayStation, Switch).
+- Rumble from the game itself: a lost life, a smart bomb, every kill (Settings, GENERAL, RUMBLE).
+- Even volume: every game is brought to the same loudness, with a master volume (Settings, GENERAL).
 - No screen flashes: the white flash on every kill and the red and multicolour strobes are removed (they can
-  be uncomfortable or a risk for photosensitive players). Gameplay is unchanged.
-- The picture has the shape it had on a UK TV in 1991.
-- Optional analog aim (RB on the title screen).
-- The other games: 50 frames a second in play too (they drew 13-25), at their original speed.
-- Flashes toned down: Trip-A-Tron's flashing palettes (4, 5, 6) pulse gently instead; Revenge's flashes are
-  softened; Hardcore starts with its own strobes switched off.
-- Super Gridrunner: smooth 50 frames a second; snakes waiting in the entry lane at the top show up 1.5
-  seconds before they come down, instead of appearing out of nowhere (--entry-lane keeps the original).
-- The remaster (on by default; F8 or Settings): Llamatron, Super Gridrunner, the Camels, Andes Attack,
-  Defender 2, Hardcore and Photon Storm draw their moving things at 4x the ST's resolution, sliding smoothly
-  between frames (Photon Storm's ship at its exact angle), on the title and attract screens too. The game
-  underneath is unchanged.
-- Run-ahead (with the remaster; F7 or Settings, default 2 frames): the game is run a frame or two ahead with
-  your controls, so the picture answers the pad quicker than the original did.
-- CRT look (on by default; Settings, or F9 cycles off / CRT+ / CRT++): CRT+ is scanlines, a
-  phosphor mask and a soft glow, with true blacks, the picture keeping its size and shape; CRT++ adds
-  psychedelic trails. Each game can have its own look (set in its Settings).
-- Your own buttons: each game's controls can be remapped (Settings in a game, CONTROLS).
+  be uncomfortable or a risk for photosensitive players). Trip-A-Tron's flashing palettes (4, 5, 6) pulse
+  gently instead; Revenge's flashes are softened; Hardcore starts with its own strobes off.
+- Fullscreen is borderless (Alt+Enter or F11 for a window; Alt+Tab without the screen blanking). Variable
+  refresh (G-Sync / FreeSync) screens show every frame evenly; fullscreen_exclusive=1 picks a refresh rate
+  that is a multiple of the game's 50 Hz for even motion on screens without it.
+
+What we changed on purpose, and how to get the original back:
+- 50 frames a second ............... --cpu=1, or grid_50fps=0, d2_50fps=0, photonstorm_50fps=0
+- the remaster, run-ahead, CRT .... F8, F7 (0), F9 (off), or Settings
+- no flashes ....................... --flashes, trip_calm_background=0, hc_strobes=1
+- Photon Storm at any angle ........ Y on its title: the original 16 directions
+- Llamatron analog aim ............. off unless you turn it on (RB on its title)
+- Andes Attack / Defender 2 arcade controls ... Settings, CONTROL SCHEME; the mouse and keys work as on the ST
+- Gridrunner: snakes waiting under the top rail show 1.5 seconds before they drop (in the original they lurk
+  half-hidden, out of reach of your shots) ... --entry-lane
+- Gridrunner: the level select unlocks the level you died on (the original: the one before) ...
+  grid_unlock_level_died=0
+- Defender 2 runs in its own 60 Hz mode, as the arcade did ... defender2_60hz=0
+- Photon Storm no longer crashes in the warp after a won bonus (the original divides by zero about one warp
+  in ten): a fix, not a choice.
 
 
 SETTINGS (userdata\settings.txt)
@@ -270,7 +289,12 @@ SETTINGS (userdata\settings.txt)
 Written on the first run with every setting and its default. Edit it while the game runs: it's reread.
   fullscreen_exclusive    1 = fullscreen switches the display to a multiple of the game's refresh rate
                           (even motion without G-Sync / FreeSync; the screen blinks when switching away)
-  crt                     1 = CRT look on, 0 = off
+  remaster                1 = the remaster (smooth motion at 4x), 0 = the ST's own picture
+  remaster_ahead          run-ahead with the remaster: 0..3 frames (2)
+  crt                     0 = off, 1 = CRT+, 2 = CRT++ (each game can have its own: <game>_crt)
+  volume, volume_normalise    master volume (0..1) and the even loudness across games (1 = on)
+  rumble                  1 = pad rumble from the game's events
+  button_names            0 = from your pad, 1 Xbox, 2 PlayStation, 3 Nintendo
   crt_scanlines           how dark the gaps between lines are (0..1)
   crt_beam_min / _max     line thickness for dark / bright colours
   crt_blur                horizontal softness (0 = sharp)
@@ -324,4 +348,8 @@ CREDITS
 Llamatron, Super Gridrunner, Trip-A-Tron, Revenge of the Mutant Camels, Andes Attack, Hardcore: Jeff Minter
 (yak) / Llamasoft. Defender 2: Jeff Minter for Arcadia, 1990. Photon Storm: Jeff Minter / Arc, 1990.
 This PC version uses SDL 3, the Musashi 68000 emulator and SoftFloat (see licenses\THIRD-PARTY-NOTICES.txt).
-The CRT shader is this project's own. The disk labels on the start screen were hand-written by the author.
+The remaster and the CRT shaders are this project's own. The disk labels on the start screen were
+hand-written by the author. Trip-A-Tron's manual: James "Piku" Grimwood's 2003 transcription. Photon
+Storm's manual: typed in by Parasite of LSD.
+
+Thanks, Yak.
