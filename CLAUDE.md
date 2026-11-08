@@ -345,6 +345,18 @@ elease\Llamatron-<ver>-windows.zip (no game
   on a row or "USE THE SHARED CRT++" drops the game's own. F9 in a game sets the game's look. settings::Has.
 - Survey of the screens outside play for the remaster: REMASTER.md "Outside play" (--survey, Tools/survey.py).
 
+## CRT shaders for other programs (2026-11-08, owner: generic versions for ShaderGlass / RetroArch)
+- crt-shaders\: crt-plus.slangp / crt-plus-plus.slangp (RetroArch slang; ShaderGlass imports them), README.md. Ports of
+  crt.frag / glow / psy_trail / psy_mix: no per-game tunes, the shared defaults; extra options (mask type / size,
+  vertical scanlines, lines per scanline, vignette, gamma, trail centre, glow tail). Verified against the app (same
+  320 x 200 frame, 1600 x 1000): CRT+ max 4 / 255, CRT++ with trails 0 max 7; RetroArch 1.21 d3d11 / vulkan / glcore
+  clean; ShaderGlass 1.2.2 compiles and runs both (its profiles: ShaderPath "..." with forward slashes - std::quoted
+  eats backslashes). ShaderGlass gives no FrameTimeDelta: LL_PSY_FPS. RetroArch tests: own --config in the scratchpad,
+  --set-shader, --max-frames=N --max-frames-ss-path (never the owner's retroarch.cfg).
+- Found porting: the app's glow levels lose ~80% each (crt.cpp BuildGlow's colour mod 0.25 into float targets is
+  converted sRGB -> linear by SDL3: 4 x 0.0509 = 0.2035 a level), so the long tail barely shows and GLOW SIZE does
+  little. The shaders keep the look (LL_HALATION_FALLOFF 0.2035; 1 = the tail as designed). App unchanged.
+
 ## Layout (C:\LlamatronRecomp)
 - Private\              (git-ignored) Llamatron ST.msa (owner's copy), disk\ = its files, tron.bin/.reloc =
                         the unpacked game (Tools\depack.py), for the analysis tools.
