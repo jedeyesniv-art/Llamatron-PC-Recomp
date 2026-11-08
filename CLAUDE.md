@@ -222,8 +222,7 @@ elease\Llamatron-<ver>-windows.zip (no game
   used in the last 15 s (attract demos die too). Verified in scripted runs (log "rumble: ...").
   2026-11-07 more (owner): kills (score digits up: Andes $12B96.., D2 $4B098..; Photon: its score digits on the
   screen shown change - RAM score not found - not for 150 frames after a death; Llamatron: the kill flash list
-  *(text+$25EA) set to text+$25E6, stronger), thrust hums (Andes speed $14BC4 / 19, D2 |$1B4B4| / 9 px: 0.05..0.18
-  low motor), Photon boost hum (Kbshift copy $27C51 bit 1 + gauge $1D12C: 0.06), Hardcore's puck ($1B714 / $1B718,
+  *(text+$25EA) set to text+$25E6, stronger), (Andes / D2 thrust hums removed 2026-11-08, owner: too overwhelming), Photon boost hum (Kbshift copy $27C51 bit 1 + gauge $1D12C: 0.06), Hardcore's puck ($1B714 / $1B718,
   16.16: the motor on its side, with its speed, <= ~0.2), Camels pickups (the pickup flash: $3D5D0 = $3D636 /
   $3D736 with level $3D5D4 jumping; TT $3D960 / $3D9C6 / $3DAC6 / $3D964: a 2-frame blip). Pulses + hum mixed per
   motor, sent when changed or every 5 frames (150 ms). Log: "kills so far" every 10, "hum up to" every 500 frames.

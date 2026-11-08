@@ -8,8 +8,8 @@
 //   Photon Storm's score digits on screen (lines 18..37, x 0..63 of the screen shown; its RAM score wasn't found);
 //   Llamatron: the kill flash being started (the colour list *$25EA set to $25E6, text offsets - the flash itself is
 //   patched out, game.cpp), stronger;
-// - thrust (a continuous low hum rising with speed): Andes's speed index $14BC4 (0..19), Defender 2's velocity
-//   $1B4B4 (16.16, top 9 px a frame); Photon Storm's boost (the play loop's Kbshift copy $27C50 bit 1, gauge $1D12C);
+// - Photon Storm's boost (a very low hum: the play loop's Kbshift copy $27C50 bit 1, gauge $1D12C). Andes's and
+//   Defender 2's thrust hums (speed $14BC4 / velocity $1B4B4) were removed 2026-11-08 (owner: too overwhelming);
 // - Hardcore's puck ($1B714 / $1B718, 16.16; the lead ring of its trail): a hum in the motor on its side, stronger
 //   as it speeds up;
 // - Camels' power-ups: a pickup starts a palette flash ($3D5D0 = $3D636 / $3D736, level $3D5D4 jumping to 7; TT
@@ -163,17 +163,11 @@ void Frame(const st::Machine& m, SDL_Gamepad* pad) {
   if (g_id == "andes") {
     const bool play = Read(m, 0x12EEE, 2) == 1;
     if (DigitsUp(m, 0x12B96, 12) && play && settled) Event(Kind::kKill, idle);
-    if (play) {
-      float speed = std::clamp(Read(m, 0x14BC4, 2) / 19.0f, 0.0f, 1.0f);
-      if (speed > 0) hum_low = 0.05f + 0.13f * speed;  // lowest to low, with speed
-    }
+    // (no thrust hum: owner 2026-11-08, "too overwhelming")
   } else if (g_id == "defender2") {
     const bool play = Read(m, 0x4B086, 2) == 0 && Read(m, 0x2F2DE, 2) == 0;
     if (DigitsUp(m, 0x4B098, 10) && play && settled) Event(Kind::kKill, idle);
-    if (play) {
-      float v = std::clamp(std::fabs(float(int32_t(Read32(m, 0x1B4B4))) / 65536.0f) / 9.0f, 0.0f, 1.0f);
-      if (v > 0.03f) hum_low = 0.05f + 0.13f * v;
-    }
+    // (no thrust hum: owner 2026-11-08)
   } else if (g_id == "photonstorm") {
     const bool play = Read(m, 0x44846, 2) == 1;
     const bool hud = HudChanged(m);  // (not just after a death: the panel is redrawn)
