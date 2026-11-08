@@ -1,4 +1,4 @@
-# Release notes for 2.0.0 (draft: not published yet)
+# Release notes for 2.0.0 (published 2026-11-08 as v2.0.0)
 
 Paste the text below the line into the GitHub release. Before then, set `VERSION 2.0.0` in `CMakeLists.txt` and
 build the zip with `Tools\package_portable.ps1 -Release`.
