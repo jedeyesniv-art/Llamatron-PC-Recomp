@@ -73,6 +73,7 @@ Runs were mostly without input, so options screens, name entry and high-score ta
   what was drawn by then is shown). The version screen / instruction scroller DONE 2026-11-07 (remaster::SetScroll:
   the scrolled rectangle slides between the game's one-line steps). Run-ahead 0 now shows each screen's last complete pass (the title draws
   into the screen it shows).
+  High score name entry DONE 2026-11-08: captured, the cursor box glides between cells (CLAUDE.md).
 - **Gridrunner DONE 2026-11-06** (as far as it goes): the wave intro's letters and game over's letters captured at 50
   a second (`grid::DrawsEveryVbl`). The title and its menus stay: the title's timeout counts drawn frames (at 50 a
   second it left for the attract screens 5x sooner), and they only draw the mouse pointer through the main loop.

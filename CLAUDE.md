@@ -90,7 +90,10 @@ elease\Llamatron-<ver>-windows.zip (no game
   VBL; was the ST picture at x1); game over's 10-frame hand-over ($CEC typing VBL under draw $D5A, no passes) gets
   the last play items under the ST picture (was an empty arena: the capture had kept them out of the screens);
   sprites are captured only inside a draw pass (g_in_pass: GAME OVER is drawn by the continue VBL as it hands
-  over). Left: the high score entry ($8272 / $82C2, "enter something wonderful"), the scrollers (slid already).
+  over). High score entry DONE 2026-11-08 (VBL $82C2, draw $8272, set up at $815C after game over): captured; its cursor box
+  ($5E8A from $828E) glides to the game's cell at 2.5 px a VBL (a cell per 8: held, a steady slide; > 40 px jumps)
+  via fine_x / fine_y (Machine::StCycles). Pixel-identical once synced (the entry starts a few frames apart with
+  capture: play's drift); same name typed. Repro: --poke=7900:@4B5A4:907 (score digits $4B5A2) before game over.
 - Andes Attack audit (2026-11-07): passes ($202BA, table $20296) 0 play, 2, 4, 5, 6 captured; 3 = level set-up
   (hands back to pass 0 the same frame: its ATTACK LEVEL intro is pass 0's, captured, pixel-identical); 7 the
   change-over, 8 the pause's set-up; 1 never set. The pause (state 3) was held - the play picture's ship,

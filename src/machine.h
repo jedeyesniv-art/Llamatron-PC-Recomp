@@ -66,6 +66,8 @@ class Machine {
   double FrameHz() const;
   // How far the CPU is into the current frame (0 at the VBL .. 1 at the next), for things drawn as fast as it goes.
   double FramePhase() const;
+  // ST cycles since power-on (8.02 MHz; 160256 a 50 Hz frame), for timing things in emulated time.
+  uint64_t StCycles() const { return Now(); }
 
   // Audio produced so far (mono float at the rate given); the caller drains it.
   void SetSampleRate(int rate) { ym_.SetSampleRate(rate), sample_rate_ = rate; }

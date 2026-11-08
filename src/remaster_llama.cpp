@@ -22,6 +22,8 @@
 // straight into the screen shown, as fast as the CPU goes).
 #include "remaster_llama.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -48,6 +50,14 @@ constexpr uint32_t kZoomVbl = 0x5CC0, kZoomDot = 0x5B08;
 // The version screen and instruction scroller ($7E6E, before the title): a line a drawn frame (2 VBLs), the draw
 // function $7F20 scrolling lines 2..197 at x 16..303 ($4EE) and adding a row at the bottom; $7F52 the whole screen.
 constexpr uint32_t kScrollText = 0x7F20, kScrollAll = 0x7F52;
+// The high score name ($815C, after game over: "enter something wonderful"): draw function $8272 (the cursor box,
+// sprite $4A7C8 through $5E8A, returning to $828E; then 12 lines copied in at line 60: the name), VBL $82C2 (the
+// joystick moves the cursor one cell - 20 px across, 32 down, 11 a row - every 8 VBLs while held). Captured, and the
+// box glides at a cell per 8 VBLs instead of jumping (a remaster liberty: held, it slides steadily; the game's
+// cursor and choice are untouched).
+constexpr uint32_t kNameHook = 0x82C2, kNameDraw = 0x8272, kNameCursor = 0x828E;
+constexpr float kGlidePerVbl = 20.0f / 8, kGlideJump = 40;
+constexpr uint64_t kVblCycles = 160256;
 constexpr uint32_t kWrapper = 0x58AA, kMarkFrom = 0x5870, kMarkTo = 0x58A2, kShotsCaller = 0x1D02;
 
 bool g_installed = false;
@@ -55,6 +65,9 @@ bool g_capture = false;  // this frame's drawing goes to remaster
 bool g_play_pass = false;  // the pass being captured is play's
 std::vector<remaster::Item> g_pass_items, g_last_play;  // play's items: this pass, the last complete one
 uint32_t g_screen = 0, g_text = 0;
+// The name cursor as shown (gliding to the game's), and the VBL it was last moved at; x < -999 = none yet.
+float g_glide_x = -1000, g_glide_y = 0;
+uint64_t g_glide_vbl = 0;
 
 uint32_t Get32(const st::Machine& m, uint32_t a) {
   const uint8_t* p = m.Ram() + (a & 0xFFFFFF);
@@ -78,7 +91,8 @@ bool OverScreen(st::Machine& m) {
 bool CapturedScreen(st::Machine& m) {
   const uint32_t t = g_text, fn = Get32(m, t + kDrawFn), hook = Get32(m, t + kVblHook);
   return (game::Playing(m) && fn == t + kGameDraw) || (hook == t + kTitleHook && fn == t + kTitleDraw) ||
-         OverScreen(m) || (hook == t + kPauseHook && fn == t + kTentacleDraw);
+         OverScreen(m) || (hook == t + kPauseHook && fn == t + kTentacleDraw) ||
+         (hook == t + kNameHook && fn == t + kNameDraw);
 }
 
 // Between the draw call and its end: sprites drawn outside a pass (a VBL's - the continue screen's GAME OVER as it
@@ -166,6 +180,18 @@ void OnSprite(st::Machine& m) {
     float fx, fy;
     if (game::ShotFraction(m, object & 0xFFFFFF, &fx, &fy)) it.fine_x = fx, it.fine_y = fy;
   }
+  if (caller == kNameCursor) {  // the name cursor: towards the game's at a cell per 8 VBLs
+    const uint64_t vbl = m.StCycles() / kVblCycles;
+    const float dx = it.x - g_glide_x, dy = it.y - g_glide_y;
+    if (g_glide_x < -999 || std::fabs(dx) > kGlideJump || std::fabs(dy) > kGlideJump) {
+      g_glide_x = it.x, g_glide_y = it.y;  // first sight, or a row's wrap / a long move: there at once
+    } else {
+      const float step = kGlidePerVbl * float(std::min<uint64_t>(vbl - g_glide_vbl, 8));
+      g_glide_x += std::clamp(dx, -step, step), g_glide_y += std::clamp(dy, -step, step);
+    }
+    g_glide_vbl = vbl;
+    it.fine_x = g_glide_x - it.x, it.fine_y = g_glide_y - it.y;
+  }
   it.image = id;
   it.clip_top = 0, it.clip_bottom = 198;
   if (g_play_pass) g_pass_items.push_back(it);
@@ -221,17 +247,21 @@ void Install(st::Machine* m) {
     bool capture, play_pass;
     uint32_t screen;
     std::vector<remaster::Item> pass_items, last_play;
+    float glide_x, glide_y;
+    uint64_t glide_vbl;
   };
   static Saved saved;
   remaster::SetAheadState(
       [] {
         saved.capture = g_capture, saved.play_pass = g_play_pass, saved.screen = g_screen;
         saved.pass_items = g_pass_items, saved.last_play = g_last_play;
+        saved.glide_x = g_glide_x, saved.glide_y = g_glide_y, saved.glide_vbl = g_glide_vbl;
         game::SaveAheadState();
       },
       [] {
         g_capture = saved.capture, g_play_pass = saved.play_pass, g_screen = saved.screen;
         g_pass_items.swap(saved.pass_items), g_last_play.swap(saved.last_play);
+        g_glide_x = saved.glide_x, g_glide_y = saved.glide_y, g_glide_vbl = saved.glide_vbl;
         game::RestoreAheadState();
       });
   LOG("llamatron: remaster hooks installed");
@@ -243,6 +273,7 @@ void Start() {  // (every game's start)
   remaster::ClearScroll();
   g_installed = g_capture = g_play_pass = g_in_pass = false;
   g_pass_items.clear(), g_last_play.clear();
+  g_glide_x = -1000, g_glide_y = 0, g_glide_vbl = 0;
 }
 
 void Update(st::Machine* m) {
