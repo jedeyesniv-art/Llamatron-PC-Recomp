@@ -199,8 +199,46 @@ def logo():
     return img.crop(img.getbbox())
 
 
+def readme_cover(shots):
+    """The README's cover 1280 x 800 (res/cover.png, 2.0): four games above and four below, the llama, the title and
+    "2.0 - THE REMASTER" on stars between them, rainbow raster lines either side."""
+    img = Image.new('RGB', (1280, 800), (0, 0, 0))
+    th = 228  # each tile row
+    names = ['llamatitle', 'gridrunner', 'tripatron', 'camels', 'andes', 'defender2', 'hardcore', 'photonstorm']
+    for i, n in enumerate(names):
+        x, y = (i % 4) * 320, 0 if i < 4 else 800 - th
+        img.paste(tile(shots, n, 318, th, fit=(n not in ('tripatron', 'defender2'))), (x + (1 if i % 4 else 0), y))
+    band = (th + 6, 800 - th - 6)
+    stars(img, (0, band[0], 1280, band[1]), 110, 2112)
+    raster_line(img, th, 6, 3)
+    raster_line(img, 800 - th - 6, 6, 3, 4)
+    llama, title, sub = llama_image(), title_image(5), sub_image(3)
+    remaster = text_image('2.0 - THE REMASTER', 4, lambda f: RAINBOW[min(7, int(f * 8))], st((0, 0, 2)))
+    lw, lh = llama.width * 4, llama.height * 4
+    gap = 44
+    text_w = max(title.width, remaster.width, sub.width)
+    x0 = (1280 - lw - gap - text_w) // 2
+    mid = (band[0] + band[1]) // 2
+    paste_px(img, llama, x0, mid - lh // 2, 4)
+    tx = x0 + lw + gap
+    block_h = title.height + 22 + remaster.height + 22 + sub.height
+    ty = mid - block_h // 2
+    paste_px(img, title, tx + (text_w - title.width) // 2, ty)
+    ty += title.height + 22
+    paste_px(img, remaster, tx + (text_w - remaster.width) // 2, ty)
+    ty += remaster.height + 22
+    paste_px(img, sub, tx + (text_w - sub.width) // 2, ty)
+    return img
+
+
 def main():
     shots = sys.argv[1]
+    if len(sys.argv) > 2 and sys.argv[2] == '--cover':  # the README's cover only
+        img = readme_cover(shots)
+        path = os.path.join(ROOT, 'res', 'cover.png')
+        img.save(path, optimize=True)
+        print(f'{path} {img.size[0]} x {img.size[1]}')
+        return
     out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, 'res', 'steam')
     os.makedirs(out, exist_ok=True)
     for name, make in (('capsule', lambda: capsule(shots)), ('wide', lambda: wide(shots)),
