@@ -83,6 +83,12 @@ function Copy-Extras([string]$to) {
     foreach ($f in "capsule.png", "wide.png", "hero.png", "logo.png") {
         Copy-Item (Join-Path $repo "res\steam\$f") (Join-Path $to "Steam art")
     }
+    # CRT+ / CRT++ as RetroArch slang presets for ShaderGlass / RetroArch (owner 2026-11-08; crt-shaders\, MIT).
+    $shaders = Join-Path $to "CRT shaders"
+    Copy-Item -Recurse (Join-Path $repo "crt-shaders") $shaders
+    foreach ($f in "crt-plus.slangp", "crt-plus-plus.slangp", "README.md", "LICENSE", "shaders\crt.inc") {
+        if (-not (Test-Path (Join-Path $shaders $f))) { throw "Extras\CRT shaders\$f missing" }
+    }
 }
 
 # Fresh folder, but keep userdata\ if it's already there (the owner's scores and settings).

@@ -65,6 +65,10 @@ CRT++ runs its trails at 4x the source's size (`scale0 = 4.0` in the preset). Fo
 up), `scale0 = 2.0` is lighter; then also set `scale2 = 0.5`, which must bring the picture back to the source's
 size.
 
+## Licence
+
+MIT (see `LICENSE`). Share, modify and include them in shader packs freely; keep the licence with them.
+
 ## Files
 
 `shaders/crt.inc` is the CRT pass (CRT+ and CRT++), `linearize.slang` and `glow-down.slang` build the glow's
