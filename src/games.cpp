@@ -325,6 +325,18 @@ const Game::Option* FindOption(const Game& g, const std::string& key) {
 
 }  // namespace
 
+namespace {
+bool g_stock = false;
+}  // namespace
+
+bool StockSetting(const Game& g) {
+  if (g.user || g.settings) return false;
+  const std::string section = g.id == "rmctt" ? "rmc" : g.id;
+  return settings::Get(section + "_stock", 0) != 0;
+}
+void SetStock(bool on) { g_stock = on; }
+bool Stock() { return g_stock; }
+
 fs::path ExeDir() {
   const char* base = SDL_GetBasePath();
   return base ? fs::path(base) : fs::current_path();

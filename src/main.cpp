@@ -431,6 +431,7 @@ void ApplySettings(const Options& opt) {
   remap::Reload();  // (the control scheme may have changed the list)
   if (opt.remaster_ahead >= 0) remaster::SetAhead(opt.remaster_ahead);
   if (opt.aim < 0) game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
+  game::SetKillFlash(int(settings::Get("llamatron_kill_flash", 0)));
 }
 
 // The settings panel's picture from the game's screen as last shown (the remaster's sprites drawn in).
@@ -556,7 +557,9 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
     machine.SetBoot60Hz(true);
     LOG("booting at 60 Hz (%s_60hz=1)", c.game->id.c_str());
   }
-  LOG("analog aim %s, cpu speed during play x%d", game::AnalogAim() ? "on" : "off", opt.cpu_speed);
+  games::SetStock(c.game && !c.in_game_docs && games::StockSetting(*c.game));
+  if (games::Stock()) LOG("stock ST: 8 MHz everywhere, the original frame rate, no remaster (%s)", c.game->id.c_str());
+  LOG("analog aim %s, cpu speed during play x%d", game::AnalogAim() ? "on" : "off", games::Stock() ? 1 : opt.cpu_speed);
 
   SDL_Window* window = c.window;
   SDL_Renderer* renderer = c.renderer;
@@ -569,6 +572,7 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   remaster::FreeTextures();  // the last game's sprites
   remaster::LoadSettings();
   remaster::SetRenderer(renderer != nullptr || opt.remaster_headless);
+  remaster::SetStock(games::Stock());
   remaster::SetProbe(opt.remaster_probe);
   if (opt.remaster_writers >= 0) remaster::TraceWriters(opt.remaster_writers);
   if (opt.remaster_ahead >= 0) remaster::SetAhead(opt.remaster_ahead);
@@ -874,7 +878,8 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
                                                  : false;
       const bool forced = opt.cpu_all && frame >= opt.cpu_all_from;
       if (forced) playing = true;
-      machine.SetCpuSpeed(forced ? opt.cpu_all : playing ? opt.cpu_speed : 1);
+      // STOCK ST: the ST's own 8 MHz on every screen ("playing" still counts the drawn frames for the log).
+      machine.SetCpuSpeed(forced ? opt.cpu_all : playing && !games::Stock() ? opt.cpu_speed : 1);
       uint64_t t_upd = SDL_GetTicksNS();
       if (llamatron) remaster_llama::Update(&machine);
       if (gridrunner) remaster_grid::Update(&machine);
@@ -1082,6 +1087,8 @@ GameEnd RunGame(Context& c, const std::string& program_name, bool direct, input:
   if (audio) SDL_ClearAudioStream(audio);
   if (renderer && mode != input::Mode::kDocs && frame > 0) KeepPreview(c, machine);
   LOG("%s ended after %d frames", program_name.c_str(), frame);
+  games::SetStock(false);  // (the launcher's previews run as before)
+  remaster::SetStock(false);
   return end;
 }
 
@@ -1373,6 +1380,7 @@ int main(int argc, char** argv) {
   // fullscreen_exclusive=1 switches the display to a refresh rate that is a multiple of the game's instead.
   if (settings::Get("fullscreen_exclusive", 0) == 0) opt.match_refresh = false;
   game::SetAnalogAim(settings::Get("analog_aim", 0) != 0);
+  game::SetKillFlash(int(settings::Get("llamatron_kill_flash", 0)));
   menu::SetApply([&opt]() { ApplySettings(opt); });
   c.preview_path = c.save_dir / "preview.bmp";
   LoadPreview(c);

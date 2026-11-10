@@ -153,6 +153,14 @@ elease\Llamatron-<ver>-windows.zip (no game
   0, ~40 ms quicker than the original game (cancels the interpolation's frame). Cost ~0.3 ms per frame run
   ahead. Game RAM identical with run-ahead 3 + ps_analog 1 (7000 frames). --remaster-ahead=N for a run.
 
+## STOCK ST (2026-11-10; a player asked to play at stock ST settings, owner: "make it worse on purpose")
+- Setting <section>_stock (0 default; rmc_stock covers both Camels builds), a STOCK ST row in each game's panel
+  section, read at the game's start (games::StockSetting -> SetStock in RunGame, cleared at its end: previews unchanged).
+  On: CPU x1 on every screen (main.cpp; `playing` still counts drawn frames for the log), the divisors left at 2
+  (grid_50fps, photonstorm_50fps, d2_50fps skipped), remaster::SetStock = remaster off (F8 says REMASTER OFF: STOCK ST).
+  Kept: controls / remaps, the game patches (no flashes, entry lane, unlock level, TT nag, D2 saves), Defender 2's
+  60 Hz (its own toggle: an NTSC ST's mode). Measured: Llamatron 23-25 drawn/s (worst 19), Gridrunner 22-25 (worst 15).
+
 ## Controls audit (2026-11-06; owner: "we can't be missing any controls")
 - Every game's input reads listed from RAM dumps (TOS Kbshift / Crawio calls, own key tables) against the pad.
   Mapped now: Photon Storm play loop Kbshift ($17BF4, copy $27C50): bit 2 Control = smart bomb (count $1D126,
@@ -848,7 +856,7 @@ ewmc1mb\*.stx): preferred over the 512K one (the first of an id found wins, gam
   blue, $4AF2 red/dark-blue strobe every frame, $25EE multicolour strobe, $1A86 rainbow. NOPping only the kill
   flash made the red strobe run longer (a kill used to cut it short), so the patch NOPs the palette write at
   $53DA instead: lists run with the same timing, the background stays black. A/B over 500 gameplay frames:
-  identical except the 5 white frames. --flashes restores them. Left alone: colour 1 rainbow cycle in the VBL
+  identical except the 5 white frames. --flashes restores them. Kill flash (2026-11-10, owner): the NOP is now a hook ($53DA) that writes colour 0 only for the kill list's entry (a0 = $25E8): setting llamatron_kill_flash 0 off (default) / 1 white ($777, the original) / 2 blue ($026, ~1/6 of white's light); every other list still leaves it black. Verified: 10 kills = 10 single frames of 777 / 026, none with 0. Left alone: colour 1 rainbow cycle in the VBL
   ($5402, smooth), the load indicators at $87B0.. (boot).
 
 - Analog aim (owner 2026-10-22: "can we make this full analog?"; then: a toggle for purists, RB, off by

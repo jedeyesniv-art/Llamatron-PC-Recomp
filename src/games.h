@@ -78,6 +78,13 @@ std::filesystem::path SaveDir(const Game& g, const std::filesystem::path& userda
 // measured from scripted runs (title + play; Tools/loudness.py). 0 for user disks and games without sound.
 float NormalGainDb(const Game& g);
 
+// STOCK ST (setting <section>_stock, the panel's game section; both Camels builds share rmc_stock): the game at the
+// original 8 MHz on every screen, drawing at its own rate (no 50 frames a second), no remaster. Controls and
+// patches stay. StockSetting = the saved choice; SetStock / Stock = the game running now (main.cpp RunGame).
+bool StockSetting(const Game& g);
+void SetStock(bool on);
+bool Stock();
+
 // The folders searched (game\, the exe's folder, Private\ up the tree).
 std::vector<std::filesystem::path> SearchRoots();
 std::filesystem::path ExeDir();

@@ -65,6 +65,7 @@ struct Image {
 // On / off (setting "remaster", F8 in a game). Off: the hooks let the game draw as always.
 bool Enabled();  // on, and there is a renderer (SetRenderer)
 void SetRenderer(bool have);
+void SetStock(bool on);  // STOCK ST (games::Stock): off for this game whatever the setting (F8 says so)
 void Toggle();
 void LoadSettings();
 // Run-ahead (setting remaster_ahead 0..3, F7 cycles): how many frames earlier than the ST picture the objects

@@ -50,6 +50,8 @@ void ApplyPatches(st::Machine& m, const Options& o);
 void SetAim(bool on, float x, float y);
 // Analog aim on/off (the player's setting; off = the original 8 directions).
 void SetAnalogAim(bool on);
+// The flash on every kill (setting llamatron_kill_flash): 0 none, 1 white as the original, 2 a soft blue.
+void SetKillFlash(int mode);
 // Forgets the state of the last game (before starting another).
 void Reset();
 bool AnalogAim();

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "cpu.h"
+#include "games.h"
 #include "log.h"
 #include "remap.h"
 #include "settings.h"
@@ -422,7 +423,7 @@ void Update(st::Machine* m, SDL_Gamepad* pad, int mouse_dx, int mouse_dy, uint8_
   if (g_running && !g_hooked) InstallHooks(m);
   ++g_frame;
   if (g_running && g_hide_entry_lane && GameState(*m) == kPlay && g_frame % kPredictEvery == 0) Predict(m);
-  if (g_running) Put16(*m, kFramesPerDraw, g_tune.draw_50 && DrawsEveryVbl(GameState(*m)) ? 1 : 2);
+  if (g_running) Put16(*m, kFramesPerDraw, g_tune.draw_50 && !games::Stock() && DrawsEveryVbl(GameState(*m)) ? 1 : 2);
   uint8_t buttons = mouse_buttons;
   if (g_docs && !g_docs_shown) {
     // On the way to GAME SECRETS, unseen: a click leaves the Llamasoft screen (it takes them from ~450 frames;

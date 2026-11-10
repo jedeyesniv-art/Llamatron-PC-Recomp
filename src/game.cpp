@@ -41,6 +41,8 @@ constexpr uint32_t kShots = 0x54FD4, kShotSlots = 64, kLlamaX = 0x4CFA4, kLlamaY
 constexpr uint32_t kTwinStick = 0x8616;
 
 bool g_analog = false;  // the player's setting (RB at the title)
+int g_kill_flash = 0;   // llamatron_kill_flash: 0 none, 1 white (the original), 2 soft blue
+constexpr uint16_t kSoftFlash = 0x026;  // ST colour: no red, a little green, mostly blue (~1/6 of white's light)
 
 struct Aim {
   bool on = false;
@@ -137,6 +139,7 @@ void Reset() {
   for (Shot& s : g_shots) s.on = false;
 }
 void SetAnalogAim(bool on) { g_analog = on; }
+void SetKillFlash(int mode) { g_kill_flash = mode; }
 namespace {
 Shot g_saved_shots[kShotSlots];
 }
@@ -159,7 +162,23 @@ void ApplyPatches(st::Machine& m, const Options& o) {
     // white on every enemy kill ($1450 -> $25E6), fades, and strobes alternating every frame (red/dark blue at
     // $4AF2, multicolour at $25EE...). Drop the write "move.w d0,$ff8240.l" at $53DA: the lists still run (same
     // timing, one still cuts another short), the background stays black. The end of a list writes 0 as before.
-    Apply(m, {"no screen flashes", 0x53DA, {0x33, 0xC0, 0x00, 0xFF, 0x82, 0x40}, {0x4E, 0x71, 0x4E, 0x71, 0x4E, 0x71}});
+    // A hook instead of NOPs: the kill flash (the entry read from $25E6: a0 is past it) may still be shown,
+    // white as the original or blue (llamatron_kill_flash); every other list still leaves the background black.
+    const uint32_t a = m.TextBase() + 0x53DA;
+    if (Get16(m, a) == 0x33C0 && Get16(m, a + 2) == 0x00FF && Get16(m, a + 4) == 0x8240) {
+      Put16(m, a, 0x4AFC);
+      m.AddHook(a, [](st::Machine& running) {
+        const uint32_t t = running.TextBase();
+        if (g_kill_flash && (cpu::Get(cpu::A0) & 0xFFFFFF) == t + 0x25E6 + 2) {
+          const uint16_t d0 = uint16_t(cpu::Get(cpu::D0));
+          running.Write16(0xFF8240, g_kill_flash == 1 ? d0 : d0 ? kSoftFlash : 0);
+        }
+        cpu::Set(cpu::PC, t + 0x53E0);
+      });
+      LOG("patch no screen flashes (but the kill flash, llamatron_kill_flash) applied");
+    } else {
+      LOG("patch no screen flashes: unexpected code at $53DA, not applied");
+    }
   }
   // Analog aim: the hooks are always in; they only change shots while the setting is on (new shots: shots
   // already flying keep their direction when it's switched).

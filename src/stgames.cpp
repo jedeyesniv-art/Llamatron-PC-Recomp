@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "cpu.h"
+#include "games.h"
 #include "input.h"
 #include "log.h"
 #include "pad.h"
@@ -546,7 +547,7 @@ void Defender2Update(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
     Put16(m, kD2PtrX, g_d2_click_at.x), Put16(m, kD2PtrY, g_d2_click_at.y);
     if (--g_d2_click_frames < 4) buttons |= 2;
   }
-  if (g_d2_50fps) {
+  if (g_d2_50fps && !games::Stock()) {
     int want = remaster_d2::DrawsEveryVbl(*m) ? 1 : 2;
     if (Get16(*m, kD2Divisor) != want) Put16(m, kD2Divisor, want);
   }
@@ -1301,7 +1302,7 @@ void PhotonUpdate(st::Machine* m, int mdx, int mdy, uint8_t mbuttons) {
   g_ps_analog = settings::Get("ps_analog", 1) != 0;
   int state = Get16(*m, kPsState);
   uint8_t buttons = mbuttons;
-  if (g_ps_50fps && Get16(*m, kPsDivisor) > 0) {
+  if (g_ps_50fps && !games::Stock() && Get16(*m, kPsDivisor) > 0) {
     int want = PsDrawsEveryVbl(state) ? 1 : 2;
     if (Get16(*m, kPsDivisor) != want) Put16(m, kPsDivisor, want);
   }

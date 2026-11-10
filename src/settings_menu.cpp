@@ -111,6 +111,10 @@ const std::vector<Item>& Items() {
 
       {"llamatron", "ANALOG AIM", "analog_aim", Kind::kToggle, 0, 0, 1, 1, {},
        "Twin-stick shots in any direction (off: the original 8). Also {RB} on the title screen."},
+      {"llamatron", "KILL FLASH", "llamatron_kill_flash", Kind::kChoice, 0, 0, 2, 1, {"OFF", "WHITE", "BLUE"},
+       "The background flashes for a frame on every kill. WHITE: as the original. BLUE: a softer flash. The other strobes stay off."},
+      {"llamatron", "STOCK ST", "llamatron_stock", Kind::kToggle, 0, 0, 1, 1, {},
+       "The ST as it was: 8 MHz on every screen, drawing at the game's own rate (16 to 25 frames a second in play), no remaster. Your controls stay. For purists and the brave.", true},
 
       {"gridrunner", "SHIP SPEED", "grid_stick_speed", Kind::kSlider, 6.0, 2, 12, 0.5, {},
        "Pixels a frame with the stick pushed all the way."},
@@ -129,11 +133,15 @@ const std::vector<Item>& Items() {
        "Draws every frame in play (the original: 25). The game's speed is the same."},
       {"gridrunner", "UNLOCK THE LEVEL YOU DIED ON", "grid_unlock_level_died", Kind::kToggle, 1, 0, 1, 1, {},
        "The level select starts where you died (the original: the level before, from level 6)."},
+      {"gridrunner", "STOCK ST", "gridrunner_stock", Kind::kToggle, 0, 0, 1, 1, {},
+       "The ST as it was: 8 MHz on every screen, drawing at the game's own rate (25 frames a second at best), no remaster. Your controls stay. For purists and the brave.", true},
 
       {"photonstorm", "360 TWIN STICK", "ps_analog", Kind::kToggle, 1, 0, 1, 1, {},
        "Steer and aim in any direction, the right stick aims and fires (off: the original 16). Also {Y} on the title."},
       {"photonstorm", "50 FRAMES A SECOND", "photonstorm_50fps", Kind::kToggle, 1, 0, 1, 1, {},
        "Draws every frame in play and on the attract screens (the original: 25). The game's speed is the same.", true},
+      {"photonstorm", "STOCK ST", "photonstorm_stock", Kind::kToggle, 0, 0, 1, 1, {},
+       "The ST as it was: 8 MHz on every screen, drawing at the game's own rate (25 frames a second), no remaster. Your controls stay. For purists and the brave.", true},
 
       {"andes", "CONTROL SCHEME", "andes_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
        "Arcade: left / right only turn round, {RT} thrust (squeeze = speed), {X} / {Y} reverse. Stick thrust: the push moves you."},
@@ -147,6 +155,8 @@ const std::vector<Item>& Items() {
        "Stick thrust controls: speed follows how far the stick is pushed (off: the game's own thrust and glide).", true},
       {"andes", "DIRECT THRUST EASE", "andes_thrust_ease", Kind::kSlider, 0.5, 0.1, 3, 0.1, {},
        "With direct thrust: how quickly the speed follows the stick.", true},
+      {"andes", "STOCK ST", "andes_stock", Kind::kToggle, 0, 0, 1, 1, {},
+       "The ST as it was: 8 MHz on every screen, drawing at the game's own rate (13 to 19 frames a second in play), no remaster. Your controls stay. For purists and the brave.", true},
 
       {"defender2", "CONTROL SCHEME", "d2_controls", Kind::kChoice, 1, 0, 1, 1, {"STICK THRUST", "ARCADE"},
        "Arcade: left / right only turn round, {RT} thrust (squeeze = speed), {X} / {Y} reverse. Stick thrust: the push moves you."},
@@ -154,12 +164,18 @@ const std::vector<Item>& Items() {
        "The game's 60 Hz mode, as the arcade (its speeds adjusted). Off: 50 Hz.", true},
       {"defender2", "50 FRAMES A SECOND", "d2_50fps", Kind::kToggle, 1, 0, 1, 1, {},
        "Draws every frame in play (the original: 25). The game's speed is the same.", true},
+      {"defender2", "STOCK ST", "defender2_stock", Kind::kToggle, 0, 0, 1, 1, {},
+       "The ST as it was: 8 MHz on every screen, drawing at the game's own rate (25 frames a second), no remaster. Your controls stay. For purists and the brave.", true},
 
       {"rmc", "TWIN STICK", "rmc_twin_stick", Kind::kChoice, 2, 0, 2, 1, {"OFF", "8 WAYS", "360"},
        "Right stick aims the spit (any angle with 360), left stick moves, jumps, sits. Off: the stick does both."},
+      {"rmc", "STOCK ST", "rmc_stock", Kind::kToggle, 0, 0, 1, 1, {},
+       "The ST as it was: 8 MHz on every screen, drawing at the game's own rate (about 15 frames a second in play; the TT build 9), no remaster. Your controls stay. For purists and the brave.", true},
 
       {"hardcore", "STROBES", "hc_strobes", Kind::kToggle, 0, 0, 1, 1, {},
        "The game's flashing strobes (its S key still switches them).", true},
+      {"hardcore", "STOCK ST", "hardcore_stock", Kind::kToggle, 0, 0, 1, 1, {},
+       "The ST as it was: 8 MHz on every screen, drawing at the game's own rate (15 to 20 frames a second in play), no remaster. Your controls stay. For purists and the brave.", true},
 
       {"tripatron", "LIGHT SPEED", "trip_stick_speed", Kind::kSlider, 5, 1, 12, 0.5, {},
        "How fast the left stick moves the light source."},

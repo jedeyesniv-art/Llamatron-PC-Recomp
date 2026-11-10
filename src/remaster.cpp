@@ -321,14 +321,17 @@ void Match() {
 }
 }  // namespace
 
-bool Enabled() { return g_enabled && g_renderer; }
+bool g_stock = false;
+bool Enabled() { return g_enabled && g_renderer && !g_stock; }
 void SetRenderer(bool have) { g_renderer = have; }
+void SetStock(bool on) { g_stock = on; }
 void LoadSettings() {
   g_enabled = settings::Get("remaster", 1) != 0;
   g_ahead = std::clamp(int(settings::Get("remaster_ahead", 2)), 0, 3);
 }
 void ShowMessage() {
-  if (!g_enabled) std::snprintf(g_message, sizeof(g_message), "REMASTER OFF (F8)");
+  if (g_stock) std::snprintf(g_message, sizeof(g_message), "REMASTER OFF: STOCK ST");
+  else if (!g_enabled) std::snprintf(g_message, sizeof(g_message), "REMASTER OFF (F8)");
   else std::snprintf(g_message, sizeof(g_message), "REMASTER ON   RUN-AHEAD %d (F7)", g_ahead);
   g_message_until = SDL_GetTicks() + 2500;
   LOG("remaster: %s, run-ahead %d", g_enabled ? "on" : "off", g_ahead);
