@@ -277,9 +277,12 @@ And:
   that is a multiple of the game's 50 Hz for even motion on screens without it.
 
 What we changed on purpose, and how to get the original back:
+- all of the speed-ups at once ..... Settings, the game's section: STOCK ST (8 MHz everywhere, the game's
+  own frame rate, no remaster; your controls stay)
 - 50 frames a second ............... --cpu=1, or grid_50fps=0, d2_50fps=0, photonstorm_50fps=0
 - the remaster, run-ahead, CRT .... F8, F7 (0), F9 (off), or Settings
-- no flashes ....................... --flashes, trip_calm_background=0, hc_strobes=1
+- no flashes ....................... --flashes, trip_calm_background=0, hc_strobes=1; Llamatron's kill
+  flash alone: Settings, KILL FLASH (WHITE as the original, or a softer BLUE)
 - Photon Storm at any angle ........ Y on its title: the original 16 directions
 - Llamatron analog aim ............. off unless you turn it on (RB on its title)
 - Andes Attack / Defender 2 arcade controls ... Settings, CONTROL SCHEME; the mouse and keys work as on the ST

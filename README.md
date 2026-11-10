@@ -197,11 +197,12 @@ Trip-A-Tron's harshest flashing palettes are calmed into gentle pulses.
 
 | Change | Why | The original |
 |---|---|---|
+| All the speed-ups (CPU, frame rate, remaster) | - | Settings, the game's section: STOCK ST (your controls stay) |
 | 50 frames a second in play | the ST couldn't keep up; the game's speed is unchanged | `--cpu=1`, or per game `grid_50fps=0`, `d2_50fps=0`, `photonstorm_50fps=0` |
 | The remaster (4x, interpolated unlocked frame rate) | modern displays | F8 / Settings: the ST's own picture |
 | Run-ahead | lower latency than the original | F7 / Settings: 0 |
 | CRT+ / CRT++ | the look | F9 / Settings: off |
-| Screen flashes removed or calmed | photosensitivity | `--flashes`, `trip_calm_background=0`, `hc_strobes=1` |
+| Screen flashes removed or calmed | photosensitivity | `--flashes`, `trip_calm_background=0`, `hc_strobes=1`; Llamatron's kill flash alone: Settings, KILL FLASH (white, or a softer blue) |
 | Photon Storm at any angle | twin-stick play | Y on its title: the original 16 directions |
 | Llamatron analog aim | twin-stick play | off by default (RB on its title) |
 | Andes Attack / Defender 2 arcade controls | pads have no mouse | Settings: CONTROL SCHEME; mouse and keyboard work as on the ST |
